@@ -1,5 +1,6 @@
 import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getStatusMeta, getLatestLog } from "./game.mjs";
 import { JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
+import { playClickSfx, playSelectSfx, playResultSfx, playAchievementSfx, playEndingSfx, startBgm, stopBgm, isAudioSupported, setAudioEnabled } from "./audio.mjs";
 
 let state = createInitialState();
 const uiState = {
@@ -18,6 +19,8 @@ try {
     uiState.feedbackEnabled = savedFeedback === "true";
   }
 } catch {}
+
+setAudioEnabled(uiState.feedbackEnabled);
 
 const elements = {
   overlay: document.querySelector("#overlay"),
@@ -189,6 +192,7 @@ const scheduleAchievementToast = () => {
     clearTimeout(uiState.achievementTimer);
   }
 
+  playAchievementSfx();
   uiState.achievementToastVisible = true;
   uiState.achievementTimer = setTimeout(() => {
     uiState.achievementToastVisible = false;
@@ -502,6 +506,7 @@ const renderIntroDialog = () => {
 };
 
 const handleActionChoice = (actionId) => {
+  playSelectSfx();
   triggerHaptic(12);
   state = dispatchAction(state, actionId);
   if (state.pendingEvent || state.ending) {
@@ -553,6 +558,7 @@ const renderActionSelection = () => {
   cancelButton.className = "dialog-close";
   cancelButton.textContent = "先不動";
   cancelButton.addEventListener("click", () => {
+    playClickSfx();
     uiState.actionDialogMode = "closed";
     render();
   });
@@ -616,11 +622,14 @@ const renderActionResult = () => {
   `;
   elements.actionDialogActions.innerHTML = "";
 
+  playResultSfx();
+
   const confirmButton = document.createElement("button");
   confirmButton.type = "button";
   confirmButton.className = "primary-button";
   confirmButton.textContent = "知道了，回主畫面";
   confirmButton.addEventListener("click", () => {
+    playClickSfx();
     uiState.actionDialogMode = "closed";
     render();
   });
@@ -663,6 +672,7 @@ const renderEventDialog = () => {
       <span class="event-choice-caption">${option.caption || "這個決定的代價會一路跟到明天。"}</span>
     `;
     button.addEventListener("click", () => {
+      playSelectSfx();
       triggerHaptic(12);
       state = dispatchEventChoice(state, option.id);
       if (!state.ending) {
@@ -681,6 +691,9 @@ const renderEndingDialog = () => {
     setVisibility(elements.endingDialog, false);
     return;
   }
+
+  stopBgm();
+  playEndingSfx();
 
   const rank = getEndingRank();
   const achievementList =
@@ -754,6 +767,7 @@ const renderAchievementToast = () => {
 };
 
 const resetGame = () => {
+  stopBgm();
   state = createInitialState();
   uiState.actionDialogMode = "closed";
   uiState.achievementToastVisible = false;
@@ -801,25 +815,36 @@ const render = () => {
 };
 
 elements.startButton.addEventListener("click", () => {
+  playClickSfx();
   triggerHaptic(10);
   uiState.onboardingOpen = false;
+  startBgm(0.15);
   render();
 });
 
 elements.takeActionButton.addEventListener("click", () => {
+  playClickSfx();
   triggerHaptic(10);
   uiState.actionDialogMode = "select";
   render();
 });
 
-elements.resetButton.addEventListener("click", resetGame);
-elements.restartButton.addEventListener("click", resetGame);
+elements.resetButton.addEventListener("click", () => {
+  playClickSfx();
+  resetGame();
+});
+elements.restartButton.addEventListener("click", () => {
+  playClickSfx();
+  resetGame();
+});
 elements.soundToggle.addEventListener("click", () => {
   uiState.feedbackEnabled = !uiState.feedbackEnabled;
+  setAudioEnabled(uiState.feedbackEnabled);
   try {
     window.localStorage.setItem("hard-life-feedback-enabled", String(uiState.feedbackEnabled));
   } catch {}
   if (uiState.feedbackEnabled) {
+    playClickSfx();
     triggerHaptic(10);
   }
   render();

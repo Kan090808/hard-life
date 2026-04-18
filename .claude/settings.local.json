@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git add *)",
-      "Bash(git commit -m 'Fix missing getLatestLog import in main.mjs *)"
+      "Bash(git commit -m 'Fix missing getLatestLog import in main.mjs *)",
+      "Bash(npm run *)",
+      "Bash(git commit -m 'Fix audio system: add audioEnabled checks and fix BGM loop timing *)"
     ]
   }
 }
