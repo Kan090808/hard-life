@@ -54,6 +54,15 @@
 
           <div class="stat-grid compact" id="stat-grid"></div>
 
+          <article class="job-identity-card" id="job-identity-card">
+            <div class="job-identity-top">
+              <span class="job-badge" id="job-badge">Lv.1 便利商店</span>
+              <span class="job-mark" id="job-mark">超商班表</span>
+            </div>
+            <h3 class="job-title" id="job-title">便利商店打工</h3>
+            <p class="job-tagline" id="job-tagline">收入普通，但帳單不會手下留情。</p>
+          </article>
+
           <div class="meta-inline">
             <div class="meta-pill"><span>工作</span><strong id="job-label">便利商店打工</strong></div>
             <div class="meta-pill"><span>欠租</span><strong id="rent-strikes">0 次</strong></div>
@@ -62,9 +71,17 @@
         </section>
 
         <section class="panel action-panel" aria-label="今日決策">
+          <article class="goal-card" id="goal-card">
+            <span class="goal-kicker">短期目標</span>
+            <strong class="goal-title" id="goal-title">先保住本週房租</strong>
+            <p class="goal-copy" id="goal-copy">這兩天別亂花錢，先把現金流撐住。</p>
+          </article>
           <div class="control-buttons">
             <button class="control-button primary-control" id="take-action-button" type="button">採取行動</button>
             <button class="control-button secondary-control" id="reset-button" type="button">重新開始</button>
+          </div>
+          <div class="utility-row">
+            <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false">回饋：開</button>
           </div>
           <p class="action-flavor">今天只能選一條路走，剩下的代價都會留下來。</p>
         </section>
@@ -167,7 +184,7 @@
           </div>
         </div>
         <p class="dialog-copy" id="ending-copy"></p>
-        <ul class="ending-stats" id="ending-stats"></ul>
+        <div class="ending-report" id="ending-report"></div>
         <div class="dialog-actions">
           <button class="primary-button" id="restart-button" type="button">重新開始，下個月再撐一次</button>
         </div>

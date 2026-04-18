@@ -1,5 +1,5 @@
-import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
-import { STAT_DISPLAY } from "./data/config.mjs";
+import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getStatusMeta } from "./game.mjs";
+import { JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
 
 let state = createInitialState();
 const uiState = {
@@ -8,8 +8,16 @@ const uiState = {
   achievementToastVisible: false,
   achievementSignature: "",
   achievementTimer: null,
+  feedbackEnabled: true,
 };
 let renderSnapshot = null;
+
+try {
+  const savedFeedback = window.localStorage.getItem("hard-life-feedback-enabled");
+  if (savedFeedback !== null) {
+    uiState.feedbackEnabled = savedFeedback === "true";
+  }
+} catch {}
 
 const elements = {
   overlay: document.querySelector("#overlay"),
@@ -25,11 +33,20 @@ const elements = {
   threatCard: document.querySelector(".threat-card"),
   rentCountdown: document.querySelector("#rent-countdown"),
   rentCaption: document.querySelector("#rent-caption"),
+  jobIdentityCard: document.querySelector("#job-identity-card"),
+  jobBadge: document.querySelector("#job-badge"),
+  jobMark: document.querySelector("#job-mark"),
+  jobTitle: document.querySelector("#job-title"),
+  jobTagline: document.querySelector("#job-tagline"),
   jobLabel: document.querySelector("#job-label"),
   rentStrikes: document.querySelector("#rent-strikes"),
   phaseLabel: document.querySelector("#phase-label"),
+  goalCard: document.querySelector("#goal-card"),
+  goalTitle: document.querySelector("#goal-title"),
+  goalCopy: document.querySelector("#goal-copy"),
   takeActionButton: document.querySelector("#take-action-button"),
   resetButton: document.querySelector("#reset-button"),
+  soundToggle: document.querySelector("#sound-toggle"),
   introDialog: document.querySelector("#intro-dialog"),
   startButton: document.querySelector("#start-button"),
   actionDialog: document.querySelector("#action-dialog"),
@@ -46,7 +63,7 @@ const elements = {
   endingDialog: document.querySelector("#ending-dialog"),
   endingTitle: document.querySelector("#ending-title"),
   endingCopy: document.querySelector("#ending-copy"),
-  endingStats: document.querySelector("#ending-stats"),
+  endingReport: document.querySelector("#ending-report"),
   restartButton: document.querySelector("#restart-button"),
 };
 
@@ -96,6 +113,10 @@ const EVENT_TONE = {
   生活意外: "danger",
   小確幸: "luck",
   轉機: "opportunity",
+};
+const FEEDBACK_COPY = {
+  on: "回饋：開",
+  off: "回饋：靜音",
 };
 
 const getWeekInfo = (day) => {
@@ -156,7 +177,7 @@ const pulseElement = (element, className) => {
 };
 
 const triggerHaptic = (duration = 10) => {
-  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+  if (uiState.feedbackEnabled && typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
     navigator.vibrate(duration);
   }
 };
@@ -214,6 +235,92 @@ const getWalletCaption = () => {
   }
 
   return "手上終於有點空氣了，但月底還沒真的放過你。";
+};
+
+const getGoalHint = () => {
+  const rentDays = getRentCountdownDays(state.day);
+
+  if (state.unpaidRentCount > 0) {
+    return {
+      title: "先補現金流",
+      copy: "你已經欠租了，這兩天的優先順序只有把現金撐回來。",
+    };
+  }
+
+  if (state.energy <= 22) {
+    return {
+      title: "今天先保身體",
+      copy: "體力太低，再硬撐很可能直接把過勞結局叫出來。",
+    };
+  }
+
+  if (state.stress >= 75) {
+    return {
+      title: "先想辦法降壓",
+      copy: "壓力已經快到頂了，這幾天最好多選能回穩的路線。",
+    };
+  }
+
+  if (rentDays !== null && rentDays <= 2 && state.money < 3500) {
+    return {
+      title: "先保住本週房租",
+      copy: "房租快到了，這兩天不要做太貴的決策，先把錢留住。",
+    };
+  }
+
+  if (state.skill >= 30 && state.jobLevel === 1) {
+    return {
+      title: "可以試著找工作",
+      copy: "技能已經夠一個門檻，現在丟履歷比較有機會翻身。",
+    };
+  }
+
+  if (state.money >= 4500 && state.skill < 30) {
+    return {
+      title: "把未來往前推一點",
+      copy: "手上還有空間，現在投一兩次技能成長，後面會比較好走。",
+    };
+  }
+
+  return {
+    title: "先守住節奏",
+    copy: "今天還有選擇空間，別為了短期現金把體力和心情一次花光。",
+  };
+};
+
+const getEndingRank = () => {
+  if (!state.ending) {
+    return null;
+  }
+
+  if (state.ending.type === "failure") {
+    return { label: "本月稱號：現實重擊", tone: "danger" };
+  }
+
+  const rankMap = {
+    "free-life": { label: "本月稱號：自由候選人", tone: "growth" },
+    "career-shift": { label: "本月稱號：翻身進行式", tone: "growth" },
+    "stable-life": { label: "本月稱號：穩住的人", tone: "steady" },
+    "busy-cycle": { label: "本月稱號：窮忙倖存者", tone: "warning" },
+  };
+
+  return rankMap[state.ending.id] ?? { label: "本月稱號：月底生還者", tone: "steady" };
+};
+
+const getEndingEvaluation = () => {
+  if (state.ending?.type === "failure") {
+    return "這個月不是你不夠努力，是系統一直在逼你拿別的東西去換。";
+  }
+
+  if (state.money >= 12000 && state.stress <= 60) {
+    return "你不只活下來，還真的把生活往比較像樣的方向推了一段。";
+  }
+
+  if (state.jobLevel >= 3) {
+    return "你已經不是單純在撐，開始有能力替下個月鋪路。";
+  }
+
+  return "你沒有徹底翻身，但已經學會怎麼不讓自己先被現實吃掉。";
 };
 
 const getDangerLine = () => {
@@ -355,14 +462,22 @@ const renderStats = (changedStats) => {
 
 const renderMeta = ({ moneyChanged, rentChanged }) => {
   const meta = getStatusMeta(state);
+  const goalHint = getGoalHint();
   elements.walletAmount.textContent = `$${state.money.toLocaleString()}`;
   elements.walletCaption.textContent = getWalletCaption();
   elements.rentCountdown.textContent = meta.rentCountdown;
   elements.rentCaption.textContent = getRentCaption();
   elements.dangerLine.textContent = getDangerLine();
+  elements.jobIdentityCard.dataset.tone = meta.currentJob.tone;
+  elements.jobBadge.textContent = meta.currentJob.badge;
+  elements.jobMark.textContent = meta.currentJob.mark;
+  elements.jobTitle.textContent = meta.currentJob.name;
+  elements.jobTagline.textContent = meta.currentJob.tagline;
   elements.jobLabel.textContent = meta.currentJob.name;
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
+  elements.goalTitle.textContent = goalHint.title;
+  elements.goalCopy.textContent = goalHint.copy;
 
   if (moneyChanged) {
     pulseElement(elements.walletCard, "is-bumping");
@@ -378,6 +493,8 @@ const renderMainButtons = () => {
   const disabled = hasBlockingDialog() || state.phase !== "ready-for-action";
   elements.takeActionButton.disabled = disabled;
   elements.resetButton.disabled = uiState.onboardingOpen;
+  elements.soundToggle.textContent = uiState.feedbackEnabled ? FEEDBACK_COPY.on : FEEDBACK_COPY.off;
+  elements.soundToggle.setAttribute("aria-pressed", String(uiState.feedbackEnabled));
 };
 
 const renderIntroDialog = () => {
@@ -565,18 +682,48 @@ const renderEndingDialog = () => {
     return;
   }
 
+  const rank = getEndingRank();
+  const achievementList =
+    state.unlockedMilestones.length > 0
+      ? state.unlockedMilestones
+          .map((id) => {
+            const milestone = MILESTONES.find((entry) => entry.id === id);
+            return milestone?.title ?? id;
+          })
+          .join("、")
+      : "本月尚未解鎖里程碑";
+
   elements.endingTitle.textContent = state.ending.title;
   elements.endingCopy.textContent = state.ending.body;
-  elements.endingStats.innerHTML = [
-    `金錢：$${state.money.toLocaleString()}`,
-    `體力：${state.energy}`,
-    `心情：${state.mood}`,
-    `壓力：${state.stress}`,
-    `技能：${state.skill}`,
-    `工作等級：Lv.${state.jobLevel}`,
-  ]
-    .map((line) => `<li>${line}</li>`)
-    .join("");
+  elements.endingReport.innerHTML = `
+    <section class="ending-rank-card ${rank?.tone ?? "steady"}">
+      <span class="ending-rank-label">${rank?.label ?? "本月稱號：月底生還者"}</span>
+      <strong class="ending-job-name">${JOBS[state.jobLevel].name}</strong>
+      <p class="ending-evaluation">${getEndingEvaluation()}</p>
+    </section>
+    <section class="ending-grid">
+      <article class="ending-stat-card">
+        <span>存款</span>
+        <strong>$${state.money.toLocaleString()}</strong>
+      </article>
+      <article class="ending-stat-card">
+        <span>體力 / 心情</span>
+        <strong>${state.energy} / ${state.mood}</strong>
+      </article>
+      <article class="ending-stat-card">
+        <span>壓力 / 技能</span>
+        <strong>${state.stress} / ${state.skill}</strong>
+      </article>
+      <article class="ending-stat-card">
+        <span>工作等級</span>
+        <strong>${JOBS[state.jobLevel].badge}</strong>
+      </article>
+    </section>
+    <section class="ending-achievements">
+      <span class="ending-section-label">本月紀錄</span>
+      <p>${achievementList}</p>
+    </section>
+  `;
 
   setVisibility(elements.endingDialog, true);
 };
@@ -667,5 +814,15 @@ elements.takeActionButton.addEventListener("click", () => {
 
 elements.resetButton.addEventListener("click", resetGame);
 elements.restartButton.addEventListener("click", resetGame);
+elements.soundToggle.addEventListener("click", () => {
+  uiState.feedbackEnabled = !uiState.feedbackEnabled;
+  try {
+    window.localStorage.setItem("hard-life-feedback-enabled", String(uiState.feedbackEnabled));
+  } catch {}
+  if (uiState.feedbackEnabled) {
+    triggerHaptic(10);
+  }
+  render();
+});
 
 render();

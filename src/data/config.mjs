@@ -43,6 +43,9 @@ export const JOBS = {
     workIncome: 800,
     overtimeIncome: 1300,
     tagline: "收入普通，但帳單不會手下留情。",
+    badge: "Lv.1 便利商店",
+    mark: "超商班表",
+    tone: "store",
   },
   2: {
     level: 2,
@@ -50,6 +53,9 @@ export const JOBS = {
     workIncome: 1100,
     overtimeIncome: 1700,
     tagline: "終於不是只靠硬撐過日子。",
+    badge: "Lv.2 穩定兼職",
+    mark: "兼職工牌",
+    tone: "parttime",
   },
   3: {
     level: 3,
@@ -57,6 +63,9 @@ export const JOBS = {
     workIncome: 1500,
     overtimeIncome: 2200,
     tagline: "收入變高了，責任也一起長大。",
+    badge: "Lv.3 正職新人",
+    mark: "識別證",
+    tone: "office",
   },
   4: {
     level: 4,
@@ -64,6 +73,9 @@ export const JOBS = {
     workIncome: 2000,
     overtimeIncome: null,
     tagline: "自由多一點，但案子不會自己長出來。",
+    badge: "Lv.4 遠端接案",
+    mark: "接案桌面",
+    tone: "remote",
   },
 };
 
