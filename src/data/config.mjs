@@ -49,26 +49,38 @@ export const DAY_SLOT_RULES = [
 export const CONDITION_CONFIG = {
   scooterBroken: {
     label: "機車待修",
+    compactLabel: "機車",
+    icon: "scooter",
     description: "通勤型行動會額外耗體、加壓。",
   },
   computerBroken: {
     label: "電腦故障",
+    compactLabel: "電腦",
+    icon: "monitor",
     description: "學技能和接案會更卡。",
   },
   burnoutRisk: {
     label: "過勞邊緣",
+    compactLabel: "過勞",
+    icon: "alert",
     description: "再硬撐很容易觸發健康事件。",
   },
   hasFreelanceContact: {
     label: "有接案人脈",
+    compactLabel: "人脈",
+    icon: "network",
     description: "可解鎖案源與介紹機會。",
   },
   landlordAngry: {
     label: "房東不爽",
+    compactLabel: "房東",
+    icon: "home-alert",
     description: "欠租後更容易出現催租壓力。",
   },
   clientLead: {
     label: "手上有案源",
+    compactLabel: "案源",
+    icon: "briefcase",
     description: "接案收益更高，也更容易接到催單事件。",
   },
 };
@@ -105,6 +117,13 @@ export const GAME_COPY = {
   title: "打工人生：月底前活下去",
   subtitle: "每天安排一到兩件事，在月底前撐住現金、體力與心情。",
 };
+
+export const CHARACTER_STAT_DISPLAY = [
+  { key: "intelligence", label: "智力", shortLabel: "智", icon: "brain", color: "#6c63ff" },
+  { key: "physique", label: "體能", shortLabel: "體", icon: "dumbbell", color: "#22a06b" },
+  { key: "luck", label: "運氣", shortLabel: "運", icon: "dice", color: "#d48806" },
+  { key: "wealth", label: "財力", shortLabel: "財", icon: "coins", color: "#c85b2c" },
+];
 
 export const JOBS = {
   1: {
@@ -363,9 +382,9 @@ export const MILESTONES = [
 ];
 
 export const STAT_DISPLAY = [
-  { key: "money", label: "金錢", meter: false, color: "#c85b2c", formatter: (value) => `$${value.toLocaleString()}` },
-  { key: "energy", label: "體力", meter: true, color: "#417c6c", formatter: (value) => `${value}` },
-  { key: "mood", label: "心情", meter: true, color: "#df8c2a", formatter: (value) => `${value}` },
-  { key: "stress", label: "壓力", meter: true, color: "#8d2f1e", formatter: (value) => `${value}` },
-  { key: "skill", label: "技能", meter: true, color: "#5568b8", formatter: (value) => `${value}` },
+  { key: "money", label: "金錢", shortLabel: "錢", icon: "wallet", meter: false, color: "#c85b2c", formatter: (value) => `$${value.toLocaleString()}` },
+  { key: "energy", label: "體力", shortLabel: "體", icon: "bolt", meter: true, color: "#417c6c", formatter: (value) => `${value}` },
+  { key: "mood", label: "心情", shortLabel: "心", icon: "spark", meter: true, color: "#df8c2a", formatter: (value) => `${value}` },
+  { key: "stress", label: "壓力", shortLabel: "壓", icon: "gauge", meter: true, color: "#8d2f1e", formatter: (value) => `${value}` },
+  { key: "skill", label: "技能", shortLabel: "技", icon: "book", meter: true, color: "#5568b8", formatter: (value) => `${value}` },
 ];

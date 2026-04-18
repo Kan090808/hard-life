@@ -1,5 +1,5 @@
 import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
-import { CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
+import { CHARACTER_STAT_DISPLAY, CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
 import {
   isAudioSupported,
   playAchievementSfx,
@@ -20,6 +20,8 @@ const uiState = {
   achievementSignature: "",
   achievementTimer: null,
   audioEnabled: true,
+  detailsExpanded: false,
+  expandedActionInfoId: null,
 };
 let renderSnapshot = null;
 
@@ -35,22 +37,19 @@ setAudioEnabled(uiState.audioEnabled);
 const elements = {
   overlay: document.querySelector("#overlay"),
   achievementToast: document.querySelector("#achievement-toast"),
+  statusPanel: document.querySelector(".status-panel"),
+  detailsToggle: document.querySelector("#details-toggle"),
   weekLabel: document.querySelector("#week-label"),
-  weekTrack: document.querySelector("#week-track"),
   statGrid: document.querySelector("#stat-grid"),
+  characterGrid: document.querySelector("#character-grid"),
   dayLabel: document.querySelector("#day-label"),
-  dangerLine: document.querySelector("#danger-line"),
   walletCard: document.querySelector(".wallet-card"),
   walletAmount: document.querySelector("#wallet-amount"),
-  walletCaption: document.querySelector("#wallet-caption"),
   threatCard: document.querySelector(".threat-card"),
   rentCountdown: document.querySelector("#rent-countdown"),
-  rentCaption: document.querySelector("#rent-caption"),
   jobIdentityCard: document.querySelector("#job-identity-card"),
   jobBadge: document.querySelector("#job-badge"),
-  jobMark: document.querySelector("#job-mark"),
   jobTitle: document.querySelector("#job-title"),
-  jobTagline: document.querySelector("#job-tagline"),
   jobLabel: document.querySelector("#job-label"),
   rentStrikes: document.querySelector("#rent-strikes"),
   phaseLabel: document.querySelector("#phase-label"),
@@ -61,7 +60,6 @@ const elements = {
   goalCopy: document.querySelector("#goal-copy"),
   takeActionButton: document.querySelector("#take-action-button"),
   resetButton: document.querySelector("#reset-button"),
-  actionFlavorNote: document.querySelector("#action-flavor-note"),
   introDialog: document.querySelector("#intro-dialog"),
   startButton: document.querySelector("#start-button"),
   soundToggle: document.querySelector("#sound-toggle"),
@@ -107,6 +105,43 @@ const EVENT_TONE = {
   小確幸: "luck",
   轉機: "opportunity",
 };
+
+const ICONS = {
+  wallet:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h14a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 18 18.5H4A2.5 2.5 0 0 1 1.5 16V10A2.5 2.5 0 0 1 4 7.5Zm0 0V6A2.5 2.5 0 0 1 6.5 3.5H18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16.5" cy="13" r="1.2" fill="currentColor"/></svg>',
+  bolt:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2.5-7 10h4.8l-1 9 8.2-11h-5l.9-8Z" fill="currentColor"/></svg>',
+  spark:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.5 2.3 5.2L19.5 10l-5.2 2.3L12 17.5l-2.3-5.2L4.5 10l5.2-2.3L12 2.5Z" fill="currentColor"/></svg>',
+  gauge:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15a8 8 0 1 1 16 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m12 12 4-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>',
+  book:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10a3.5 3.5 0 0 1 3.5 3.5v11H8.5A3.5 3.5 0 0 0 5 22.5Zm0 0v18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  brain:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5a2.8 2.8 0 0 1 5.5.6 2.6 2.6 0 0 1 2.7 2.8 2.7 2.7 0 0 1 1.8 2.6 3 3 0 0 1-3 3H9A3.5 3.5 0 0 1 5.5 11a2.9 2.9 0 0 1 1.7-2.6A2.7 2.7 0 0 1 9 5.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 8v7m4-8v8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  dumbbell:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6m3-8v10m12-10v10m3-8v6M6 12h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  dice:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9" r="1.1" fill="currentColor"/><circle cx="15" cy="15" r="1.1" fill="currentColor"/><circle cx="15" cy="9" r="1.1" fill="currentColor"/></svg>',
+  coins:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="7" rx="5.5" ry="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.5 7v6c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 16.5v1.5c0 1.2 2 2 4.5 2s4.5-.8 4.5-2v-1.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+  scooter:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 17h5l2-5h-4l-1.5-4H8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  monitor:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="11.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 19.5h5M12 16v3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  alert:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.8 19.5h18.4L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v4.8M12 17h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  network:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="8" r="2.1" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="8" r="2.1" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="17" r="2.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7.8 9.2 10.2 15M16.2 9.2 13.8 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  "home-alert":
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9.5H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10.2v4M12 17h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  briefcase:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7.5" width="17" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 7.5v-1A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5v1M3.5 12.5h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  info:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 10.1v5M12 7.8h.01" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+const getIconSvg = (iconId) => ICONS[iconId] ?? ICONS.info;
 
 
 const getWeekInfo = (day) => {
@@ -331,6 +366,25 @@ const getPlanningNote = () => {
   return "今天的空間已經縮小了，接下來的每一格都很貴。";
 };
 
+const getActionContextHint = (action) => {
+  if (action.id === "jobSearch") {
+    return `目前翻身機率 ${action.tag}。`;
+  }
+  if (action.id === "freelance" && state.conditions.clientLead) {
+    return "你手上有案源，這次接案更值得。";
+  }
+  if (action.id === "lifeAdmin") {
+    return "會優先清掉最麻煩的持續問題。";
+  }
+  if (action.id === "network") {
+    return "可能換到人脈或新的案源。";
+  }
+  if (action.id === "reward") {
+    return "只能止痛，不能真的解決月底壓力。";
+  }
+  return "";
+};
+
 const getResultTone = (latest) => ACTION_FLAVOR[latest?.actionId]?.tone ?? "steady";
 
 const getResultButtonCopy = () => {
@@ -347,22 +401,9 @@ const renderWeekProgress = () => {
   const { weekNumber, dayInWeek, totalWeeks } = getWeekInfo(state.day);
   elements.weekLabel.textContent = `第 ${weekNumber} / ${totalWeeks} 週 · 週內第 ${dayInWeek} 天`;
   elements.dayLabel.textContent = `Day ${state.day} / ${state.totalDays}`;
-  elements.weekTrack.innerHTML = "";
-
-  for (let index = 1; index <= 7; index += 1) {
-    const dot = document.createElement("span");
-    dot.className = "week-dot";
-    if (index < dayInWeek) {
-      dot.classList.add("past");
-    } else if (index === dayInWeek) {
-      dot.classList.add("current");
-    }
-    dot.setAttribute("aria-hidden", "true");
-    elements.weekTrack.append(dot);
-  }
 };
 
-const renderStats = (changedStats) => {
+const renderCurrentStats = (changedStats) => {
   elements.statGrid.innerHTML = "";
   for (const stat of STAT_DISPLAY.filter(({ key }) => key !== "money")) {
     const value = state[stat.key];
@@ -370,9 +411,10 @@ const renderStats = (changedStats) => {
     const changed = changedStats.has(stat.key);
     const previousValue = renderSnapshot?.[stat.key] ?? value;
     const direction = value >= previousValue ? "gain" : "loss";
-    card.className = `stat-card stat-${stat.key}${changed ? ` is-updated ${direction}` : ""}`;
+    card.className = `stat-card compact-stat stat-${stat.key}${changed ? ` is-updated ${direction}` : ""}`;
     card.innerHTML = `
-      <span class="stat-label">${stat.label}</span>
+      <span class="stat-icon" aria-hidden="true">${getIconSvg(stat.icon)}</span>
+      <span class="stat-label">${stat.shortLabel ?? stat.label}</span>
       <strong class="stat-value">${stat.formatter(value)}</strong>
       <div class="stat-meter"><div class="stat-meter-fill" style="width:${Math.max(0, Math.min(100, value))}%; background:${stat.color};"></div></div>
     `;
@@ -380,21 +422,44 @@ const renderStats = (changedStats) => {
   }
 };
 
+const renderCharacterStats = (character) => {
+  elements.characterGrid.innerHTML = "";
+  for (const stat of CHARACTER_STAT_DISPLAY) {
+    const value = character[stat.key];
+    const card = document.createElement("article");
+    card.className = `attribute-card attribute-${stat.key}`;
+    card.innerHTML = `
+      <span class="stat-icon" aria-hidden="true">${getIconSvg(stat.icon)}</span>
+      <span class="stat-label">${stat.shortLabel}</span>
+      <strong class="stat-value">${value}</strong>
+    `;
+    elements.characterGrid.append(card);
+  }
+};
+
 const renderConditions = (conditions) => {
   elements.conditionStrip.innerHTML = "";
 
   if (conditions.length === 0) {
-    elements.conditionStrip.innerHTML = `<span class="condition-empty">目前沒有持續狀態，這很難得。</span>`;
+    elements.conditionStrip.innerHTML = `<span class="condition-empty">目前無持續狀態</span>`;
     return;
   }
 
   for (const condition of conditions) {
     const chip = document.createElement("article");
     chip.className = "condition-chip";
-    chip.innerHTML = `
-      <strong>${condition.label}</strong>
-      <span>${condition.description}</span>
-    `;
+    chip.innerHTML = uiState.detailsExpanded
+      ? `
+        <span class="condition-icon" aria-hidden="true">${getIconSvg(condition.icon)}</span>
+        <div>
+          <strong>${condition.label}</strong>
+          <span>${condition.description}</span>
+        </div>
+      `
+      : `
+        <span class="condition-icon" aria-hidden="true">${getIconSvg(condition.icon)}</span>
+        <strong>${condition.compactLabel}</strong>
+      `;
     elements.conditionStrip.append(chip);
   }
 };
@@ -403,15 +468,10 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
   const meta = getStatusMeta(state);
   const goalHint = getGoalHint();
   elements.walletAmount.textContent = `$${state.money.toLocaleString()}`;
-  elements.walletCaption.textContent = getWalletCaption();
   elements.rentCountdown.textContent = meta.rentCountdown;
-  elements.rentCaption.textContent = getRentCaption();
-  elements.dangerLine.textContent = getDangerLine();
   elements.jobIdentityCard.dataset.tone = meta.currentJob.tone;
   elements.jobBadge.textContent = meta.currentJob.badge;
-  elements.jobMark.textContent = meta.currentJob.mark;
   elements.jobTitle.textContent = meta.currentJob.name;
-  elements.jobTagline.textContent = meta.currentJob.tagline;
   elements.jobLabel.textContent = meta.currentJob.name;
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
@@ -419,8 +479,11 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
   elements.slotCaption.textContent = meta.slotCaption;
   elements.goalTitle.textContent = goalHint.title;
   elements.goalCopy.textContent = goalHint.copy;
-  elements.actionFlavorNote.textContent = getPlanningNote();
+  elements.statusPanel.classList.toggle("details-expanded", uiState.detailsExpanded);
+  elements.detailsToggle.setAttribute("aria-expanded", String(uiState.detailsExpanded));
+  elements.detailsToggle.querySelector(".toggle-text").textContent = uiState.detailsExpanded ? "收起" : "詳情";
   renderConditions(meta.activeConditions);
+  renderCharacterStats(meta.character);
 
   if (moneyChanged) {
     pulseElement(elements.walletCard, "is-bumping");
@@ -428,7 +491,6 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
 
   if (rentChanged) {
     pulseElement(elements.threatCard, "is-bumping");
-    pulseElement(elements.dangerLine, "is-shaking");
   }
 };
 
@@ -448,6 +510,7 @@ const renderIntroDialog = () => {
 
 const handleActionChoice = (actionId) => {
   playSelectSfx();
+  uiState.expandedActionInfoId = null;
   state = dispatchAction(state, actionId);
   if (state.pendingEvent || state.ending) {
     uiState.actionDialogMode = "closed";
@@ -462,34 +525,62 @@ const renderActionSelection = () => {
   const meta = getStatusMeta(state);
   elements.actionDialogKicker.textContent = "回合選單";
   elements.actionDialogTitle.textContent = "今天還要安排什麼";
-  elements.actionDialogCopy.textContent = `剩下 ${meta.slotSummary}。${meta.slotCaption}`;
+  elements.actionDialogCopy.textContent = `剩下 ${meta.slotSummary}`;
   elements.actionDialogBody.innerHTML = "";
   elements.actionDialogActions.innerHTML = "";
 
   const grid = document.createElement("div");
-  grid.className = "dialog-option-grid";
+  grid.className = "action-list";
 
   for (const action of actions) {
-    const flavor = ACTION_FLAVOR[action.id] ?? ACTION_FLAVOR.work;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `event-button action-choice-button ${flavor.tone ?? "steady"}`;
-    button.disabled = action.disabled;
-    const previewItems = getActionPreview(action)
-      .map((item) => `<span class="effect-pill">${item}</span>`)
-      .join("");
-    button.innerHTML = `
-      <span class="dialog-option-topline">
-        <span class="dialog-option-title">${action.label}</span>
-        <span class="dialog-option-tag">${flavor.risk}</span>
-      </span>
-      <span class="dialog-option-subtitle">${flavor.subtitle}</span>
-      <span class="dialog-option-desc">${action.description}</span>
-      <span class="effect-pills">${previewItems}</span>
-      ${action.disabledReason ? `<span class="disabled-note">${action.disabledReason}</span>` : ""}
-    `;
-    button.addEventListener("click", () => handleActionChoice(action.id));
-    grid.append(button);
+    const item = document.createElement("article");
+    const infoId = `action-info-${action.id}`;
+    item.className = `action-list-item${action.disabled ? " is-disabled" : ""}`;
+
+    const row = document.createElement("div");
+    row.className = "action-row";
+
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.className = "action-row-button";
+    actionButton.disabled = action.disabled;
+    actionButton.textContent = action.label;
+    actionButton.addEventListener("click", () => handleActionChoice(action.id));
+
+    const infoButton = document.createElement("button");
+    infoButton.type = "button";
+    infoButton.className = "action-info-button";
+    infoButton.setAttribute("aria-label", `${action.label} 詳細資訊`);
+    infoButton.setAttribute("aria-expanded", String(uiState.expandedActionInfoId === action.id));
+    infoButton.setAttribute("aria-controls", infoId);
+    infoButton.innerHTML = '<span class="action-info-glyph" aria-hidden="true">i</span>';
+    infoButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      uiState.expandedActionInfoId = uiState.expandedActionInfoId === action.id ? null : action.id;
+      render();
+    });
+
+    row.append(actionButton, infoButton);
+    item.append(row);
+
+    if (uiState.expandedActionInfoId === action.id) {
+      const detail = document.createElement("section");
+      detail.className = "action-inline-details";
+      detail.id = infoId;
+      const previewItems = getActionPreview(action)
+        .map((entry) => `<span class="effect-pill">${entry}</span>`)
+        .join("");
+      const contextHint = getActionContextHint(action);
+      detail.innerHTML = `
+        <p class="action-inline-copy">${action.description}</p>
+        <div class="effect-pills">${previewItems}</div>
+        ${contextHint ? `<p class="action-inline-hint">${contextHint}</p>` : ""}
+        ${action.disabledReason ? `<p class="disabled-note">${action.disabledReason}</p>` : ""}
+      `;
+      item.append(detail);
+    }
+
+    grid.append(item);
   }
 
   elements.actionDialogBody.append(grid);
@@ -509,6 +600,7 @@ const renderActionSelection = () => {
   cancelButton.textContent = "先返回";
   cancelButton.addEventListener("click", () => {
     playClickSfx();
+    uiState.expandedActionInfoId = null;
     uiState.actionDialogMode = "closed";
     render();
   });
@@ -757,6 +849,8 @@ const resetGame = () => {
   state = createInitialState();
   uiState.onboardingOpen = true;
   uiState.actionDialogMode = "closed";
+  uiState.detailsExpanded = false;
+  uiState.expandedActionInfoId = null;
   uiState.achievementToastVisible = false;
   uiState.achievementSignature = "";
   if (uiState.achievementTimer) {
@@ -776,7 +870,7 @@ const render = () => {
   }
 
   renderWeekProgress();
-  renderStats(diff.changedStats);
+  renderCurrentStats(diff.changedStats);
   renderMeta(diff);
   renderMainButtons();
   renderIntroDialog();
@@ -811,6 +905,7 @@ elements.startButton.addEventListener("click", async () => {
 
 elements.takeActionButton.addEventListener("click", () => {
   playClickSfx();
+  uiState.expandedActionInfoId = null;
   uiState.actionDialogMode = "select";
   render();
 });
@@ -837,18 +932,10 @@ elements.soundToggle.addEventListener("click", () => {
   render();
 });
 
-// 初始化詳情切換按鈕（手機優化）
-function initDetailsToggle() {
-  const toggleBtn = document.querySelector("#details-toggle");
-  const statusPanel = document.querySelector(".status-panel");
-  if (!toggleBtn || !statusPanel) return;
+elements.detailsToggle.addEventListener("click", () => {
+  playClickSfx();
+  uiState.detailsExpanded = !uiState.detailsExpanded;
+  render();
+});
 
-  toggleBtn.addEventListener("click", () => {
-    const isExpanded = statusPanel.classList.toggle("details-expanded");
-    toggleBtn.setAttribute("aria-expanded", isExpanded);
-    toggleBtn.querySelector(".toggle-text").textContent = isExpanded ? "收起詳情" : "顯示詳情";
-  });
-}
-
-initDetailsToggle();
 render();

@@ -30,6 +30,8 @@ const clampStat = (key, value) => {
   return Math.max(bounds.min, Math.min(bounds.max, value));
 };
 
+const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+
 const describeDelta = (key, value) => {
   const labelMap = {
     money: "金錢",
@@ -237,6 +239,55 @@ const finalizeDay = (state) => {
 };
 
 const pickRandom = (items, rng) => items[Math.floor(rng() * items.length)];
+
+const pickWeightedRandom = (items, getWeight, rng) => {
+  const weighted = items.map((item) => ({ item, weight: Math.max(0, getWeight(item)) }));
+  const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+
+  if (total <= 0) {
+    return pickRandom(items, rng);
+  }
+
+  let cursor = rng() * total;
+  for (const entry of weighted) {
+    cursor -= entry.weight;
+    if (cursor <= 0) {
+      return entry.item;
+    }
+  }
+
+  return weighted.at(-1)?.item ?? null;
+};
+
+const createCharacter = (rng) => {
+  const character = {
+    intelligence: 1,
+    physique: 1,
+    luck: 1,
+    wealth: 1,
+  };
+  const keys = Object.keys(character);
+  let remaining = 8;
+
+  while (remaining > 0) {
+    const key = pickRandom(keys, rng);
+    if (character[key] >= 5) {
+      continue;
+    }
+    character[key] += 1;
+    remaining -= 1;
+  }
+
+  return character;
+};
+
+const getStartingState = (character) => ({
+  ...DEFAULT_PLAYER_STATE,
+  money: DEFAULT_PLAYER_STATE.money + 300 * (character.wealth - 3),
+  energy: clampStat("energy", DEFAULT_PLAYER_STATE.energy + 5 * (character.physique - 3)),
+  mood: clampStat("mood", DEFAULT_PLAYER_STATE.mood + 3 * (character.luck - 3)),
+  skill: clampStat("skill", 4 * (character.intelligence - 1)),
+});
 
 const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {}) => {
   if (!ignoreFlowGuards && state.phase !== PHASES.READY) {
@@ -536,6 +587,28 @@ const eligibleEvents = (state) => EVENTS.filter((event) => (event.condition ? ev
 
 const tierOrder = ["urgent", "state", "opportunity", "ambient"];
 
+const getEventCategoryWeight = (state, category = "") => {
+  const { intelligence, physique, luck, wealth } = state.character;
+  const delta = {
+    intelligence: intelligence - 3,
+    physique: physique - 3,
+    luck: luck - 3,
+    wealth: wealth - 3,
+  };
+
+  const weights = {
+    健康警訊: 1 - 0.18 * delta.physique,
+    生活意外: 1 - 0.06 * delta.intelligence - 0.06 * delta.luck,
+    帳單壓力: 1 - 0.18 * delta.wealth - 0.05 * delta.luck,
+    接案壓力: 1 + 0.06 * delta.intelligence,
+    生活事件: 1,
+    小確幸: 1 + 0.18 * delta.luck,
+    轉機: 1 + 0.06 * delta.intelligence + 0.08 * delta.luck + 0.04 * delta.wealth,
+  };
+
+  return clampNumber(weights[category] ?? 1, 0.4, 1.8);
+};
+
 const selectEvent = (state, rng) => {
   const eligible = eligibleEvents(state);
   if (eligible.length === 0) {
@@ -545,11 +618,11 @@ const selectEvent = (state, rng) => {
   for (const tier of tierOrder) {
     const bucket = eligible.filter((event) => event.tier === tier);
     if (bucket.length > 0) {
-      return pickRandom(bucket, rng);
+      return pickWeightedRandom(bucket, (event) => getEventCategoryWeight(state, event.category), rng);
     }
   }
 
-  return pickRandom(eligible, rng);
+  return pickWeightedRandom(eligible, (event) => getEventCategoryWeight(state, event.category), rng);
 };
 
 const canTakeAnotherAction = (state) => {
@@ -694,9 +767,11 @@ const resolveEvent = (state, optionId, rng) => {
   return finalizeDay(nextState);
 };
 
-export const createInitialState = () => {
+export const createInitialState = (rng = Math.random) => {
+  const character = createCharacter(rng);
   const state = {
-    ...DEFAULT_PLAYER_STATE,
+    ...getStartingState(character),
+    character,
     conditions: { ...DEFAULT_CONDITIONS },
     history: { ...DEFAULT_HISTORY },
     phase: PHASES.READY,
@@ -752,6 +827,8 @@ export const getStatusMeta = (state) => {
     .map(([id]) => ({
       id,
       label: CONDITION_CONFIG[id]?.label ?? id,
+      compactLabel: CONDITION_CONFIG[id]?.compactLabel ?? CONDITION_CONFIG[id]?.label ?? id,
+      icon: CONDITION_CONFIG[id]?.icon ?? "alert",
       description: CONDITION_CONFIG[id]?.description ?? "",
     }));
 
@@ -763,6 +840,7 @@ export const getStatusMeta = (state) => {
     slotCaption: slotRule.caption,
     canEndDay: state.phase === PHASES.READY && state.dayPlan.actionsTaken.length > 0 && state.dayPlan.remainingSlots > 0,
     activeConditions,
+    character: state.character,
   };
 };
 
