@@ -4,6 +4,7 @@
 let audioContext = null;
 let currentBgmOscillators = [];
 let bgmGainNode = null;
+let bgmTimeoutId = null;
 let audioEnabled = true;
 
 export const setAudioEnabled = (enabled) => {
@@ -13,18 +14,29 @@ export const setAudioEnabled = (enabled) => {
   }
 };
 
-const getAudioContext = () => {
+const ensureAudioContext = async () => {
   if (!audioContext) {
     try {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
     } catch (e) {
-      console.warn("Web Audio API not supported");
+      console.warn("Web Audio API not supported:", e);
       return null;
     }
   }
+
+  // Resume context if suspended (required by some browsers)
   if (audioContext.state === "suspended") {
-    audioContext.resume();
+    try {
+      await audioContext.resume();
+    } catch (e) {
+      console.warn("Could not resume audio context:", e);
+    }
   }
+
+  return audioContext;
+};
+
+const getAudioContext = () => {
   return audioContext;
 };
 
@@ -53,18 +65,18 @@ const playBeep = (frequency = 800, duration = 100, volume = 0.3) => {
 
 // SFX: Button click (short high beep)
 export const playClickSfx = () => {
-  playBeep(1000, 80, 0.2);
+  playBeep(1000, 80, 0.4);
 };
 
 // SFX: Action selection (medium beep)
 export const playSelectSfx = () => {
-  playBeep(700, 120, 0.25);
+  playBeep(700, 120, 0.5);
 };
 
 // SFX: Result display (two-tone)
 export const playResultSfx = () => {
-  playBeep(600, 100, 0.2);
-  setTimeout(() => playBeep(750, 100, 0.2), 120);
+  playBeep(600, 100, 0.4);
+  setTimeout(() => playBeep(750, 100, 0.4), 120);
 };
 
 // SFX: Achievement unlock (rising tone)
@@ -84,8 +96,8 @@ export const playAchievementSfx = () => {
     osc.frequency.setValueAtTime(baseFreq, now + i * 0.08);
     osc.type = "sine";
 
-    gain.gain.setValueAtTime(0.25, now + i * 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.15);
+    gain.gain.setValueAtTime(0.5, now + i * 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.02, now + i * 0.08 + 0.15);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -112,8 +124,8 @@ export const playEndingSfx = () => {
     osc.frequency.value = freq;
     osc.type = "sine";
 
-    gain.gain.setValueAtTime(0.25, beatTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, beatTime + 0.15);
+    gain.gain.setValueAtTime(0.5, beatTime);
+    gain.gain.exponentialRampToValueAtTime(0.02, beatTime + 0.15);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -124,13 +136,17 @@ export const playEndingSfx = () => {
 };
 
 // Generate minimalist looping BGM
-export const startBgm = (volume = 0.15) => {
+export const startBgm = async (volume = 0.15) => {
   if (!audioEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
 
-  // Stop existing BGM
+  // Stop existing BGM first
   stopBgm();
+
+  const ctx = await ensureAudioContext();
+  if (!ctx) {
+    console.warn("Could not initialize audio context for BGM");
+    return;
+  }
 
   const beatDuration = 0.5; // 500ms per beat
   const barLength = beatDuration * 8; // 8 beats per bar
@@ -144,7 +160,15 @@ export const startBgm = (volume = 0.15) => {
   const scale = [262, 294, 330, 392, 440]; // C4, D4, E4, G4, A4
 
   // Create repeating pattern
-  const playBgmPattern = (startTime) => {
+  const playBgmPattern = () => {
+    if (!audioEnabled || !bgmGainNode) return;
+
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const startTime = now + 0.1; // Start slightly in future to ensure stability
+
     // Pattern: C - E - G - A - G - E - D - C (one octave down for bass)
     const pattern = [0, 2, 3, 4, 3, 2, 1, 0]; // indices to scale
     const octaves = [1, 1, 1, 1, 1, 1, 1, 0.5]; // bass note in last position
@@ -160,7 +184,7 @@ export const startBgm = (volume = 0.15) => {
       osc.type = "sine";
 
       gain.gain.setValueAtTime(0, beatTime);
-      gain.gain.linearRampToValueAtTime(0.15, beatTime + 0.05);
+      gain.gain.linearRampToValueAtTime(0.25, beatTime + 0.05);
       gain.gain.exponentialRampToValueAtTime(0.05, beatTime + beatDuration - 0.05);
 
       osc.connect(gain);
@@ -172,24 +196,21 @@ export const startBgm = (volume = 0.15) => {
       currentBgmOscillators.push(osc);
     });
 
-    // Schedule next pattern - use fixed delay instead of checking time
-    const delay = barLength * 1000; // Convert to milliseconds
-    const timeoutId = setTimeout(() => {
-      if (audioEnabled && bgmGainNode) {
-        playBgmPattern(ctx.currentTime);
-      }
-    }, delay);
+    // Schedule next pattern
+    if (audioEnabled && bgmGainNode) {
+      bgmTimeoutId = setTimeout(playBgmPattern, barLength * 1000);
+    }
   };
 
-  // Start the pattern with small delay to ensure context is ready
-  setTimeout(() => {
-    if (audioEnabled && ctx.state !== "suspended") {
-      playBgmPattern(ctx.currentTime);
-    }
-  }, 100);
+  // Start the pattern immediately
+  playBgmPattern();
 };
 
 export const stopBgm = () => {
+  if (bgmTimeoutId) {
+    clearTimeout(bgmTimeoutId);
+    bgmTimeoutId = null;
+  }
   currentBgmOscillators.forEach((osc) => {
     try {
       osc.stop();

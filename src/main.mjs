@@ -814,11 +814,11 @@ const render = () => {
   }
 };
 
-elements.startButton.addEventListener("click", () => {
+elements.startButton.addEventListener("click", async () => {
   playClickSfx();
   triggerHaptic(10);
   uiState.onboardingOpen = false;
-  startBgm(0.15);
+  await startBgm(0.15);
   render();
 });
 

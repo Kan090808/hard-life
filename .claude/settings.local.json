@@ -4,7 +4,13 @@
       "Bash(git add *)",
       "Bash(git commit -m 'Fix missing getLatestLog import in main.mjs *)",
       "Bash(npm run *)",
-      "Bash(git commit -m 'Fix audio system: add audioEnabled checks and fix BGM loop timing *)"
+      "Bash(git commit -m 'Fix audio system: add audioEnabled checks and fix BGM loop timing *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "Bash(git commit -m 'Increase audio volume and fix BGM initialization *)"
     ]
   }
 }
