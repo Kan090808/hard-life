@@ -1,4 +1,4 @@
-import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getStatusMeta } from "./game.mjs";
+import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getStatusMeta, getLatestLog } from "./game.mjs";
 import { JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
 
 let state = createInitialState();
