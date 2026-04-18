@@ -10,7 +10,8 @@
       "mcp__Claude_in_Chrome__computer",
       "mcp__Claude_in_Chrome__read_console_messages",
       "mcp__Claude_in_Chrome__javascript_tool",
-      "Bash(git commit -m 'Increase audio volume and fix BGM initialization *)"
+      "Bash(git commit -m 'Increase audio volume and fix BGM initialization *)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

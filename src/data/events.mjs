@@ -1,76 +1,246 @@
-const withLog = (effects, log) => ({ effects, log });
+const withLog = (effects = {}, log = "", extras = {}) => ({
+  effects,
+  log,
+  ...extras,
+});
+
+const lastActionIs = (state, ids) => ids.includes(state.dayPlan.actionsTaken.at(-1));
 
 export const EVENTS = [
   {
-    id: "cover-shift",
-    category: "工作麻煩",
-    title: "主管臨時叫你代班",
-    description: "今天有人請假，主管希望你留下來代班。",
+    id: "body-warning",
+    tier: "urgent",
+    category: "健康警訊",
+    title: "身體發出警告",
+    description: "你今天胸口悶、頭也有點痛，身體像在提醒你這不是鐵打的月曆。",
+    condition: (state) =>
+      state.energy < 28 || state.conditions.burnoutRisk || state.history.consecutiveHeavyDays >= 2,
     options: [
       {
-        id: "accept",
-        text: "答應，賺一點是一點",
-        caption: "今晚的自由拿去換現金。",
+        id: "slow-down",
+        text: "收手，今天先保命",
+        caption: "少賺一點，但把人先留住。",
         resolve: () =>
           withLog(
             {
-              money: 900,
-              energy: -24,
-              stress: 10,
+              energy: 16,
+              mood: 4,
+              stress: -10,
             },
-            "你把晚上的力氣也換成了時薪，錢是多一點，臉色不是。"
+            "你讓自己慢下來，今天沒有多賺，但至少沒有把身體再往下逼。",
+            { conditionChanges: { burnoutRisk: false } }
           ),
       },
       {
-        id: "decline",
-        text: "拒絕，我真的需要休息",
-        caption: "這次先站在自己這邊。",
+        id: "push-through",
+        text: "再硬撐一下",
+        caption: "今天先過去，代價晚點再說。",
+        resolve: (_state, rng) => {
+          const gotHit = rng() < 0.55;
+          return withLog(
+            {
+              money: 400,
+              energy: gotHit ? -18 : -10,
+              stress: gotHit ? 18 : 10,
+              mood: gotHit ? -8 : -3,
+            },
+            gotHit
+              ? "你硬撐著把今天做完，回家時整個人都像快散架。"
+              : "你勉強撐過去了，但身體沒有真的同意。",
+            { conditionChanges: { burnoutRisk: true } }
+          );
+        },
+      },
+    ],
+  },
+  {
+    id: "scooter-breakdown",
+    tier: "state",
+    category: "生活意外",
+    title: "機車在路上出怪聲",
+    description: "通勤途中，機車發出一聲你不想聽懂的聲音。",
+    condition: (state) =>
+      !state.conditions.scooterBroken &&
+      lastActionIs(state, ["work", "overtime", "sideGig", "jobSearch"]) &&
+      state.jobLevel < 4,
+    options: [
+      {
+        id: "repair-now",
+        text: "當場修掉",
+        caption: "先痛一次，免得後面每天都痛。",
         resolve: () =>
           withLog(
             {
-              mood: 5,
-              stress: -5,
+              money: -1100,
+              stress: -4,
             },
-            "你終於對主管說了不，回家的路上連空氣都比較能呼吸。"
+            "錢包當場瘦了一截，但至少明天不用先輸在路上。"
+          ),
+      },
+      {
+        id: "delay-repair",
+        text: "先拖著",
+        caption: "把問題踢給明天的自己。",
+        resolve: () =>
+          withLog(
+            {
+              stress: 8,
+            },
+            "你把修車這件事往後推了，通勤從明天開始會變得更麻煩。",
+            { conditionChanges: { scooterBroken: true } }
           ),
       },
     ],
   },
   {
-    id: "rude-customer",
-    category: "工作麻煩",
-    title: "遇到奧客",
-    description: "客人因為小事大罵你，主管還要你先道歉。",
+    id: "computer-glitch",
+    tier: "state",
+    category: "生活意外",
+    title: "電腦開始不穩",
+    description: "畫面突然閃了一下，你很清楚這通常不是好兆頭。",
+    condition: (state) =>
+      !state.conditions.computerBroken && lastActionIs(state, ["study", "freelance"]),
     options: [
       {
-        id: "hold",
-        text: "忍下來，先把今天過完",
-        caption: "委屈先吞，薪水不要飛。",
+        id: "back-up",
+        text: "先花錢救資料",
+        caption: "先把災情壓住。",
         resolve: () =>
           withLog(
             {
-              mood: -16,
-              stress: 16,
-              money: 200,
+              money: -500,
+              stress: -2,
             },
-            "你把火吞回去，換到一點加給，還有更多委屈。"
+            "你先把資料救回來，雖然花錢，但至少沒有整台一起下去。"
           ),
       },
       {
-        id: "fight-back",
-        text: "直接反擊，今天不忍了",
-        caption: "今天的底線只剩這一條。",
+        id: "ignore",
+        text: "先當沒看到",
+        caption: "希望它能自己撐過去。",
+        resolve: () =>
+          withLog(
+            {
+              stress: 6,
+            },
+            "你假裝沒看到那一下閃爍，但之後做需要電腦的事都會更卡。",
+            { conditionChanges: { computerBroken: true } }
+          ),
+      },
+    ],
+  },
+  {
+    id: "landlord-message",
+    tier: "state",
+    category: "帳單壓力",
+    title: "房東傳訊息來了",
+    description: "房東問你房租什麼時候補，語氣比上次更不耐煩。",
+    condition: (state) => state.unpaidRentCount > 0 || state.conditions.landlordAngry,
+    options: [
+      {
+        id: "reply-politely",
+        text: "先低頭安撫",
+        caption: "把今天的尊嚴換成一點時間。",
+        resolve: () =>
+          withLog(
+            {
+              mood: -5,
+              stress: -6,
+            },
+            "你把姿態放低，至少暫時沒有被追得更緊。",
+            { conditionChanges: { landlordAngry: false } }
+          ),
+      },
+      {
+        id: "leave-read",
+        text: "先已讀不回",
+        caption: "問題沒消失，但你今天不想面對。",
+        resolve: () =>
+          withLog(
+            {
+              stress: 12,
+              mood: -8,
+            },
+            "你先不回，壓力沒有因此消失，只是轉成更晚要面對的麻煩。",
+            { conditionChanges: { landlordAngry: true } }
+          ),
+      },
+    ],
+  },
+  {
+    id: "client-referral",
+    tier: "opportunity",
+    category: "轉機",
+    title: "朋友丟來一個案源",
+    description: "有人問你願不願意接個小案子，終於不是只有垃圾訊息找你。",
+    condition: (state) =>
+      state.conditions.hasFreelanceContact &&
+      state.skill >= 35 &&
+      !state.conditions.clientLead &&
+      !state.conditions.computerBroken,
+    options: [
+      {
+        id: "take-lead",
+        text: "先接下來",
+        caption: "把這個機會留到之後變現。",
+        resolve: () =>
+          withLog(
+            {},
+            "你把這條線接住了，之後的接案動作會更有價值。",
+            { conditionChanges: { clientLead: true } }
+          ),
+      },
+      {
+        id: "pass-lead",
+        text: "先婉拒",
+        caption: "今天沒那個餘裕。",
+        resolve: () =>
+          withLog(
+            {
+              mood: -2,
+            },
+            "你把機會放掉了，心裡知道這可能不是天天都有。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "rush-client",
+    tier: "opportunity",
+    category: "接案壓力",
+    title: "客戶突然催單",
+    description: "對方問你能不能提早交，語氣客氣但很急。",
+    condition: (state) => state.conditions.clientLead && state.skill >= 35,
+    options: [
+      {
+        id: "rush-it",
+        text: "硬挪時間趕出來",
+        caption: "拿體力換評價。",
+        resolve: () =>
+          withLog(
+            {
+              money: 650,
+              energy: -12,
+              stress: 10,
+            },
+            "你把這張單硬是趕了出來，現金有進來，但今天也更空了。"
+          ),
+      },
+      {
+        id: "set-boundary",
+        text: "改約正常時程",
+        caption: "別讓每個人都覺得你可以無限壓榨。",
         resolve: (_state, rng) => {
-          const gotCut = rng() < 0.45;
+          const kept = rng() < 0.7;
           return withLog(
             {
-              mood: 15,
-              stress: -10,
-              money: gotCut ? -500 : 0,
+              mood: 5,
+              stress: -4,
+              money: kept ? 150 : -200,
             },
-            gotCut
-              ? "你嘴贏了，排班輸了，主管看你的眼神已經像月底的報表。"
-              : "你總算替自己出了一口氣，今天晚上心情有回來一點。"
+            kept
+              ? "你把時程談回合理範圍，這單沒飛走，還替自己守住一點邊界。"
+              : "你把界線說清楚了，但這筆小錢也一起飛了。"
           );
         },
       },
@@ -78,309 +248,87 @@ export const EVENTS = [
   },
   {
     id: "friend-dinner",
+    tier: "ambient",
     category: "生活事件",
-    title: "朋友約吃飯",
-    description: "朋友說很久沒見了，問你要不要出來聊聊近況。",
+    title: "朋友約你吃飯",
+    description: "朋友說很久沒見了，問你今晚要不要出來聊聊近況。",
+    condition: (state) => state.dayPlan.remainingSlots > 0,
     options: [
       {
         id: "go",
-        text: "去，至少今晚像在過生活",
-        caption: "用一餐飯把自己拉回人間。",
+        text: "去一下",
+        caption: "至少今晚像在過生活。",
         resolve: () =>
           withLog(
             {
-              money: -600,
-              mood: 25,
-              energy: -10,
+              money: -350,
+              mood: 15,
+              stress: -6,
             },
-            "你花掉一點錢，但把最近悶著的話也順便吐出去了。"
+            "你花了點錢，但也把最近悶著的話吐出去了。"
           ),
       },
       {
         id: "skip",
-        text: "不去，月底前先省著",
-        caption: "錢包先活，孤單晚點再說。",
+        text: "先不去",
+        caption: "月底前還是現實先贏。",
         resolve: () =>
           withLog(
             {
-              mood: -6,
-              stress: 3,
+              mood: -4,
+              stress: 2,
             },
-            "你留在家裡滑手機，錢包沒變薄，但心情有一點。"
+            "你留在家裡省下那筆開銷，但心情也跟著薄了一點。"
           ),
-      },
-    ],
-  },
-  {
-    id: "sick-day",
-    category: "生活意外",
-    title: "身體不舒服",
-    description: "你今天頭很痛，身體像在提醒你這不是鐵打的月曆。",
-    condition: (state) => state.energy < 30,
-    options: [
-      {
-        id: "call-in-sick",
-        text: "請假休息，先把命保住",
-        caption: "今天不賺，也不能直接倒。",
-        resolve: () =>
-          withLog(
-            {
-              money: -800,
-              energy: 40,
-              stress: -10,
-            },
-            "今天賺不到錢，但你至少不是把自己再往更壞的地方推。"
-          ),
-      },
-      {
-        id: "push-through",
-        text: "硬撐上班，拜託今天先不要倒",
-        caption: "再賭一天，看看身體會不會原諒你。",
-        resolve: (_state, rng) => {
-          const gotWorse = rng() < 0.5;
-          return withLog(
-            {
-              money: 800,
-              energy: gotWorse ? -34 : -22,
-              stress: gotWorse ? 28 : 20,
-              mood: gotWorse ? -6 : 0,
-            },
-            gotWorse
-              ? "你真的硬撐去了，晚上的你看起來像一封快撕開的帳單。"
-              : "你勉強撐完班，身體沒有原諒你，但也還沒正式報復。"
-          );
-        },
       },
     ],
   },
   {
     id: "receipt-win",
+    tier: "ambient",
     category: "小確幸",
     title: "發票中獎",
-    description: "你整理錢包時突然發現，原來命運今天還有留一點零頭給你。",
-    options: [
-      {
-        id: "collect",
-        text: "收下這 200 塊溫柔",
-        caption: "今天至少有一件事站在你這邊。",
-        resolve: () =>
-          withLog(
-            {
-              money: 200,
-              mood: 15,
-            },
-            "發票中了 200 元，你今天突然覺得世界還沒有完全放棄你。"
-          ),
-      },
-    ],
-  },
-  {
-    id: "scooter-breakdown",
-    category: "生活意外",
-    title: "機車壞掉",
-    description: "上班路上機車發出一聲你不想聽懂的聲音。",
-    options: [
-      {
-        id: "repair",
-        text: "修吧，不修以後更麻煩",
-        caption: "先痛一次，免得每天都痛。",
-        resolve: () =>
-          withLog(
-            {
-              money: -1200,
-              stress: -5,
-            },
-            "錢少了一截，但至少你知道明天不會先輸在路上。"
-          ),
-      },
-      {
-        id: "delay",
-        text: "先不修，能拖一天是一天",
-        caption: "把問題踢給明天的自己。",
-        resolve: () =>
-          withLog(
-            {
-              energy: -12,
-              stress: 10,
-            },
-            "你決定用腿和運氣頂一下，路上每一步都像在跟月底吵架。"
-          ),
-      },
-    ],
+    description: "你翻錢包時發現，原來今天命運還留了一點零頭給你。",
+    autoResolve: () =>
+      withLog(
+        {
+          money: 200,
+          mood: 12,
+        },
+        "發票中了 200 元，今天突然沒有那麼像跟世界對幹。"
+      ),
   },
   {
     id: "course-sale",
+    tier: "opportunity",
     category: "轉機",
     title: "線上課程特價",
-    description: "你看到一門實用課程打折，標題寫著『也許你的人生還能再調整一下』。",
+    description: "你看到一門很實用的課程在打折，剛好是你最近想補的技能。",
+    condition: (state) => state.skill < 75 && state.money >= 1200,
     options: [
       {
         id: "buy",
-        text: "買，這可能是未來的門票",
-        caption: "今天窮一點，換未來多一點可能。",
+        text: "買下來",
+        caption: "今天窮一點，換明天多一點可能。",
         resolve: () =>
           withLog(
             {
-              money: -1200,
-              skill: 25,
+              money: -900,
+              skill: 18,
             },
-            "你刷卡的時候心有點痛，但也終於對未來做了一次正向投資。"
+            "你咬牙刷下去，這次至少不是把錢只花在止痛上。"
           ),
       },
       {
         id: "pass",
-        text: "先略過，現在真的沒本錢",
-        caption: "這次不是不想，是現實先贏。",
+        text: "先略過",
+        caption: "這次先守住現金。",
         resolve: () =>
           withLog(
             {
               stress: 2,
             },
-            "你把頁面關掉，理智贏了，但不太快樂。"
-          ),
-      },
-    ],
-  },
-  {
-    id: "interview-invite",
-    category: "轉機",
-    title: "面試邀請",
-    description: "你收到一份更好工作的面試邀請，終於不是只有垃圾訊息在找你。",
-    condition: (state) => state.skill >= 50,
-    options: [
-      {
-        id: "take-it",
-        text: "請假去面試，賭一次看看",
-        caption: "有些翻身機會就是要硬挪出來。",
-        resolve: (state, rng) => {
-          const roll = rng();
-          const successRate = Math.min(1, 0.2 + state.skill * 0.008 + 0.15);
-          const nextLevel = state.skill >= 80 && state.money >= 10000 ? 4 : state.skill >= 60 ? 3 : state.skill >= 30 ? 2 : state.jobLevel;
-          const upgraded = roll < successRate && nextLevel > state.jobLevel;
-
-          return withLog(
-            {
-              money: -800,
-              mood: upgraded ? 12 : -8,
-              stress: upgraded ? -12 : 8,
-              jobLevel: upgraded ? nextLevel - state.jobLevel : 0,
-            },
-            upgraded
-              ? "你請假去面試，回來的時候不只心跳很快，工作等級也真的跳了一階。"
-              : "你去了面試，也把希望一起帶回家，但這次還沒輪到你。"
-          );
-        },
-      },
-      {
-        id: "skip",
-        text: "放棄，今天先活下去比較重要",
-        caption: "先顧今天，未來晚點再說。",
-        resolve: () =>
-          withLog(
-            {
-              mood: -10,
-              stress: 10,
-            },
-            "你把信關掉了，心裡知道這不是最想做的決定。"
-          ),
-      },
-    ],
-  },
-  {
-    id: "rain-no-umbrella",
-    category: "生活意外",
-    title: "下雨忘記帶傘",
-    description: "你看著突然下大的雨，心想今天連天空都很懂怎麼補刀。",
-    options: [
-      {
-        id: "buy-drink-and-wait",
-        text: "買杯手搖飲躲一下",
-        caption: "先用糖分和冷氣撐住心情。",
-        resolve: () =>
-          withLog(
-            {
-              money: -180,
-              mood: 8,
-              stress: -4,
-            },
-            "錢包變薄了，但糖分和冰塊幫你把今天緩了一點。"
-          ),
-      },
-      {
-        id: "run-home",
-        text: "直接衝回家，反正都一樣狼狽",
-        caption: "體面先不要了，回家比較重要。",
-        resolve: () =>
-          withLog(
-            {
-              energy: -10,
-              mood: -4,
-            },
-            "你成功把自己送回家，也成功讓鞋子整晚都在滴水。"
-          ),
-      },
-    ],
-  },
-  {
-    id: "breakfast-auntie",
-    category: "小確幸",
-    title: "早餐店阿姨記得你",
-    description: "她看到你就說『今天一樣嗎？』那一瞬間，你覺得自己還算被世界接住。",
-    options: [
-      {
-        id: "accept-kindness",
-        text: "今天先被這份善意接住",
-        caption: "有人記得你，真的很補。",
-        resolve: () =>
-          withLog(
-            {
-              mood: 10,
-              energy: 5,
-            },
-            "有人記得你喜歡什麼，這件事比早餐本身還補。"
-          ),
-      },
-    ],
-  },
-  {
-    id: "tip-jar-luck",
-    category: "小確幸",
-    title: "意外的小費",
-    description: "今天有人結帳後回頭說『辛苦了』，還默默多留了一點錢。",
-    options: [
-      {
-        id: "pocket-luck",
-        text: "把這點運氣放進口袋",
-        caption: "小錢不多，但這句辛苦了很值。",
-        resolve: () =>
-          withLog(
-            {
-              money: 450,
-              mood: 8,
-            },
-            "不是什麼大翻盤，但被好好對待一下，整天都比較能撐。"
-          ),
-      },
-    ],
-  },
-  {
-    id: "used-book-haul",
-    category: "轉機",
-    title: "二手書攤撿到寶",
-    description: "你路過二手書攤，剛好翻到一本超便宜又真的有用的工具書。",
-    options: [
-      {
-        id: "grab-book",
-        text: "把這本便宜機會撿回家",
-        caption: "現在花一點，換未來少吃一點虧。",
-        resolve: () =>
-          withLog(
-            {
-              money: -120,
-              skill: 8,
-              mood: 6,
-            },
-            "今天花的不是亂花，是把未來往前推了一點點。"
+            "你把頁面關掉了，理智贏了，但也不是很快樂。"
           ),
       },
     ],

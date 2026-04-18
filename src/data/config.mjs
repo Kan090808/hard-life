@@ -9,7 +9,7 @@ export const TOTAL_DAYS = 30;
 export const DAILY_LIVING_COST = 150;
 export const RENT_AMOUNT = 3000;
 export const RENT_DAYS = [7, 14, 21, 28];
-export const EVENT_TRIGGER_RATE = 0.35;
+export const EVENT_TRIGGER_RATE = 0.3;
 export const MAX_LOG_ENTRIES = 8;
 
 export const STAT_BOUNDS = {
@@ -17,6 +17,60 @@ export const STAT_BOUNDS = {
   mood: { min: 0, max: 100 },
   stress: { min: 0, max: 100 },
   skill: { min: 0, max: 100 },
+};
+
+export const DAY_SLOT_RULES = [
+  {
+    id: "high",
+    minEnergy: 70,
+    totalSlots: 2,
+    maxHeavyActions: 2,
+    slotLabel: "2 格，自由安排",
+    caption: "今天還有兩格時間，重行動也扛得住。",
+  },
+  {
+    id: "mid",
+    minEnergy: 40,
+    totalSlots: 2,
+    maxHeavyActions: 1,
+    slotLabel: "2 格，但只能扛 1 次重行動",
+    caption: "今天還有兩格，但只能再扛一次重行動。",
+  },
+  {
+    id: "low",
+    minEnergy: 0,
+    totalSlots: 1,
+    maxHeavyActions: 0,
+    slotLabel: "只剩 1 格",
+    caption: "今天只剩一格力氣，先別再硬來。",
+  },
+];
+
+export const CONDITION_CONFIG = {
+  scooterBroken: {
+    label: "機車待修",
+    description: "通勤型行動會額外耗體、加壓。",
+  },
+  computerBroken: {
+    label: "電腦故障",
+    description: "學技能和接案會更卡。",
+  },
+  burnoutRisk: {
+    label: "過勞邊緣",
+    description: "再硬撐很容易觸發健康事件。",
+  },
+  hasFreelanceContact: {
+    label: "有接案人脈",
+    description: "可解鎖案源與介紹機會。",
+  },
+  landlordAngry: {
+    label: "房東不爽",
+    description: "欠租後更容易出現催租壓力。",
+  },
+  clientLead: {
+    label: "手上有案源",
+    description: "接案收益更高，也更容易接到催單事件。",
+  },
 };
 
 export const DEFAULT_PLAYER_STATE = {
@@ -31,9 +85,25 @@ export const DEFAULT_PLAYER_STATE = {
   unpaidRentCount: 0,
 };
 
+export const DEFAULT_CONDITIONS = {
+  scooterBroken: false,
+  computerBroken: false,
+  burnoutRisk: false,
+  hasFreelanceContact: false,
+  landlordAngry: false,
+  clientLead: false,
+};
+
+export const DEFAULT_HISTORY = {
+  consecutiveHeavyDays: 0,
+  daysSinceRest: 0,
+  recentActions: [],
+  lastDayActions: [],
+};
+
 export const GAME_COPY = {
   title: "打工人生：月底前活下去",
-  subtitle: "每天選一個行動，承擔結果，努力活到月底。",
+  subtitle: "每天安排一到兩件事，在月底前撐住現金、體力與心情。",
 };
 
 export const JOBS = {
@@ -84,7 +154,10 @@ export const ACTIONS = {
     id: "work",
     label: "去打工",
     tag: "穩定收入",
-    description: "穩定賺錢，但體力、心情和耐性都會被刷掉一點。",
+    description: "半天穩定進帳，通常還能留一格時間給別的安排。",
+    slotCost: 1,
+    intensity: "medium",
+    category: "job",
     effects: {
       energy: -25,
       mood: -8,
@@ -96,7 +169,10 @@ export const ACTIONS = {
     id: "overtime",
     label: "加班",
     tag: "高風險現金",
-    description: "今天賺比較多，明天的身體大概會記仇。",
+    description: "今天賺得更多，但身體和壓力都會記仇。",
+    slotCost: 2,
+    intensity: "heavy",
+    category: "job",
     effects: {
       energy: -40,
       mood: -18,
@@ -104,16 +180,19 @@ export const ACTIONS = {
     },
     incomeKey: "overtimeIncome",
     disabledAtLevel: 4,
-    disabledReason: "你現在靠接案吃飯，沒有所謂的制式加班可以按。",
+    disabledReason: "你現在靠接案吃飯，沒有制式加班可以按。",
   },
   rest: {
     id: "rest",
     label: "休息",
     tag: "修復自己",
-    description: "今天不賺錢，但至少你明天還像個人。",
+    description: "留一格給休息，今天少賺，但明天比較像個人。",
+    slotCost: 1,
+    intensity: "light",
+    category: "recovery",
     effects: {
       money: -100,
-      energy: 35,
+      energy: 28,
       mood: 10,
       stress: -15,
     },
@@ -122,32 +201,81 @@ export const ACTIONS = {
     id: "study",
     label: "學技能",
     tag: "長期投資",
-    description: "短期更苦一點，但未來比較可能換到像樣的選擇權。",
+    description: "花一格時間和一點錢，把未來往前推。",
+    slotCost: 1,
+    intensity: "light",
+    category: "growth",
     effects: {
-      money: -400,
-      energy: -18,
-      mood: -5,
+      money: -350,
+      energy: -14,
+      mood: -4,
       stress: 5,
-      skill: 12,
+      skill: 10,
     },
   },
   jobSearch: {
     id: "jobSearch",
     label: "找新工作",
     tag: "試著翻身",
-    description: "把履歷丟出去，看看這個月會不會有比較像樣的明天。",
+    description: "全天整理履歷、投遞、面試，賭一次階級往上。",
+    slotCost: 2,
+    intensity: "heavy",
+    category: "growth",
     special: "jobSearch",
   },
   reward: {
     id: "reward",
     label: "犒賞自己",
-    tag: "短暫回血",
-    description: "錢包會變薄，但至少今晚不會那麼想消失。",
+    tag: "喘一口氣",
+    description: "短暫花錢把心情拉回來，不解決根本問題，但今天會比較好撐。",
+    slotCost: 1,
+    intensity: "light",
+    category: "recovery",
     effects: {
-      money: -500,
-      mood: 30,
-      stress: -20,
+      money: -450,
+      mood: 24,
+      stress: -16,
     },
+  },
+  sideGig: {
+    id: "sideGig",
+    label: "接零工",
+    tag: "半天快錢",
+    description: "臨時代班、跑腿、散工，沒正職穩，但比較不會吃掉整天。",
+    slotCost: 1,
+    intensity: "medium",
+    category: "income",
+    special: "sideGig",
+  },
+  freelance: {
+    id: "freelance",
+    label: "接案",
+    tag: "技能變現",
+    description: "把技能換成現金，需要技能或人脈才能接得到。",
+    slotCost: 1,
+    intensity: "medium",
+    category: "income",
+    special: "freelance",
+  },
+  lifeAdmin: {
+    id: "lifeAdmin",
+    label: "處理雜事",
+    tag: "修問題",
+    description: "修車、處理設備、安撫房東或跑補助，今天很現實。",
+    slotCost: 1,
+    intensity: "light",
+    category: "utility",
+    special: "lifeAdmin",
+  },
+  network: {
+    id: "network",
+    label: "社交拜訪",
+    tag: "累積機會",
+    description: "見朋友、跑聚會、維持關係，短期不一定賺錢，但可能帶來門路。",
+    slotCost: 1,
+    intensity: "light",
+    category: "social",
+    special: "network",
   },
 };
 
@@ -225,6 +353,12 @@ export const MILESTONES = [
     title: "工作升級",
     body: "你不只是活著，真的把人生往上拉了一格。",
     matches: (state) => state.jobLevel >= 2,
+  },
+  {
+    id: "first-contact",
+    title: "開始有人脈",
+    body: "你終於不只靠時薪吃飯，開始有別的門路。",
+    matches: (state) => state.conditions.hasFreelanceContact,
   },
 ];
 

@@ -34,6 +34,11 @@
 
           <p class="danger-line" id="danger-line">房租還在路上，今天最好不要亂花。</p>
 
+          <button class="details-toggle" aria-expanded="false" id="details-toggle">
+            <span class="toggle-text">顯示詳情</span>
+            <span class="toggle-icon">▼</span>
+          </button>
+
           <div class="hud-grid">
             <article class="hud-card wallet-card">
               <span class="hud-label">存款</span>
@@ -68,6 +73,13 @@
             <div class="meta-pill"><span>欠租</span><strong id="rent-strikes">0 次</strong></div>
             <div class="meta-pill wide"><span>狀態</span><strong id="phase-label">準備選擇今天要做什麼</strong></div>
           </div>
+
+          <div class="meta-inline planning-inline">
+            <div class="meta-pill"><span>今日時段</span><strong id="slot-summary">2 / 2 格</strong></div>
+            <div class="meta-pill wide"><span>安排限制</span><strong id="slot-caption">今天還有兩格時間可以安排。</strong></div>
+          </div>
+
+          <div class="condition-strip" id="condition-strip" aria-label="持續狀態"></div>
         </section>
 
         <section class="panel action-panel" aria-label="今日決策">
@@ -81,9 +93,9 @@
             <button class="control-button secondary-control" id="reset-button" type="button">重新開始</button>
           </div>
           <div class="utility-row">
-            <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false">回饋：開</button>
+            <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false">音效：開</button>
           </div>
-          <p class="action-flavor">今天只能選一條路走，剩下的代價都會留下來。</p>
+          <p class="action-flavor" id="action-flavor-note">今天通常能安排一到兩件事，但體力和現實都會逼你做取捨。</p>
         </section>
       </section>
     </main>
@@ -107,7 +119,7 @@
           </div>
         </div>
         <p class="dialog-copy" id="intro-copy">
-          《打工人生：月底前活下去》是一款 30 天生存決策遊戲。每天只能做一個主要決策，所有行動、結果與隨機事件都會在上層對話框完成。
+          《打工人生：月底前活下去》是一款 30 天生存決策遊戲。每天通常能安排一到兩件事，但體力、房租與突發事件會讓你的時間一下就不夠用。
         </p>
         <div class="intro-points">
           <div class="intro-point">

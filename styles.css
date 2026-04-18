@@ -416,6 +416,10 @@ h3 {
   margin-top: 0.65rem;
 }
 
+.planning-inline {
+  margin-top: 0.55rem;
+}
+
 .job-identity-card {
   display: grid;
   gap: 0.28rem;
@@ -486,6 +490,44 @@ h3 {
 
 .meta-pill.wide {
   grid-column: 1 / -1;
+}
+
+.condition-strip {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.condition-empty {
+  display: block;
+  padding: 0.72rem 0.78rem;
+  border: 3px dashed rgba(24, 28, 38, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.56);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.condition-chip {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.72rem 0.78rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: #fff4e4;
+  box-shadow: 4px 4px 0 rgba(24, 28, 38, 0.1);
+}
+
+.condition-chip strong {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.condition-chip span {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
 }
 
 .panel {
@@ -709,6 +751,16 @@ h3 {
 
 #event-dialog[data-tone="opportunity"] .dialog-shell {
   background: #ede7ff;
+}
+
+#ending-dialog[data-tone="growth"] .dialog-shell {
+  background: #ecfff1;
+  border-color: #13b56e;
+}
+
+#ending-dialog[data-tone="danger"] .dialog-shell {
+  background: #ffe2e2;
+  border-color: #ff6565;
 }
 
 .event-spotlight {
@@ -1174,6 +1226,112 @@ h3 {
   outline-offset: 2px;
 }
 
+/* 手機視圖優化：信息優先級簡化 */
+@media (max-width: 767px) {
+  .stat-grid.compact {
+    grid-template-columns: repeat(2, 1fr);
+    max-height: 8rem;
+    overflow: hidden;
+    gap: 0.5rem;
+  }
+
+  .meta-inline {
+    display: none;
+  }
+
+  .condition-strip {
+    max-height: 2.8rem;
+    overflow: hidden;
+  }
+
+  .week-strip {
+    font-size: 0.85rem;
+  }
+
+  .status-panel {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+
+  .hud-grid {
+    gap: 0.6rem;
+  }
+
+  .job-identity-card {
+    padding: 0.8rem;
+    margin-top: 0.6rem;
+  }
+}
+
+/* 超小屏幕（375px 以下）字體微調 */
+@media (max-width: 374px) {
+  .status-top .app-title {
+    font-size: 1.1rem;
+  }
+
+  .stat-card strong {
+    font-size: 1rem;
+  }
+
+  .hud-label {
+    font-size: 0.7rem;
+  }
+
+  .week-caption {
+    font-size: 0.8rem;
+  }
+}
+
+/* 詳情切換按鈕樣式 */
+.details-toggle {
+  width: 100%;
+  padding: 0.6rem;
+  font-size: 0.9rem;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: #f9f9f9;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+
+.details-toggle:hover {
+  background: #f0f0f0;
+  transform: translate(-1px, -1px);
+}
+
+.details-toggle:active {
+  transform: translate(2px, 2px);
+}
+
+.toggle-icon {
+  display: inline-block;
+  transition: transform 180ms ease;
+  font-size: 0.8rem;
+}
+
+.status-panel.details-expanded .stat-grid.compact {
+  max-height: none;
+}
+
+.status-panel.details-expanded .meta-inline {
+  display: grid;
+}
+
+.status-panel.details-expanded .condition-strip {
+  max-height: none;
+}
+
+.status-panel.details-expanded .toggle-icon {
+  transform: rotate(180deg);
+}
+
 @media (min-width: 768px) {
   .app-shell {
     width: min(100% - 2rem, 60rem);
@@ -1196,6 +1354,21 @@ h3 {
 
   .stat-grid.compact {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-height: none;
+    overflow: visible;
+  }
+
+  .meta-inline {
+    display: grid !important;
+  }
+
+  .condition-strip {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .details-toggle {
+    display: none;
   }
 
   .control-buttons {

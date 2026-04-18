@@ -1,83 +1,5 @@
 import { createInitialState, dispatchAction, dispatchEventChoice } from "../src/game.mjs";
 
-const chooseAction = (state) => {
-  if (state.energy <= 38 || state.stress >= 58) {
-    return state.money > 1000 ? "rest" : "work";
-  }
-
-  if (state.mood <= 22 && state.money > 900) {
-    return "reward";
-  }
-
-  if (state.jobLevel === 1 && state.skill >= 30) {
-    return "jobSearch";
-  }
-
-  if (state.jobLevel === 2 && state.skill >= 60) {
-    return "jobSearch";
-  }
-
-  if (state.jobLevel === 3 && state.skill >= 80 && state.money >= 10000) {
-    return "jobSearch";
-  }
-
-  if (state.skill < 60 && state.day < 18 && state.money > 2500 && state.energy > 55 && state.stress < 45) {
-    return "study";
-  }
-
-  if ([6, 13, 20, 27].includes(state.day) && state.energy > 72 && state.jobLevel < 4) {
-    return "overtime";
-  }
-
-  if (state.money < 2800) {
-    return "work";
-  }
-
-  if (state.day > 22 && state.money > 5000 && state.stress > 45) {
-    return "reward";
-  }
-
-  return "work";
-};
-
-const chooseEventOption = (state) => {
-  const title = state.pendingEvent?.title ?? "";
-
-  if (title.includes("主管")) {
-    return state.energy > 45 ? "accept" : "decline";
-  }
-
-  if (title.includes("奧客")) {
-    return state.stress > 65 ? "fight-back" : "hold";
-  }
-
-  if (title.includes("朋友")) {
-    return state.mood < 40 && state.money > 1600 ? "go" : "skip";
-  }
-
-  if (title.includes("身體不舒服")) {
-    return state.money > 1500 ? "call-in-sick" : "push-through";
-  }
-
-  if (title.includes("機車")) {
-    return state.money > 1800 ? "repair" : "delay";
-  }
-
-  if (title.includes("線上課程")) {
-    return state.skill < 75 && state.money > 3500 ? "buy" : "pass";
-  }
-
-  if (title.includes("面試")) {
-    return "take-it";
-  }
-
-  if (title.includes("下雨")) {
-    return state.money > 400 ? "buy-drink-and-wait" : "run-home";
-  }
-
-  return state.pendingEvent.options[0].id;
-};
-
 const createRng = (seed) => {
   let value = seed >>> 0;
   return () => {
@@ -86,13 +8,99 @@ const createRng = (seed) => {
   };
 };
 
+const chooseAction = (state) => {
+  const did = (actionId) => state.dayPlan.actionsTaken.includes(actionId);
+  const hasSpareSlot = state.dayPlan.remainingSlots > 0;
+  if (!hasSpareSlot) {
+    return "endDay";
+  }
+
+  const hasActionsAlready = state.dayPlan.actionsTaken.length > 0;
+
+  if (state.conditions.scooterBroken || state.conditions.computerBroken || state.conditions.landlordAngry) {
+    return "lifeAdmin";
+  }
+
+  if (state.energy <= 32 || state.stress >= 72) {
+    return !did("rest") ? "rest" : "endDay";
+  }
+
+  if (state.conditions.clientLead && !did("freelance")) {
+    return "freelance";
+  }
+
+  if (!state.conditions.hasFreelanceContact && state.skill >= 25 && !did("network")) {
+    return "network";
+  }
+
+  if (state.jobLevel < 3 && state.skill >= 30 && state.dayPlan.remainingSlots >= 2 && !did("jobSearch")) {
+    return "jobSearch";
+  }
+
+  if (state.money < 2400) {
+    if (!did("work")) {
+      return "work";
+    }
+    if (!did("sideGig")) {
+      return "sideGig";
+    }
+    return "endDay";
+  }
+
+  if (state.skill < 55 && state.money > 2200 && !did("study")) {
+    return "study";
+  }
+
+  if (state.conditions.hasFreelanceContact && !did("freelance")) {
+    return "freelance";
+  }
+
+  if (!did("work")) {
+    return "work";
+  }
+  if (!did("sideGig")) {
+    return "sideGig";
+  }
+  if (!did("reward") && hasActionsAlready && state.stress > 55) {
+    return "reward";
+  }
+  return "endDay";
+};
+
+const chooseEventOption = (state) => {
+  const eventId = state.pendingEvent?.id ?? "";
+
+  switch (eventId) {
+    case "body-warning":
+      return state.money > 1800 ? "slow-down" : "push-through";
+    case "scooter-breakdown":
+      return state.money > 1800 ? "repair-now" : "delay-repair";
+    case "computer-glitch":
+      return state.money > 2200 ? "back-up" : "ignore";
+    case "landlord-message":
+      return "reply-politely";
+    case "client-referral":
+      return "take-lead";
+    case "rush-client":
+      return state.stress > 65 ? "set-boundary" : "rush-it";
+    case "friend-dinner":
+      return state.mood < 35 && state.money > 1600 ? "go" : "skip";
+    case "course-sale":
+      return state.skill < 70 && state.money > 2500 ? "buy" : "pass";
+    default:
+      return state.pendingEvent.options[0].id;
+  }
+};
+
 const playRun = (seed) => {
   const rng = createRng(seed);
   let state = createInitialState();
 
   while (state.phase !== "game-over" && state.phase !== "completed") {
     if (state.phase === "ready-for-action") {
-      state = dispatchAction(state, chooseAction(state), rng);
+      const choice = chooseAction(state);
+      const nextState = dispatchAction(state, choice, rng);
+      state = nextState === state ? dispatchAction(state, "endDay", rng) : nextState;
     } else {
       state = dispatchEventChoice(state, chooseEventOption(state), rng);
     }
@@ -101,11 +109,12 @@ const playRun = (seed) => {
   return state.ending.title;
 };
 
+const sampleSize = Number(process.env.SAMPLE_SIZE ?? 500);
 const totals = {};
-for (let seed = 1; seed <= 500; seed += 1) {
+for (let seed = 1; seed <= sampleSize; seed += 1) {
   const ending = playRun(seed);
   totals[ending] = (totals[ending] ?? 0) + 1;
 }
 
-console.log("Balance sample (500 heuristic runs)");
+console.log(`Balance sample (${sampleSize} heuristic runs)`);
 console.log(JSON.stringify(totals, null, 2));
