@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>打工人生：月底前活下去</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="backdrop backdrop-a"></div>
+    <div class="backdrop backdrop-b"></div>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">30 天生存經營網頁遊戲</p>
+        <h1>打工人生：月底前活下去</h1>
+        <p class="hero-copy">
+          每天只能做一個主要決定。帳單、房租、體力、心情、壓力，沒有一個會自己消失。
+        </p>
+      </header>
+
+      <section class="status-panel">
+        <div class="status-head">
+          <div>
+            <p class="status-kicker">本月進度</p>
+            <h2 id="day-label">第 1 天 / 30 天</h2>
+          </div>
+          <div class="rent-chip">
+            <span>下次房租</span>
+            <strong id="rent-countdown">6 天後</strong>
+          </div>
+        </div>
+
+        <div class="stat-grid" id="stat-grid"></div>
+
+        <div class="meta-strip">
+          <div class="meta-card">
+            <span>目前工作</span>
+            <strong id="job-label">便利商店打工</strong>
+          </div>
+          <div class="meta-card">
+            <span>欠租次數</span>
+            <strong id="rent-strikes">0 次</strong>
+          </div>
+          <div class="meta-card">
+            <span>目前狀態</span>
+            <strong id="phase-label">準備選擇今天要做什麼</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <section class="panel action-panel">
+          <div class="panel-head">
+            <p class="eyebrow">今日決策</p>
+            <h3>選一個主要行動</h3>
+          </div>
+          <div class="actions" id="actions"></div>
+        </section>
+
+        <section class="panel result-panel">
+          <div class="panel-head">
+            <p class="eyebrow">每日結果</p>
+            <h3>今天發生了什麼</h3>
+          </div>
+          <div class="result-card" id="result-card"></div>
+        </section>
+      </section>
+
+      <section class="panel event-panel hidden" id="event-panel">
+        <div class="panel-head">
+          <p class="eyebrow">隨機事件</p>
+          <h3 id="event-title"></h3>
+        </div>
+        <p class="event-description" id="event-description"></p>
+        <div class="event-options" id="event-options"></div>
+      </section>
+
+      <section class="panel ending-panel hidden" id="ending-panel">
+        <div class="panel-head">
+          <p class="eyebrow">月底結算</p>
+          <h3 id="ending-title"></h3>
+        </div>
+        <p class="ending-copy" id="ending-copy"></p>
+        <div class="ending-stats" id="ending-stats"></div>
+        <button class="restart-button" id="restart-button" type="button">重新開始，下個月再撐一次</button>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.mjs"></script>
+  </body>
+</html>
