@@ -4,87 +4,154 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>打工人生：月底前活下去</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="backdrop backdrop-a"></div>
     <div class="backdrop backdrop-b"></div>
+
     <main class="app-shell">
-      <header class="hero">
-        <p class="eyebrow">30 天生存經營網頁遊戲</p>
-        <h1>打工人生：月底前活下去</h1>
-        <p class="hero-copy">
-          每天只能做一個主要決定。帳單、房租、體力、心情、壓力，沒有一個會自己消失。
-        </p>
-      </header>
+      <section class="game-board" aria-label="遊戲主畫面">
+        <section class="status-panel" aria-label="本週進度">
+          <div class="status-top">
+            <div class="status-title-group">
+              <p class="eyebrow">本週進度</p>
+              <h1 class="app-title">打工人生：月底前活下去</h1>
+              <p class="week-caption" id="week-label">第 1 週 · 週內第 1 天</p>
+            </div>
+            <div class="rent-chip compact">
+              <span>房租</span>
+              <strong id="rent-countdown">6 天後</strong>
+            </div>
+          </div>
 
-      <section class="status-panel">
-        <div class="status-head">
-          <div>
-            <p class="status-kicker">本月進度</p>
-            <h2 id="day-label">第 1 天 / 30 天</h2>
+          <div class="week-strip">
+            <div class="day-pill" id="day-label">Day 1 / 30</div>
+            <div class="week-track" id="week-track" aria-label="本週天數進度"></div>
           </div>
-          <div class="rent-chip">
-            <span>下次房租</span>
-            <strong id="rent-countdown">6 天後</strong>
-          </div>
-        </div>
 
-        <div class="stat-grid" id="stat-grid"></div>
+          <div class="stat-grid compact" id="stat-grid"></div>
 
-        <div class="meta-strip">
-          <div class="meta-card">
-            <span>目前工作</span>
-            <strong id="job-label">便利商店打工</strong>
+          <div class="meta-inline">
+            <div class="meta-pill"><span>工作</span><strong id="job-label">便利商店打工</strong></div>
+            <div class="meta-pill"><span>欠租</span><strong id="rent-strikes">0 次</strong></div>
+            <div class="meta-pill wide"><span>狀態</span><strong id="phase-label">準備選擇今天要做什麼</strong></div>
           </div>
-          <div class="meta-card">
-            <span>欠租次數</span>
-            <strong id="rent-strikes">0 次</strong>
-          </div>
-          <div class="meta-card">
-            <span>目前狀態</span>
-            <strong id="phase-label">準備選擇今天要做什麼</strong>
-          </div>
-        </div>
-      </section>
-
-      <section class="content-grid">
-        <section class="panel action-panel">
-          <div class="panel-head">
-            <p class="eyebrow">今日決策</p>
-            <h3>選一個主要行動</h3>
-          </div>
-          <div class="actions" id="actions"></div>
         </section>
 
-        <section class="panel result-panel">
-          <div class="panel-head">
-            <p class="eyebrow">每日結果</p>
-            <h3>今天發生了什麼</h3>
+        <section class="panel action-panel" aria-label="今日決策">
+          <div class="control-buttons">
+            <button class="control-button primary-control" id="take-action-button" type="button">採取行動</button>
+            <button class="control-button secondary-control" id="reset-button" type="button">重新開始</button>
           </div>
-          <div class="result-card" id="result-card"></div>
         </section>
-      </section>
-
-      <section class="panel event-panel hidden" id="event-panel">
-        <div class="panel-head">
-          <p class="eyebrow">隨機事件</p>
-          <h3 id="event-title"></h3>
-        </div>
-        <p class="event-description" id="event-description"></p>
-        <div class="event-options" id="event-options"></div>
-      </section>
-
-      <section class="panel ending-panel hidden" id="ending-panel">
-        <div class="panel-head">
-          <p class="eyebrow">月底結算</p>
-          <h3 id="ending-title"></h3>
-        </div>
-        <p class="ending-copy" id="ending-copy"></p>
-        <div class="ending-stats" id="ending-stats"></div>
-        <button class="restart-button" id="restart-button" type="button">重新開始，下個月再撐一次</button>
       </section>
     </main>
+
+    <div class="overlay hidden" id="overlay" aria-hidden="true"></div>
+
+    <section
+      class="dialog hidden"
+      id="intro-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="intro-title"
+      aria-describedby="intro-copy"
+    >
+      <div class="dialog-shell intro-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">遊戲介紹</p>
+            <h3 id="intro-title">打工人生：月底前活下去</h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="intro-copy">
+          《打工人生：月底前活下去》是一款 30 天生存決策遊戲。每天只能做一個主要決策，所有行動、結果與隨機事件都會在上層對話框完成。
+        </p>
+        <div class="intro-points">
+          <div class="intro-point">
+            <span>目標</span>
+            <strong>撐過 30 天，別被房租和壓力先擊倒。</strong>
+          </div>
+          <div class="intro-point">
+            <span>提醒</span>
+            <strong>休息不是浪費，學技能不是立刻有錢。</strong>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="primary-button" id="start-button" type="button">開始遊玩</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="dialog hidden"
+      id="action-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="action-dialog-title"
+      aria-describedby="action-dialog-body"
+    >
+      <div class="dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow" id="action-dialog-kicker">採取行動</p>
+            <h3 id="action-dialog-title">選一個主要行動</h3>
+          </div>
+        </div>
+        <div class="dialog-body" id="action-dialog-body"></div>
+        <div class="dialog-actions" id="action-dialog-actions"></div>
+      </div>
+    </section>
+
+    <section
+      class="dialog hidden"
+      id="event-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="event-title"
+      aria-describedby="event-description"
+    >
+      <div class="dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">隨機事件</p>
+            <h3 id="event-title"></h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="event-description"></p>
+        <div class="dialog-actions stacked" id="event-options"></div>
+      </div>
+    </section>
+
+    <section
+      class="dialog hidden"
+      id="ending-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ending-title"
+      aria-describedby="ending-copy"
+    >
+      <div class="dialog-shell ending-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">月底結算</p>
+            <h3 id="ending-title"></h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="ending-copy"></p>
+        <ul class="ending-stats" id="ending-stats"></ul>
+        <div class="dialog-actions">
+          <button class="primary-button" id="restart-button" type="button">重新開始，下個月再撐一次</button>
+        </div>
+      </div>
+    </section>
 
     <script type="module" src="./src/main.mjs"></script>
   </body>

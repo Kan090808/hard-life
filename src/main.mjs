@@ -1,34 +1,114 @@
-import { STAT_DISPLAY } from "./data/config.mjs";
 import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
+import { STAT_DISPLAY } from "./data/config.mjs";
 
 let state = createInitialState();
+const uiState = {
+  onboardingOpen: true,
+  actionDialogMode: "closed",
+};
 
 const elements = {
+  overlay: document.querySelector("#overlay"),
+  weekLabel: document.querySelector("#week-label"),
+  weekTrack: document.querySelector("#week-track"),
   statGrid: document.querySelector("#stat-grid"),
   dayLabel: document.querySelector("#day-label"),
   rentCountdown: document.querySelector("#rent-countdown"),
   jobLabel: document.querySelector("#job-label"),
   rentStrikes: document.querySelector("#rent-strikes"),
   phaseLabel: document.querySelector("#phase-label"),
-  actions: document.querySelector("#actions"),
-  resultCard: document.querySelector("#result-card"),
-  eventPanel: document.querySelector("#event-panel"),
+  takeActionButton: document.querySelector("#take-action-button"),
+  resetButton: document.querySelector("#reset-button"),
+  introDialog: document.querySelector("#intro-dialog"),
+  startButton: document.querySelector("#start-button"),
+  actionDialog: document.querySelector("#action-dialog"),
+  actionDialogKicker: document.querySelector("#action-dialog-kicker"),
+  actionDialogTitle: document.querySelector("#action-dialog-title"),
+  actionDialogBody: document.querySelector("#action-dialog-body"),
+  actionDialogActions: document.querySelector("#action-dialog-actions"),
+  eventDialog: document.querySelector("#event-dialog"),
   eventTitle: document.querySelector("#event-title"),
   eventDescription: document.querySelector("#event-description"),
   eventOptions: document.querySelector("#event-options"),
-  endingPanel: document.querySelector("#ending-panel"),
+  endingDialog: document.querySelector("#ending-dialog"),
   endingTitle: document.querySelector("#ending-title"),
   endingCopy: document.querySelector("#ending-copy"),
   endingStats: document.querySelector("#ending-stats"),
   restartButton: document.querySelector("#restart-button"),
 };
 
+const getWeekInfo = (day) => {
+  const weekNumber = Math.ceil(day / 7);
+  const dayInWeek = ((day - 1) % 7) + 1;
+  const totalWeeks = Math.ceil(30 / 7);
+  return { weekNumber, dayInWeek, totalWeeks };
+};
+
+const setVisibility = (element, isVisible) => {
+  element.classList.toggle("hidden", !isVisible);
+  element.setAttribute("aria-hidden", String(!isVisible));
+};
+
+const hasBlockingDialog = () =>
+  uiState.onboardingOpen || uiState.actionDialogMode !== "closed" || Boolean(state.pendingEvent) || Boolean(state.ending);
+
+const setBodyOverlayState = () => {
+  const overlayVisible = hasBlockingDialog();
+  document.body.classList.toggle("dialog-open", overlayVisible);
+  setVisibility(elements.overlay, overlayVisible);
+};
+
+const focusDialogAction = () => {
+  if (uiState.onboardingOpen) {
+    elements.startButton.focus();
+    return;
+  }
+
+  if (state.ending) {
+    elements.restartButton.focus();
+    return;
+  }
+
+  if (state.pendingEvent) {
+    elements.eventOptions.querySelector("button")?.focus();
+    return;
+  }
+
+  if (uiState.actionDialogMode === "select") {
+    elements.actionDialogBody.querySelector("button")?.focus();
+    return;
+  }
+
+  if (uiState.actionDialogMode === "result") {
+    elements.actionDialogActions.querySelector("button")?.focus();
+  }
+};
+
+const renderWeekProgress = () => {
+  const { weekNumber, dayInWeek, totalWeeks } = getWeekInfo(state.day);
+  elements.weekLabel.textContent = `第 ${weekNumber} / ${totalWeeks} 週 · 週內第 ${dayInWeek} 天`;
+  elements.dayLabel.textContent = `Day ${state.day} / ${state.totalDays}`;
+  elements.weekTrack.innerHTML = "";
+
+  for (let index = 1; index <= 7; index += 1) {
+    const dot = document.createElement("span");
+    dot.className = "week-dot";
+    if (index < dayInWeek) {
+      dot.classList.add("past");
+    } else if (index === dayInWeek) {
+      dot.classList.add("current");
+    }
+    dot.setAttribute("aria-hidden", "true");
+    elements.weekTrack.append(dot);
+  }
+};
+
 const renderStats = () => {
   elements.statGrid.innerHTML = "";
   for (const stat of STAT_DISPLAY) {
-    const card = document.createElement("article");
-    card.className = "stat-card fade-in";
     const value = state[stat.key];
+    const card = document.createElement("article");
+    card.className = "stat-card";
     card.innerHTML = `
       <span class="stat-label">${stat.label}</span>
       <strong class="stat-value">${stat.formatter(value)}</strong>
@@ -44,63 +124,119 @@ const renderStats = () => {
 
 const renderMeta = () => {
   const meta = getStatusMeta(state);
-  elements.dayLabel.textContent = `第 ${state.day} 天 / ${state.totalDays} 天`;
   elements.rentCountdown.textContent = meta.rentCountdown;
   elements.jobLabel.textContent = meta.currentJob.name;
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
 };
 
-const renderActions = () => {
-  elements.actions.innerHTML = "";
+const renderMainButtons = () => {
+  const disabled = hasBlockingDialog() || state.phase !== "ready-for-action";
+  elements.takeActionButton.disabled = disabled;
+  elements.resetButton.disabled = uiState.onboardingOpen;
+};
+
+const renderIntroDialog = () => {
+  setVisibility(elements.introDialog, uiState.onboardingOpen);
+};
+
+const handleActionChoice = (actionId) => {
+  state = dispatchAction(state, actionId);
+  if (state.pendingEvent || state.ending) {
+    uiState.actionDialogMode = "closed";
+  } else {
+    uiState.actionDialogMode = "result";
+  }
+  render();
+};
+
+const renderActionSelection = () => {
   const actions = getActionViewModels(state);
+  elements.actionDialogKicker.textContent = "採取行動";
+  elements.actionDialogTitle.textContent = "選一個主要行動";
+  elements.actionDialogBody.innerHTML = "";
+  elements.actionDialogActions.innerHTML = "";
+
+  const grid = document.createElement("div");
+  grid.className = "dialog-option-grid";
 
   for (const action of actions) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "action-button fade-in";
+    button.className = "event-button action-choice-button";
     button.disabled = action.disabled;
     button.innerHTML = `
-      <span class="action-title">
-        <strong>${action.label}</strong>
-        <span class="action-tag">${action.tag}</span>
-      </span>
-      <span class="action-desc">${action.description}</span>
-      <span class="action-meta">${action.disabledReason || "每天只能選一個主要行動。"}</span>
+      <span class="dialog-option-title">${action.label}</span>
+      <span class="dialog-option-tag">${action.tag}</span>
+      <span class="dialog-option-desc">${action.description}</span>
     `;
-    button.addEventListener("click", () => {
-      state = dispatchAction(state, action.id);
-      render();
-    });
-    elements.actions.append(button);
+    button.addEventListener("click", () => handleActionChoice(action.id));
+    grid.append(button);
   }
+
+  elements.actionDialogBody.append(grid);
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "dialog-close";
+  cancelButton.textContent = "先不動";
+  cancelButton.addEventListener("click", () => {
+    uiState.actionDialogMode = "closed";
+    render();
+  });
+  elements.actionDialogActions.append(cancelButton);
 };
 
-const renderResult = () => {
+const renderActionResult = () => {
   const latest = getLatestLog(state);
   if (!latest) {
-    elements.resultCard.innerHTML = `
-      <h4>今天還沒開始</h4>
-      <p>先選一個行動，看看這一天要怎麼撐過去。</p>
-    `;
+    uiState.actionDialogMode = "closed";
+    setVisibility(elements.actionDialog, false);
     return;
   }
 
+  elements.actionDialogKicker.textContent = "每日結果";
+  elements.actionDialogTitle.textContent = "今天發生了什麼";
   const lines = latest.lines.map((line) => `<li>${line}</li>`).join("");
-  elements.resultCard.innerHTML = `
+  elements.actionDialogBody.innerHTML = `
     <h4>${latest.heading}</h4>
-    <p>這就是今天的代價與收穫。</p>
+    <p>這是今天的代價與收穫，整理完再回到主畫面。</p>
     <ul class="result-lines">${lines}</ul>
   `;
+  elements.actionDialogActions.innerHTML = "";
+
+  const confirmButton = document.createElement("button");
+  confirmButton.type = "button";
+  confirmButton.className = "primary-button";
+  confirmButton.textContent = "知道了，回主畫面";
+  confirmButton.addEventListener("click", () => {
+    uiState.actionDialogMode = "closed";
+    render();
+  });
+  elements.actionDialogActions.append(confirmButton);
 };
 
-const renderEvent = () => {
-  if (!state.pendingEvent) {
-    elements.eventPanel.classList.add("hidden");
+const renderActionDialog = () => {
+  if (uiState.onboardingOpen || uiState.actionDialogMode === "closed" || state.pendingEvent || state.ending) {
+    setVisibility(elements.actionDialog, false);
     return;
   }
 
-  elements.eventPanel.classList.remove("hidden");
+  if (uiState.actionDialogMode === "select") {
+    renderActionSelection();
+  } else {
+    renderActionResult();
+  }
+
+  setVisibility(elements.actionDialog, true);
+};
+
+const renderEventDialog = () => {
+  if (!state.pendingEvent || uiState.onboardingOpen) {
+    setVisibility(elements.eventDialog, false);
+    return;
+  }
+
   elements.eventTitle.textContent = state.pendingEvent.title;
   elements.eventDescription.textContent = state.pendingEvent.description;
   elements.eventOptions.innerHTML = "";
@@ -108,23 +244,27 @@ const renderEvent = () => {
   for (const option of state.pendingEvent.options) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "event-button fade-in";
+    button.className = "event-button";
     button.textContent = option.text;
     button.addEventListener("click", () => {
       state = dispatchEventChoice(state, option.id);
+      if (!state.ending) {
+        uiState.actionDialogMode = "result";
+      }
       render();
     });
     elements.eventOptions.append(button);
   }
+
+  setVisibility(elements.eventDialog, true);
 };
 
-const renderEnding = () => {
-  if (!state.ending) {
-    elements.endingPanel.classList.add("hidden");
+const renderEndingDialog = () => {
+  if (!state.ending || uiState.onboardingOpen) {
+    setVisibility(elements.endingDialog, false);
     return;
   }
 
-  elements.endingPanel.classList.remove("hidden");
   elements.endingTitle.textContent = state.ending.title;
   elements.endingCopy.textContent = state.ending.body;
   elements.endingStats.innerHTML = [
@@ -137,20 +277,43 @@ const renderEnding = () => {
   ]
     .map((line) => `<li>${line}</li>`)
     .join("");
+
+  setVisibility(elements.endingDialog, true);
+};
+
+const resetGame = () => {
+  state = createInitialState();
+  uiState.actionDialogMode = "closed";
+  render();
 };
 
 const render = () => {
+  renderWeekProgress();
   renderStats();
   renderMeta();
-  renderActions();
-  renderResult();
-  renderEvent();
-  renderEnding();
+  renderMainButtons();
+  renderIntroDialog();
+  renderActionDialog();
+  renderEventDialog();
+  renderEndingDialog();
+  setBodyOverlayState();
+
+  if (hasBlockingDialog()) {
+    requestAnimationFrame(focusDialogAction);
+  }
 };
 
-elements.restartButton.addEventListener("click", () => {
-  state = createInitialState();
+elements.startButton.addEventListener("click", () => {
+  uiState.onboardingOpen = false;
   render();
 });
+
+elements.takeActionButton.addEventListener("click", () => {
+  uiState.actionDialogMode = "select";
+  render();
+});
+
+elements.resetButton.addEventListener("click", resetGame);
+elements.restartButton.addEventListener("click", resetGame);
 
 render();
