@@ -189,6 +189,33 @@ export const SUCCESS_ENDINGS = [
   },
 ];
 
+export const MILESTONES = [
+  {
+    id: "survive-week-one",
+    title: "撐過第一週",
+    body: "你還沒翻身，但至少這週沒有先被現實打趴。",
+    matches: (state) => state.day >= 8,
+  },
+  {
+    id: "save-five-thousand",
+    title: "存到 5000",
+    body: "戶頭第一次有點厚度，雖然還不到能安心。",
+    matches: (state) => state.money >= 5000,
+  },
+  {
+    id: "skill-thirty",
+    title: "技能到 30",
+    body: "你終於不是只靠硬撐，開始有一點選擇權。",
+    matches: (state) => state.skill >= 30,
+  },
+  {
+    id: "job-upgrade",
+    title: "工作升級",
+    body: "你不只是活著，真的把人生往上拉了一格。",
+    matches: (state) => state.jobLevel >= 2,
+  },
+];
+
 export const STAT_DISPLAY = [
   { key: "money", label: "金錢", meter: false, color: "#c85b2c", formatter: (value) => `$${value.toLocaleString()}` },
   { key: "energy", label: "體力", meter: true, color: "#417c6c", formatter: (value) => `${value}` },

@@ -17,6 +17,10 @@
     <div class="backdrop backdrop-b"></div>
 
     <main class="app-shell">
+      <img class="world-decor decor-receipt" src="./assets/decor/receipt-note.svg" alt="" aria-hidden="true" />
+      <img class="world-decor decor-envelope" src="./assets/decor/pay-envelope.svg" alt="" aria-hidden="true" />
+      <img class="world-decor decor-sticker" src="./assets/decor/store-sticker.svg" alt="" aria-hidden="true" />
+
       <section class="game-board" aria-label="遊戲主畫面">
         <section class="status-panel" aria-label="本週進度">
           <div class="status-top">
@@ -68,6 +72,7 @@
     </main>
 
     <div class="overlay hidden" id="overlay" aria-hidden="true"></div>
+    <section class="achievement-toast hidden" id="achievement-toast" aria-live="polite" aria-atomic="true"></section>
 
     <section
       class="dialog hidden"
@@ -135,11 +140,13 @@
       <div class="dialog-shell">
         <div class="dialog-head">
           <div>
-            <p class="eyebrow">隨機事件</p>
+            <p class="eyebrow" id="event-kicker">隨機事件</p>
             <h3 id="event-title"></h3>
           </div>
         </div>
-        <p class="dialog-copy" id="event-description"></p>
+        <div class="event-spotlight">
+          <p class="dialog-copy" id="event-description"></p>
+        </div>
         <div class="dialog-actions stacked" id="event-options"></div>
       </div>
     </section>

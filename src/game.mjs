@@ -6,6 +6,7 @@ import {
   FAILURE_ENDINGS,
   JOBS,
   MAX_LOG_ENTRIES,
+  MILESTONES,
   PHASES,
   RENT_AMOUNT,
   RENT_DAYS,
@@ -117,22 +118,44 @@ const setEnding = (state, ending, phase) => {
   state.phase = phase;
 };
 
+const unlockMilestones = (state) => {
+  const unlocked = new Set(state.unlockedMilestones ?? []);
+  const latest = [];
+
+  for (const milestone of MILESTONES) {
+    if (!unlocked.has(milestone.id) && milestone.matches(state)) {
+      unlocked.add(milestone.id);
+      latest.push({
+        id: milestone.id,
+        title: milestone.title,
+        body: milestone.body,
+      });
+    }
+  }
+
+  state.unlockedMilestones = [...unlocked];
+  state.latestAchievements = latest;
+};
+
 const finalizeDay = (state) => {
   const failure = detectFailure(state);
   if (failure) {
+    state.latestAchievements = [];
     setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
     commitTurnLog(state);
     return state;
   }
 
   if (state.day >= state.totalDays) {
+    unlockMilestones(state);
     setEnding(state, evaluateEnding(state), PHASES.COMPLETED);
     commitTurnLog(state);
     return state;
   }
 
-  commitTurnLog(state);
   state.day += 1;
+  unlockMilestones(state);
+  commitTurnLog(state);
   state.phase = PHASES.READY;
   return state;
 };
@@ -257,10 +280,12 @@ const maybeTriggerEvent = (state, rng) => {
   state.pendingEvent = {
     id: event.id,
     title: event.title,
+    category: event.category,
     description: event.description,
     options: event.options.map((option) => ({
       id: option.id,
       text: option.text,
+      caption: option.caption ?? "",
     })),
   };
   state.phase = PHASES.EVENT;
@@ -334,6 +359,8 @@ export const createInitialState = () => ({
   pendingEvent: null,
   ending: null,
   activityLog: [],
+  unlockedMilestones: [],
+  latestAchievements: [],
   turnLog: null,
 });
 

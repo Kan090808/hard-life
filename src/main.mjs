@@ -5,17 +5,24 @@ let state = createInitialState();
 const uiState = {
   onboardingOpen: true,
   actionDialogMode: "closed",
+  achievementToastVisible: false,
+  achievementSignature: "",
+  achievementTimer: null,
 };
+let renderSnapshot = null;
 
 const elements = {
   overlay: document.querySelector("#overlay"),
+  achievementToast: document.querySelector("#achievement-toast"),
   weekLabel: document.querySelector("#week-label"),
   weekTrack: document.querySelector("#week-track"),
   statGrid: document.querySelector("#stat-grid"),
   dayLabel: document.querySelector("#day-label"),
   dangerLine: document.querySelector("#danger-line"),
+  walletCard: document.querySelector(".wallet-card"),
   walletAmount: document.querySelector("#wallet-amount"),
   walletCaption: document.querySelector("#wallet-caption"),
+  threatCard: document.querySelector(".threat-card"),
   rentCountdown: document.querySelector("#rent-countdown"),
   rentCaption: document.querySelector("#rent-caption"),
   jobLabel: document.querySelector("#job-label"),
@@ -32,6 +39,7 @@ const elements = {
   actionDialogBody: document.querySelector("#action-dialog-body"),
   actionDialogActions: document.querySelector("#action-dialog-actions"),
   eventDialog: document.querySelector("#event-dialog"),
+  eventKicker: document.querySelector("#event-kicker"),
   eventTitle: document.querySelector("#event-title"),
   eventDescription: document.querySelector("#event-description"),
   eventOptions: document.querySelector("#event-options"),
@@ -82,6 +90,13 @@ const ACTION_FLAVOR = {
 };
 
 const DELTA_LINE_PATTERN = /^(金錢|體力|心情|壓力|技能) ([+-].+)$/;
+const EVENT_TONE = {
+  工作麻煩: "work",
+  生活事件: "life",
+  生活意外: "danger",
+  小確幸: "luck",
+  轉機: "opportunity",
+};
 
 const getWeekInfo = (day) => {
   const weekNumber = Math.ceil(day / 7);
@@ -128,6 +143,56 @@ const focusDialogAction = () => {
   if (uiState.actionDialogMode === "result") {
     elements.actionDialogActions.querySelector("button")?.focus();
   }
+};
+
+const pulseElement = (element, className) => {
+  if (!element) {
+    return;
+  }
+
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+};
+
+const triggerHaptic = (duration = 10) => {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    navigator.vibrate(duration);
+  }
+};
+
+const getAchievementSignature = () => state.latestAchievements.map((achievement) => achievement.id).join("|");
+
+const scheduleAchievementToast = () => {
+  if (uiState.achievementTimer) {
+    clearTimeout(uiState.achievementTimer);
+  }
+
+  uiState.achievementToastVisible = true;
+  uiState.achievementTimer = setTimeout(() => {
+    uiState.achievementToastVisible = false;
+    render();
+  }, 3200);
+};
+
+const getRenderDiff = () => {
+  if (!renderSnapshot) {
+    return {
+      changedStats: new Set(),
+      moneyChanged: false,
+      rentChanged: false,
+    };
+  }
+
+  const changedStats = new Set(
+    ["energy", "mood", "stress", "skill"].filter((key) => renderSnapshot[key] !== state[key])
+  );
+
+  return {
+    changedStats,
+    moneyChanged: renderSnapshot.money !== state.money,
+    rentChanged: renderSnapshot.unpaidRentCount !== state.unpaidRentCount,
+  };
 };
 
 const getRentCountdownDays = (day) => {
@@ -266,12 +331,15 @@ const renderWeekProgress = () => {
   }
 };
 
-const renderStats = () => {
+const renderStats = (changedStats) => {
   elements.statGrid.innerHTML = "";
   for (const stat of STAT_DISPLAY.filter(({ key }) => key !== "money")) {
     const value = state[stat.key];
     const card = document.createElement("article");
-    card.className = `stat-card stat-${stat.key}`;
+    const changed = changedStats.has(stat.key);
+    const previousValue = renderSnapshot?.[stat.key] ?? value;
+    const direction = value >= previousValue ? "gain" : "loss";
+    card.className = `stat-card stat-${stat.key}${changed ? ` is-updated ${direction}` : ""}`;
     card.innerHTML = `
       <span class="stat-label">${stat.label}</span>
       <strong class="stat-value">${stat.formatter(value)}</strong>
@@ -285,7 +353,7 @@ const renderStats = () => {
   }
 };
 
-const renderMeta = () => {
+const renderMeta = ({ moneyChanged, rentChanged }) => {
   const meta = getStatusMeta(state);
   elements.walletAmount.textContent = `$${state.money.toLocaleString()}`;
   elements.walletCaption.textContent = getWalletCaption();
@@ -295,6 +363,15 @@ const renderMeta = () => {
   elements.jobLabel.textContent = meta.currentJob.name;
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
+
+  if (moneyChanged) {
+    pulseElement(elements.walletCard, "is-bumping");
+  }
+
+  if (rentChanged) {
+    pulseElement(elements.threatCard, "is-bumping");
+    pulseElement(elements.dangerLine, "is-shaking");
+  }
 };
 
 const renderMainButtons = () => {
@@ -308,6 +385,7 @@ const renderIntroDialog = () => {
 };
 
 const handleActionChoice = (actionId) => {
+  triggerHaptic(12);
   state = dispatchAction(state, actionId);
   if (state.pendingEvent || state.ending) {
     uiState.actionDialogMode = "closed";
@@ -383,6 +461,24 @@ const renderActionResult = () => {
     })
     .join("");
   const notes = storyLines.map((line) => `<li>${line}</li>`).join("");
+  const achievementBlock =
+    state.latestAchievements.length > 0
+      ? `
+        <div class="milestone-strip">
+          ${state.latestAchievements
+            .map(
+              (achievement) => `
+                <article class="milestone-chip">
+                  <span class="milestone-kicker">里程碑解鎖</span>
+                  <strong>${achievement.title}</strong>
+                  <p>${achievement.body}</p>
+                </article>
+              `
+            )
+            .join("")}
+        </div>
+      `
+      : "";
 
   elements.actionDialogKicker.textContent = "每日結算單";
   elements.actionDialogTitle.textContent = "今天勉強撐成什麼樣";
@@ -397,6 +493,7 @@ const renderActionResult = () => {
       <p class="settlement-summary">${flavor?.settlement ?? "今天留下了代價，也留下了活下去的機會。"}</p>
       <div class="ledger-card">${ledger || '<div class="ledger-row neutral"><span>狀態</span><strong>沒有明確數值變化</strong></div>'}</div>
       <ul class="settlement-notes">${notes}</ul>
+      ${achievementBlock}
       <p class="tomorrow-tip">${getTomorrowTip()}</p>
     </section>
   `;
@@ -435,15 +532,21 @@ const renderEventDialog = () => {
   }
 
   elements.eventTitle.textContent = state.pendingEvent.title;
-  elements.eventDescription.textContent = `臨時遭遇：${state.pendingEvent.description}`;
+  elements.eventKicker.textContent = state.pendingEvent.category ?? "隨機事件";
+  elements.eventDialog.dataset.tone = EVENT_TONE[state.pendingEvent.category] ?? "life";
+  elements.eventDescription.textContent = state.pendingEvent.description;
   elements.eventOptions.innerHTML = "";
 
   for (const option of state.pendingEvent.options) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "event-button";
-    button.textContent = option.text;
+    button.className = "event-button event-choice";
+    button.innerHTML = `
+      <span class="event-choice-text">${option.text}</span>
+      <span class="event-choice-caption">${option.caption || "這個決定的代價會一路跟到明天。"}</span>
+    `;
     button.addEventListener("click", () => {
+      triggerHaptic(12);
       state = dispatchEventChoice(state, option.id);
       if (!state.ending) {
         uiState.actionDialogMode = "result";
@@ -478,22 +581,72 @@ const renderEndingDialog = () => {
   setVisibility(elements.endingDialog, true);
 };
 
+const renderAchievementToast = () => {
+  const achievements = state.latestAchievements;
+  const shouldShow = uiState.achievementToastVisible && achievements.length > 0;
+  setVisibility(elements.achievementToast, shouldShow);
+
+  if (!shouldShow) {
+    elements.achievementToast.innerHTML = "";
+    return;
+  }
+
+  elements.achievementToast.innerHTML = achievements
+    .map(
+      (achievement) => `
+        <article class="achievement-card">
+          <span class="achievement-badge">NEW</span>
+          <div>
+            <p class="achievement-title">${achievement.title}</p>
+            <p class="achievement-copy">${achievement.body}</p>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+};
+
 const resetGame = () => {
   state = createInitialState();
   uiState.actionDialogMode = "closed";
+  uiState.achievementToastVisible = false;
+  uiState.achievementSignature = "";
+  if (uiState.achievementTimer) {
+    clearTimeout(uiState.achievementTimer);
+    uiState.achievementTimer = null;
+  }
+  renderSnapshot = null;
   render();
 };
 
 const render = () => {
+  const diff = getRenderDiff();
+  const achievementSignature = getAchievementSignature();
+  if (achievementSignature && achievementSignature !== uiState.achievementSignature) {
+    uiState.achievementSignature = achievementSignature;
+    scheduleAchievementToast();
+    triggerHaptic(18);
+  }
+
   renderWeekProgress();
-  renderStats();
-  renderMeta();
+  renderStats(diff.changedStats);
+  renderMeta(diff);
   renderMainButtons();
   renderIntroDialog();
   renderActionDialog();
   renderEventDialog();
   renderEndingDialog();
+  renderAchievementToast();
   setBodyOverlayState();
+
+  renderSnapshot = {
+    money: state.money,
+    energy: state.energy,
+    mood: state.mood,
+    stress: state.stress,
+    skill: state.skill,
+    unpaidRentCount: state.unpaidRentCount,
+  };
 
   if (hasBlockingDialog()) {
     requestAnimationFrame(focusDialogAction);
@@ -501,11 +654,13 @@ const render = () => {
 };
 
 elements.startButton.addEventListener("click", () => {
+  triggerHaptic(10);
   uiState.onboardingOpen = false;
   render();
 });
 
 elements.takeActionButton.addEventListener("click", () => {
+  triggerHaptic(10);
   uiState.actionDialogMode = "select";
   render();
 });
