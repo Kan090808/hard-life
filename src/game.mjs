@@ -38,9 +38,10 @@ const describeDelta = (key, value) => {
   return `${labelMap[key]} ${prefix}${value}`;
 };
 
-const createTurnLog = (day, heading) => ({
+const createTurnLog = (day, heading, actionId = null) => ({
   day,
   heading,
+  actionId,
   lines: [],
 });
 
@@ -282,7 +283,7 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
-  nextState.turnLog = createTurnLog(nextState.day, `第 ${nextState.day} 天：${action.label}`);
+  nextState.turnLog = createTurnLog(nextState.day, `第 ${nextState.day} 天：${action.label}`, actionId);
   pushLine(nextState, `你今天選擇了「${action.label}」。`);
 
   if (action.special === "jobSearch") {

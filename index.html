@@ -21,17 +21,29 @@
         <section class="status-panel" aria-label="本週進度">
           <div class="status-top">
             <div class="status-title-group">
-              <p class="eyebrow">本週進度</p>
+              <p class="eyebrow">月底生存戰</p>
               <h1 class="app-title">打工人生：月底前活下去</h1>
               <p class="week-caption" id="week-label">第 1 週 · 週內第 1 天</p>
             </div>
-            <div class="rent-chip compact">
-              <span>房租</span>
-              <strong id="rent-countdown">6 天後</strong>
-            </div>
+            <div class="status-stamp">SURVIVE</div>
           </div>
 
-          <div class="week-strip">
+          <p class="danger-line" id="danger-line">房租還在路上，今天最好不要亂花。</p>
+
+          <div class="hud-grid">
+            <article class="hud-card wallet-card">
+              <span class="hud-label">存款</span>
+              <strong class="hud-value" id="wallet-amount">$3,000</strong>
+              <p class="hud-note" id="wallet-caption">這點錢還不夠你安心，只夠你繼續想辦法。</p>
+            </article>
+            <article class="hud-card threat-card">
+              <span class="hud-label">本週危機</span>
+              <strong class="hud-value" id="rent-countdown">6 天後</strong>
+              <p class="hud-note" id="rent-caption">房租還沒到，但它正朝你走過來。</p>
+            </article>
+          </div>
+
+          <div class="week-strip danger-strip">
             <div class="day-pill" id="day-label">Day 1 / 30</div>
             <div class="week-track" id="week-track" aria-label="本週天數進度"></div>
           </div>
@@ -50,6 +62,7 @@
             <button class="control-button primary-control" id="take-action-button" type="button">採取行動</button>
             <button class="control-button secondary-control" id="reset-button" type="button">重新開始</button>
           </div>
+          <p class="action-flavor">今天只能選一條路走，剩下的代價都會留下來。</p>
         </section>
       </section>
     </main>
@@ -105,6 +118,7 @@
             <h3 id="action-dialog-title">選一個主要行動</h3>
           </div>
         </div>
+        <p class="dialog-copy" id="action-dialog-copy">今天只能按一次，選下去就是今天的命運。</p>
         <div class="dialog-body" id="action-dialog-body"></div>
         <div class="dialog-actions" id="action-dialog-actions"></div>
       </div>
