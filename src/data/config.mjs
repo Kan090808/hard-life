@@ -1,9 +1,183 @@
 export const PHASES = {
   READY: "ready-for-action",
+  ATTENDANCE: "attendance-decision",
+  STARTUP_DECISION: "startup-decision",
+  CHOICE: "action-choice",
   EVENT: "resolving-event",
   GAME_OVER: "game-over",
   COMPLETED: "completed",
 };
+
+export const STARTUP_FIXED_EVENTS = [
+  {
+    id: "startup-pricing",
+    title: "客戶問你能不能降價",
+    description: "對方說預算有限，希望你給個折扣。你知道降了收入就少一截，但不降可能直接失去這客戶。",
+    options: [
+      {
+        id: "hold-price",
+        text: "堅持報價",
+        caption: "保住收益率，但這筆可能沒了。",
+        effects: { businessIncome: 60, stress: 4 },
+        log: "你沒有讓步，對方沈默了一下，但你的定價守住了。",
+      },
+      {
+        id: "give-discount",
+        text: "給折扣成交",
+        caption: "成交機率高，但每次讓步都在壓低你的基準。",
+        effects: { money: 300, businessIncome: -50, mood: -3 },
+        log: "你把這筆談成了，但接下來每張單都會有人試圖再壓你的價。",
+      },
+    ],
+  },
+  {
+    id: "startup-supplier",
+    title: "供應商說原料成本要漲",
+    description: "合作的供應商傳訊息說，下個月的報價要調漲，你需要決定怎麼應對。",
+    options: [
+      {
+        id: "absorb-cost",
+        text: "先吸收成本",
+        caption: "維持客戶關係，但利潤被壓縮。",
+        effects: { money: -400, businessIncome: -60 },
+        log: "你先把這波漲價吃下來，客戶沒什麼感覺，但你的底線又薄了一點。",
+      },
+      {
+        id: "find-new",
+        text: "找別家比價",
+        caption: "費時費力，但可能談到更好條件。",
+        effects: { energy: -8, stress: 6, businessIncome: 40 },
+        log: "你花了時間找備選廠商，最後談到稍微好一點的條件，代價是今天整個人很累。",
+      },
+    ],
+  },
+  {
+    id: "startup-pivot",
+    title: "朋友建議你調整產品方向",
+    description: "一個有經驗的朋友說你的定位跑偏了，建議你小幅轉向。你不確定他說的對不對。",
+    options: [
+      {
+        id: "try-pivot",
+        text: "試試看他說的調整",
+        caption: "短期會亂，但可能找到更好的方向。",
+        effects: { businessIncome: -80, skill: 5, stress: 8 },
+        log: "你把方向稍微修了一下，現在又得重新摸索節奏，但至少沒有死守原地。",
+      },
+      {
+        id: "stay-course",
+        text: "繼續現有方向",
+        caption: "熟悉的路，但不知道是不是真的對。",
+        effects: { businessIncome: 50 },
+        log: "你繼續照原本的方向走，沒有多餘的動盪，但那個建議還是一直在後腦海裡轉。",
+      },
+    ],
+  },
+  {
+    id: "startup-outsource",
+    title: "有人提議可以外包一部分工作",
+    description: "你一個人扛所有事開始卡住，有人說可以把部分工作外包，但外包要花錢。",
+    options: [
+      {
+        id: "outsource",
+        text: "外包出去",
+        caption: "花錢，但省下你的時間和體力。",
+        effects: { money: -600, energy: 8, businessIncome: 80 },
+        log: "你把一部分事情交出去了，錢少了，但今天終於不用一個人扛所有事。",
+      },
+      {
+        id: "keep-solo",
+        text: "自己繼續扛",
+        caption: "省錢，但一直這樣遲早會出問題。",
+        effects: { energy: -6, stress: 8, businessIncome: 20 },
+        log: "你又把這些事自己處理掉了，省了那筆費用，但每天就是這樣慢慢被榨乾。",
+      },
+    ],
+  },
+  {
+    id: "startup-media",
+    title: "媒體記者問你能不能受訪",
+    description: "一個小型媒體說想採訪你的創業故事，要花半天，但也可能帶來曝光。",
+    options: [
+      {
+        id: "accept-interview",
+        text: "接受採訪",
+        caption: "花時間，但曝光後可能帶來長期效益。",
+        effects: { energy: -10, mood: 8, businessIncome: 100 },
+        log: "你接受了採訪，話說完人就累了，但如果這個曝光有效，這半天應該是划算的。",
+      },
+      {
+        id: "decline-interview",
+        text: "婉拒",
+        caption: "今天專注在本業，不追那個不確定的機會。",
+        effects: { businessIncome: 30, stress: -3 },
+        log: "你謝絕了採訪，今天比較安靜，也不用花時間整理話術和笑容。",
+      },
+    ],
+  },
+  {
+    id: "startup-debt-client",
+    title: "客戶還沒付上個月的款",
+    description: "帳款已經超期兩週了，你要決定要不要主動去催，還是再等等。",
+    options: [
+      {
+        id: "chase-payment",
+        text: "主動去催款",
+        caption: "可能拿回錢，但關係可能有點尷尬。",
+        effects: { money: 800, stress: 5, mood: -5 },
+        log: "你主動聯絡對方，後來對方確實把款付了，但你知道這段關係多少有點傷。",
+      },
+      {
+        id: "wait-longer",
+        text: "再等等看",
+        caption: "保住關係，但錢不一定回得來。",
+        effects: { stress: 10, mood: -8, businessIncome: -40 },
+        log: "你選擇繼續等，壓力一直掛在那裡，帳款的問題也還沒解決。",
+      },
+    ],
+  },
+  {
+    id: "startup-competition",
+    title: "競爭對手大幅降價",
+    description: "你發現競爭對手把價格砍了不少，客戶開始問你為什麼比他們貴。",
+    options: [
+      {
+        id: "match-price",
+        text: "跟著降價",
+        caption: "短期守住客戶，但可能開始打價格戰。",
+        effects: { money: 200, businessIncome: -70, stress: 6 },
+        log: "你跟著調整了報價，客戶暫時穩住了，但你知道價格戰一旦開打，沒有人真的贏。",
+      },
+      {
+        id: "emphasize-value",
+        text: "強調你的差異",
+        caption: "堅守定位，有人會懂，有人不在乎。",
+        effects: { businessIncome: 50, skill: 3, mood: 4 },
+        log: "你沒有跟著降，把精力放在說清楚自己的價值。有的客戶留下來了，有的沒有。",
+      },
+    ],
+  },
+  {
+    id: "startup-platform-fee",
+    title: "平台要調漲手續費",
+    description: "你依賴的銷售平台通知，下個月起手續費從 5% 漲到 9%，要決定要不要繼續用。",
+    options: [
+      {
+        id: "accept-fee",
+        text: "繼續留在平台",
+        caption: "方便，但利潤被切走更多。",
+        effects: { businessIncome: -90 },
+        log: "你繼續留在平台，因為還沒找到更好的替代，但每一筆都在替平台打工。",
+      },
+      {
+        id: "diversify",
+        text: "開始轉移到其他管道",
+        caption: "費力，但長期比較主動。",
+        effects: { energy: -10, stress: 8, businessIncome: 20 },
+        log: "你開始把客戶往其他管道轉，前幾天很辛苦，但至少不是永遠被平台拿走那一截。",
+      },
+    ],
+  },
+];
 
 export const TOTAL_DAYS = 30;
 export const DAILY_LIVING_COST = 150;
@@ -81,7 +255,7 @@ export const CONDITION_CONFIG = {
     label: "手上有案源",
     compactLabel: "案源",
     icon: "briefcase",
-    description: "接案收益更高，也更容易接到催單事件。",
+    description: "今天保底收到接案機會，收益也更高。",
   },
 };
 
@@ -94,6 +268,8 @@ export const DEFAULT_PLAYER_STATE = {
   stress: 20,
   skill: 0,
   jobLevel: 1,
+  businessLevel: 0,
+  businessIncome: 0,
   unpaidRentCount: 0,
 };
 
@@ -128,32 +304,59 @@ export const CHARACTER_STAT_DISPLAY = [
 export const JOBS = {
   1: {
     level: 1,
-    name: "便利商店打工",
-    workIncome: 800,
-    overtimeIncome: 1300,
-    tagline: "收入普通，但帳單不會手下留情。",
-    badge: "Lv.1 便利商店",
-    mark: "超商班表",
+    name: "待業中",
+    workIncome: 0,
+    overtimeIncome: null,
+    tagline: "沒有固定班，但還能靠臨時工撐一下。",
+    badge: "Lv.1 待業中",
+    mark: "求職狀態",
+    requiresAttendance: false,
     tone: "store",
   },
   2: {
     level: 2,
     name: "穩定兼職",
     workIncome: 1100,
-    overtimeIncome: 1700,
-    tagline: "終於不是只靠硬撐過日子。",
+    overtimeIncome: 700,
+    tagline: "每天都要進班，時間開始被固定吃掉。",
     badge: "Lv.2 穩定兼職",
     mark: "兼職工牌",
+    requiresAttendance: true,
+    leaveThreshold: 35,
+    attendanceEffects: {
+      money: 1100,
+      energy: -18,
+      mood: -5,
+      stress: 6,
+    },
+    leaveEffects: {
+      money: -250,
+      mood: -6,
+      stress: 8,
+    },
     tone: "parttime",
   },
   3: {
     level: 3,
     name: "正職新人",
     workIncome: 1500,
-    overtimeIncome: 2200,
-    tagline: "收入變高了，責任也一起長大。",
+    overtimeIncome: 1100,
+    tagline: "收入提高了，但每天先被公司拿走一格。",
     badge: "Lv.3 正職新人",
     mark: "識別證",
+    requiresAttendance: true,
+    leaveThreshold: 45,
+    attendanceEffects: {
+      money: 1500,
+      energy: -26,
+      mood: -8,
+      stress: 10,
+    },
+    leaveEffects: {
+      money: -500,
+      mood: -10,
+      stress: 10,
+    },
     tone: "office",
   },
   4: {
@@ -172,34 +375,28 @@ export const ACTIONS = {
   work: {
     id: "work",
     label: "去打工",
-    tag: "穩定收入",
-    description: "半天穩定進帳，通常還能留一格時間給別的安排。",
+    tag: "隨機工作",
+    description: "今天去接一份臨時工作，報酬和體力消耗看你接到哪一種。",
     slotCost: 1,
     intensity: "medium",
     category: "job",
-    effects: {
-      energy: -25,
-      mood: -8,
-      stress: 8,
-    },
-    incomeKey: "workIncome",
+    special: "workChoice",
   },
   overtime: {
     id: "overtime",
     label: "加班",
-    tag: "高風險現金",
-    description: "今天賺得更多，但身體和壓力都會記仇。",
-    slotCost: 2,
+    tag: "班後再扛一段",
+    description: "固定班之外再多賣一段時間，錢更多，代價也更直接。",
+    slotCost: 1,
     intensity: "heavy",
     category: "job",
     effects: {
-      energy: -40,
-      mood: -18,
-      stress: 20,
+      energy: -18,
+      mood: -10,
+      stress: 14,
     },
     incomeKey: "overtimeIncome",
-    disabledAtLevel: 4,
-    disabledReason: "你現在靠接案吃飯，沒有制式加班可以按。",
+    disabledReason: "你現在沒有能自由選的加班班表。",
   },
   rest: {
     id: "rest",
@@ -209,6 +406,7 @@ export const ACTIONS = {
     slotCost: 1,
     intensity: "light",
     category: "recovery",
+    special: "rest",
     effects: {
       money: -100,
       energy: 28,
@@ -245,36 +443,12 @@ export const ACTIONS = {
   reward: {
     id: "reward",
     label: "犒賞自己",
-    tag: "喘一口氣",
-    description: "短暫花錢把心情拉回來，不解決根本問題，但今天會比較好撐。",
+    tag: "花錢止痛",
+    description: "今天花點錢安撫自己，但花多少、回多少狀態，要看你選哪一種。",
     slotCost: 1,
     intensity: "light",
     category: "recovery",
-    effects: {
-      money: -450,
-      mood: 24,
-      stress: -16,
-    },
-  },
-  sideGig: {
-    id: "sideGig",
-    label: "接零工",
-    tag: "半天快錢",
-    description: "臨時代班、跑腿、散工，沒正職穩，但比較不會吃掉整天。",
-    slotCost: 1,
-    intensity: "medium",
-    category: "income",
-    special: "sideGig",
-  },
-  freelance: {
-    id: "freelance",
-    label: "接案",
-    tag: "技能變現",
-    description: "把技能換成現金，需要技能或人脈才能接得到。",
-    slotCost: 1,
-    intensity: "medium",
-    category: "income",
-    special: "freelance",
+    special: "rewardChoice",
   },
   lifeAdmin: {
     id: "lifeAdmin",
@@ -296,7 +470,52 @@ export const ACTIONS = {
     category: "social",
     special: "network",
   },
+  venture: {
+    id: "venture",
+    label: "創業",
+    tag: "開公司",
+    description: "把錢和判斷力壓進自己的事業，之後每天都會回報你。",
+    slotCost: 1,
+    intensity: "heavy",
+    category: "growth",
+    special: "venture",
+  },
+  stockTrade: {
+    id: "stockTrade",
+    label: "股票市場",
+    tag: "隨時可進場",
+    description: "查看今天 5 檔股票的價格，可多次買賣、每次自訂股數。",
+    slotCost: 0,
+    intensity: "light",
+    category: "income",
+    special: "stockTrade",
+  },
 };
+
+export const WORK_GIGS = [
+  { id: "flyer", label: "發傳單", effects: { money: 650, energy: -12, mood: -3, stress: 4 } },
+  { id: "dishwash", label: "洗碗支援", effects: { money: 900, energy: -20, mood: -6, stress: 7 } },
+  { id: "warehouse", label: "倉庫搬貨", effects: { money: 1200, energy: -28, mood: -8, stress: 10 } },
+  { id: "tutor", label: "家教代班", effects: { money: 980, energy: -10, mood: 2, stress: 5 } },
+  { id: "delivery", label: "跑單外送", effects: { money: 1080, energy: -18, mood: -4, stress: 8 } },
+  { id: "promoter", label: "商場活動工讀", effects: { money: 860, energy: -14, mood: 1, stress: 5 } },
+];
+
+export const REWARD_ACTIVITIES = [
+  { id: "snack", label: "買點好吃的", effects: { money: -180, mood: 10, stress: -5 } },
+  { id: "movie", label: "看場電影", effects: { money: -380, mood: 18, stress: -10 } },
+  { id: "shopping", label: "小額購物", effects: { money: -520, mood: 22, stress: -12 } },
+  { id: "massage", label: "去按摩", effects: { money: -760, energy: 10, mood: 20, stress: -16 } },
+  { id: "cafeday", label: "咖啡廳耍廢", effects: { money: -260, mood: 14, stress: -7 } },
+];
+
+export const STOCK_CATALOG = [
+  { id: "chip", name: "鉅晶半導", basePrice: 48, volatility: 0.12 },
+  { id: "cloud", name: "流雲科技", basePrice: 62, volatility: 0.18 },
+  { id: "retail", name: "城南零售", basePrice: 26, volatility: 0.09 },
+  { id: "green", name: "新芽能源", basePrice: 34, volatility: 0.15 },
+  { id: "bio", name: "遠星生醫", basePrice: 19, volatility: 0.22 },
+];
 
 export const FAILURE_ENDINGS = {
   debt: {

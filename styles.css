@@ -1793,6 +1793,188 @@ h3 {
   color: var(--ink);
 }
 
+.stock-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.stock-news-board {
+  margin-bottom: 0.7rem;
+}
+
+.stock-news-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.stock-news-card {
+  padding: 0.62rem 0.7rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: #eef3ff;
+  box-shadow: 4px 4px 0 rgba(24, 28, 38, 0.1);
+}
+
+.stock-news-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.stock-news-card p {
+  margin-top: 0.32rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.stock-news-horizon {
+  flex: none;
+  padding: 0.18rem 0.48rem;
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.stock-card {
+  padding: 0.7rem 0.75rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: #fffdf6;
+  box-shadow: 4px 4px 0 rgba(24, 28, 38, 0.12);
+}
+
+.stock-head,
+.stock-meta,
+.stock-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.stock-meta {
+  margin-top: 0.32rem;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+.stock-price {
+  font-weight: 900;
+}
+
+.stock-delta.gain {
+  color: var(--accent-deep);
+}
+
+.stock-delta.loss {
+  color: #b92727;
+}
+
+.stock-controls {
+  margin-top: 0.62rem;
+}
+
+.stock-controls .dialog-close {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.8rem;
+}
+
+.stock-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.qty-btn {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--line-strong);
+  background: var(--surface-alt, #f5f2ec);
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.12s;
+}
+
+.qty-btn:hover {
+  background: var(--line-strong);
+}
+
+.qty-input {
+  width: 3.2rem;
+  height: 2rem;
+  text-align: center;
+  border: 2px solid var(--line-strong);
+  background: var(--surface-base, #fff);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 4px;
+  padding: 0 0.25rem;
+  -moz-appearance: textfield;
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.qty-cost {
+  margin-left: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stock-trade-btn {
+  flex: 1;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.6rem;
+  border: 2px solid var(--line-strong);
+  background: var(--surface-alt, #f5f2ec);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.stock-trade-btn:hover:not(:disabled) {
+  background: var(--line-strong);
+}
+
+.stock-trade-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.stock-trade-btn.stock-buy:not(:disabled) {
+  border-color: var(--accent-deep, #22a06b);
+  color: var(--accent-deep, #22a06b);
+}
+
+.stock-trade-btn.stock-sell:not(:disabled) {
+  border-color: #b92727;
+  color: #b92727;
+}
+
 @media (max-width: 767px) {
   .status-panel {
     padding: 0.62rem;

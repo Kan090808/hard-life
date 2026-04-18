@@ -61,7 +61,7 @@ export const EVENTS = [
     description: "通勤途中，機車發出一聲你不想聽懂的聲音。",
     condition: (state) =>
       !state.conditions.scooterBroken &&
-      lastActionIs(state, ["work", "overtime", "sideGig", "jobSearch"]) &&
+      lastActionIs(state, ["work", "attendanceWork", "overtime", "jobSearch"]) &&
       state.jobLevel < 4,
     options: [
       {
@@ -205,44 +205,44 @@ export const EVENTS = [
     ],
   },
   {
-    id: "rush-client",
+    id: "freelance-offer",
     tier: "opportunity",
-    category: "接案壓力",
-    title: "客戶突然催單",
-    description: "對方問你能不能提早交，語氣客氣但很急。",
-    condition: (state) => state.conditions.clientLead && state.skill >= 35,
+    category: "接案機會",
+    title: "有人找你接案子",
+    description: "",
+    condition: () => false,
     options: [
       {
-        id: "rush-it",
-        text: "硬挪時間趕出來",
-        caption: "拿體力換評價。",
-        resolve: () =>
-          withLog(
-            {
-              money: 650,
-              energy: -12,
-              stress: 10,
-            },
-            "你把這張單硬是趕了出來，現金有進來，但今天也更空了。"
-          ),
-      },
-      {
-        id: "set-boundary",
-        text: "改約正常時程",
-        caption: "別讓每個人都覺得你可以無限壓榨。",
-        resolve: (_state, rng) => {
-          const kept = rng() < 0.7;
+        id: "accept",
+        text: "接下來",
+        caption: "接了才知道值不值得。",
+        resolve: (state, rng) => {
+          const { income = 600, energyCost = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
+          const bonusStress = energyCost > 18 ? 8 : 4;
           return withLog(
             {
-              mood: 5,
-              stress: -4,
-              money: kept ? 150 : -200,
+              money: income,
+              energy: -energyCost,
+              mood: -2,
+              stress: bonusStress,
+              skill: 1,
             },
-            kept
-              ? "你把時程談回合理範圍，這單沒飛走，還替自己守住一點邊界。"
-              : "你把界線說清楚了，但這筆小錢也一起飛了。"
+            fromLead
+              ? `你把手上的案源變現了，拿到 $${income}，消耗了 ${energyCost} 點體力。`
+              : `你接了這筆案子，拿到 $${income}，消耗了 ${energyCost} 點體力。`,
+            fromLead ? { conditionChanges: { clientLead: false } } : {}
           );
         },
+      },
+      {
+        id: "decline",
+        text: "婉拒",
+        caption: "今天精力留給其他事。",
+        resolve: () =>
+          withLog(
+            { mood: -2 },
+            "你婉拒了這筆案子，有點可惜但也無所謂。"
+          ),
       },
     ],
   },
@@ -296,6 +296,75 @@ export const EVENTS = [
           mood: 12,
         },
         "發票中了 200 元，今天突然沒有那麼像跟世界對幹。"
+      ),
+  },
+  {
+    id: "startup-windfall",
+    tier: "opportunity",
+    category: "創業驚喜",
+    title: "突然來了一筆大單",
+    description: "一個你沒預期的客戶主動聯繫，說他們想下一筆比平時大好幾倍的訂單。",
+    condition: (state) => state.businessLevel > 0,
+    autoResolve: (_state, rng) => {
+      const success = rng() < 0.6;
+      return withLog(
+        { money: success ? 1500 : 200, mood: success ? 12 : 4, businessIncome: success ? 120 : 20 },
+        success
+          ? "你把這筆大單談成了，帳戶一口氣厚了一截，今天終於有點值得的消息。"
+          : "大單沒有真的成交，對方最後說「再考慮看看」，你把這筆當作市場測試吧。"
+      );
+    },
+  },
+  {
+    id: "startup-bad-review",
+    tier: "state",
+    category: "創業危機",
+    title: "網路上出現負評",
+    description: "有人在社群上貼了一篇對你產品不滿的文章，開始有人轉發。",
+    condition: (state) => state.businessLevel > 0,
+    autoResolve: (_state, rng) => {
+      const serious = rng() < 0.55;
+      return withLog(
+        {
+          money: serious ? -400 : -100,
+          businessIncome: serious ? -80 : -20,
+          mood: -6,
+          stress: serious ? 15 : 6,
+        },
+        serious
+          ? "那篇負評被轉爆了，你花了一整天應對，還是沒辦法完全控制輿論。"
+          : "負評沒有擴散太多，但你還是花了時間和心力處理，收入稍微受了影響。"
+      );
+    },
+  },
+  {
+    id: "startup-tech-failure",
+    tier: "state",
+    category: "創業危機",
+    title: "業務系統突然出問題",
+    description: "你的業務工具今天突然故障，幾個訂單卡在那裡動不了。",
+    condition: (state) => state.businessLevel > 0 && !state.conditions.computerBroken,
+    autoResolve: (_state, rng) => {
+      const serious = rng() < 0.4;
+      return withLog(
+        { money: serious ? -600 : -200, stress: serious ? 14 : 7, mood: -5 },
+        serious
+          ? "系統修了很久，幾筆訂單跑掉了，今天損失比預期大。"
+          : "問題比想像中快解決，但還是耽誤了一些事，小虧一筆。"
+      );
+    },
+  },
+  {
+    id: "startup-referral",
+    tier: "opportunity",
+    category: "創業驚喜",
+    title: "老客戶主動幫你介紹新客戶",
+    description: "一個老客戶說他把你推薦給朋友，對方可能會來詢問，你什麼都沒做，就多了一條線。",
+    condition: (state) => state.businessLevel > 0 && state.conditions.hasFreelanceContact,
+    autoResolve: () =>
+      withLog(
+        { businessIncome: 150, mood: 10, stress: -4 },
+        "這筆生意沒有靠你主動去跑，是老客戶的口碑帶來的。你沒有多花力氣，但收入又往上墊了一點。"
       ),
   },
   {

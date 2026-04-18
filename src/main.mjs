@@ -1,4 +1,4 @@
-import { createInitialState, dispatchAction, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
+import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchEventChoice, dispatchStartupDecision, dispatchStockTrade, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
 import { CHARACTER_STAT_DISPLAY, CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
 import {
   isAudioSupported,
@@ -22,6 +22,8 @@ const uiState = {
   audioEnabled: true,
   detailsExpanded: false,
   expandedActionInfoId: null,
+  stockDialogOpen: false,
+  stockQuantities: {},
 };
 let renderSnapshot = null;
 
@@ -63,6 +65,18 @@ const elements = {
   introDialog: document.querySelector("#intro-dialog"),
   startButton: document.querySelector("#start-button"),
   soundToggle: document.querySelector("#sound-toggle"),
+  attendanceDialog: document.querySelector("#attendance-dialog"),
+  attendanceTitle: document.querySelector("#attendance-title"),
+  attendanceDescription: document.querySelector("#attendance-description"),
+  attendanceOptions: document.querySelector("#attendance-options"),
+  startupDecisionDialog: document.querySelector("#startup-decision-dialog"),
+  startupDecisionTitle: document.querySelector("#startup-decision-title"),
+  startupDecisionDescription: document.querySelector("#startup-decision-description"),
+  startupDecisionOptions: document.querySelector("#startup-decision-options"),
+  choiceDialog: document.querySelector("#choice-dialog"),
+  choiceTitle: document.querySelector("#choice-title"),
+  choiceDescription: document.querySelector("#choice-description"),
+  choiceOptions: document.querySelector("#choice-options"),
   actionDialog: document.querySelector("#action-dialog"),
   actionDialogKicker: document.querySelector("#action-dialog-kicker"),
   actionDialogTitle: document.querySelector("#action-dialog-title"),
@@ -74,6 +88,9 @@ const elements = {
   eventTitle: document.querySelector("#event-title"),
   eventDescription: document.querySelector("#event-description"),
   eventOptions: document.querySelector("#event-options"),
+  stockDialog: document.querySelector("#stock-dialog"),
+  stockBody: document.querySelector("#stock-body"),
+  stockActions: document.querySelector("#stock-actions"),
   endingDialog: document.querySelector("#ending-dialog"),
   endingTitle: document.querySelector("#ending-title"),
   endingCopy: document.querySelector("#ending-copy"),
@@ -83,15 +100,18 @@ const elements = {
 
 const ACTION_FLAVOR = {
   work: { subtitle: "半天穩定進帳", risk: "1 格・中", tone: "steady" },
+  resign: { subtitle: "把班表停掉", risk: "1 格・轉向", tone: "recover" },
   overtime: { subtitle: "拿命補現金流", risk: "2 格・重", tone: "danger" },
   rest: { subtitle: "先把自己修回來", risk: "1 格・輕", tone: "recover" },
   study: { subtitle: "今天投資明天", risk: "1 格・輕", tone: "growth" },
   jobSearch: { subtitle: "把希望投出去", risk: "2 格・重", tone: "growth" },
   reward: { subtitle: "花錢止痛一下", risk: "1 格・輕", tone: "recover" },
-  sideGig: { subtitle: "半天快錢", risk: "1 格・中", tone: "steady" },
-  freelance: { subtitle: "技能開始變現", risk: "1 格・中", tone: "growth" },
   lifeAdmin: { subtitle: "處理現實問題", risk: "1 格・輕", tone: "recover" },
   network: { subtitle: "換機會，不保證立刻有錢", risk: "1 格・輕", tone: "growth" },
+  venture: { subtitle: "把自己的生意押下去", risk: "1 格・重", tone: "growth" },
+  stockTrade: { subtitle: "今天先看盤", risk: "0 格・波動", tone: "steady" },
+  attendanceWork: { subtitle: "固定班先上掉", risk: "1 格・固定", tone: "steady" },
+  attendanceLeave: { subtitle: "今天先請假", risk: "1 格・代價", tone: "recover" },
 };
 
 const DELTA_LINE_PATTERN = /^(金錢|體力|心情|壓力|技能) ([+-].+)$/;
@@ -104,6 +124,10 @@ const EVENT_TONE = {
   生活事件: "life",
   小確幸: "luck",
   轉機: "opportunity",
+  創業決策: "growth",
+  創業驚喜: "opportunity",
+  創業危機: "danger",
+  接案機會: "opportunity",
 };
 
 const ICONS = {
@@ -157,7 +181,14 @@ const setVisibility = (element, isVisible) => {
 };
 
 const hasBlockingDialog = () =>
-  uiState.onboardingOpen || uiState.actionDialogMode !== "closed" || Boolean(state.pendingEvent) || Boolean(state.ending);
+  uiState.onboardingOpen ||
+  uiState.actionDialogMode !== "closed" ||
+  uiState.stockDialogOpen ||
+  Boolean(state.pendingActionChoice) ||
+  Boolean(state.pendingAttendance) ||
+  Boolean(state.pendingStartupDecision) ||
+  Boolean(state.pendingEvent) ||
+  Boolean(state.ending);
 
 const setBodyOverlayState = () => {
   const overlayVisible = hasBlockingDialog();
@@ -178,6 +209,26 @@ const focusDialogAction = () => {
 
   if (state.pendingEvent) {
     elements.eventOptions.querySelector("button")?.focus();
+    return;
+  }
+
+  if (state.pendingActionChoice) {
+    elements.choiceOptions.querySelector("button")?.focus();
+    return;
+  }
+
+  if (state.pendingAttendance) {
+    elements.attendanceOptions.querySelector("button")?.focus();
+    return;
+  }
+
+  if (state.pendingStartupDecision) {
+    elements.startupDecisionOptions.querySelector("button")?.focus();
+    return;
+  }
+
+  if (uiState.stockDialogOpen) {
+    elements.stockBody.querySelector("button")?.focus();
     return;
   }
 
@@ -313,13 +364,21 @@ const getActionPreview = (action) => {
   const preview = [action.slotLabel];
   const effects = { ...action.effects };
 
-  if (action.id === "jobSearch") {
-    preview.push(action.tag, "失敗時 體力 -14", "失敗時 心情 -12", "失敗時 壓力 +10");
+  if (action.id === "rest") {
+    const physique = state.character.physique;
+    const restEnergy = 22 + physique * 2;
+    const restStress = 12 + physique;
+    preview.push(`體力 +${restEnergy}`, "心情 +10", `壓力 -${restStress}`, "體能越高，休息回得越多");
     return preview;
   }
 
-  if (action.id === "freelance") {
-    preview.push(action.tag, "需要技能 45 或接案人脈");
+  if (action.id === "work" && action.label === "離職") {
+    preview.push("工作狀態 → 待業中", "時間壓力解除", "現金流變差");
+    return preview;
+  }
+
+  if (action.id === "jobSearch") {
+    preview.push(action.tag, "失敗時 體力 -14", "失敗時 心情 -12", "失敗時 壓力 +10");
     return preview;
   }
 
@@ -330,6 +389,16 @@ const getActionPreview = (action) => {
 
   if (action.id === "network") {
     preview.push("可能換到人脈或案源");
+    return preview;
+  }
+
+  if (action.id === "venture") {
+    preview.push(action.label === "結束創業" ? "關掉被動收入" : "起步成本高", "智力、財力、人脈會影響創業日常");
+    return preview;
+  }
+
+  if (action.id === "stockTrade") {
+    preview.push("5 檔固定股票", "可多次進入買賣", "每次自訂股數", "不消耗體力");
     return preview;
   }
 
@@ -367,11 +436,11 @@ const getPlanningNote = () => {
 };
 
 const getActionContextHint = (action) => {
+  if (action.id === "work" && action.label === "離職") {
+    return "離職後明天開始不再被固定班表吃掉一格。";
+  }
   if (action.id === "jobSearch") {
     return `目前翻身機率 ${action.tag}。`;
-  }
-  if (action.id === "freelance" && state.conditions.clientLead) {
-    return "你手上有案源，這次接案更值得。";
   }
   if (action.id === "lifeAdmin") {
     return "會優先清掉最麻煩的持續問題。";
@@ -381,6 +450,12 @@ const getActionContextHint = (action) => {
   }
   if (action.id === "reward") {
     return "只能止痛，不能真的解決月底壓力。";
+  }
+  if (action.id === "venture") {
+    return action.label === "結束創業" ? "按下去會把目前的事業直接收掉。" : "創業不是立刻賺錢，是先把錢和壓力押下去。";
+  }
+  if (action.id === "stockTrade") {
+    return "可以先看今天 5 檔價格，再決定是否買賣。";
   }
   return "";
 };
@@ -511,8 +586,14 @@ const renderIntroDialog = () => {
 const handleActionChoice = (actionId) => {
   playSelectSfx();
   uiState.expandedActionInfoId = null;
+  if (actionId === "stockTrade") {
+    uiState.stockDialogOpen = true;
+    uiState.actionDialogMode = "closed";
+    render();
+    return;
+  }
   state = dispatchAction(state, actionId);
-  if (state.pendingEvent || state.ending) {
+  if (state.pendingActionChoice || state.pendingEvent || state.ending) {
     uiState.actionDialogMode = "closed";
   } else {
     uiState.actionDialogMode = "result";
@@ -681,7 +762,16 @@ const renderActionResult = () => {
 };
 
 const renderActionDialog = () => {
-  if (uiState.onboardingOpen || uiState.actionDialogMode === "closed" || state.pendingEvent || state.ending) {
+  if (
+    uiState.onboardingOpen ||
+    uiState.actionDialogMode === "closed" ||
+    uiState.stockDialogOpen ||
+    state.pendingActionChoice ||
+    state.pendingAttendance ||
+    state.pendingStartupDecision ||
+    state.pendingEvent ||
+    state.ending
+  ) {
     setVisibility(elements.actionDialog, false);
     return;
   }
@@ -693,6 +783,98 @@ const renderActionDialog = () => {
   }
 
   setVisibility(elements.actionDialog, true);
+};
+
+const renderChoiceDialog = () => {
+  if (!state.pendingActionChoice || uiState.onboardingOpen) {
+    setVisibility(elements.choiceDialog, false);
+    return;
+  }
+
+  elements.choiceTitle.textContent = state.pendingActionChoice.title;
+  elements.choiceDescription.textContent = state.pendingActionChoice.description;
+  elements.choiceOptions.innerHTML = "";
+
+  for (const option of state.pendingActionChoice.options) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "event-button event-choice";
+    button.innerHTML = `
+      <span class="event-choice-text">${option.label}</span>
+      <span class="event-choice-caption">${option.caption}</span>
+    `;
+    button.addEventListener("click", () => {
+      playSelectSfx();
+      state = dispatchActionChoice(state, option.id);
+      if (!state.pendingEvent && !state.ending) {
+        uiState.actionDialogMode = "result";
+      }
+      render();
+    });
+    elements.choiceOptions.append(button);
+  }
+
+  setVisibility(elements.choiceDialog, true);
+};
+
+const renderAttendanceDialog = () => {
+  if (!state.pendingAttendance || uiState.onboardingOpen) {
+    setVisibility(elements.attendanceDialog, false);
+    return;
+  }
+
+  elements.attendanceTitle.textContent = state.pendingAttendance.title;
+  elements.attendanceDescription.textContent = state.pendingAttendance.description;
+  elements.attendanceOptions.innerHTML = "";
+
+  for (const option of state.pendingAttendance.options) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "event-button event-choice";
+    button.innerHTML = `
+      <span class="event-choice-text">${option.text}</span>
+      <span class="event-choice-caption">${option.caption}</span>
+    `;
+    button.addEventListener("click", () => {
+      playSelectSfx();
+      state = dispatchAttendanceChoice(state, option.id);
+      uiState.actionDialogMode = "closed";
+      render();
+    });
+    elements.attendanceOptions.append(button);
+  }
+
+  setVisibility(elements.attendanceDialog, true);
+};
+
+const renderStartupDecisionDialog = () => {
+  if (!state.pendingStartupDecision || uiState.onboardingOpen) {
+    setVisibility(elements.startupDecisionDialog, false);
+    return;
+  }
+
+  elements.startupDecisionTitle.textContent = state.pendingStartupDecision.title;
+  elements.startupDecisionDescription.textContent = state.pendingStartupDecision.description;
+  elements.startupDecisionOptions.innerHTML = "";
+
+  for (const option of state.pendingStartupDecision.options) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "event-button event-choice";
+    button.innerHTML = `
+      <span class="event-choice-text">${option.text}</span>
+      <span class="event-choice-caption">${option.caption}</span>
+    `;
+    button.addEventListener("click", () => {
+      playSelectSfx();
+      state = dispatchStartupDecision(state, option.id);
+      uiState.actionDialogMode = "closed";
+      render();
+    });
+    elements.startupDecisionOptions.append(button);
+  }
+
+  setVisibility(elements.startupDecisionDialog, true);
 };
 
 const renderEventDialog = () => {
@@ -727,6 +909,124 @@ const renderEventDialog = () => {
   }
 
   setVisibility(elements.eventDialog, true);
+};
+
+const getStockQty = (stockId) => uiState.stockQuantities[stockId] ?? 1;
+
+const setStockQty = (stockId, value) => {
+  uiState.stockQuantities[stockId] = Math.max(1, Math.floor(value) || 1);
+};
+
+const renderStockDialog = () => {
+  if (!uiState.stockDialogOpen || uiState.onboardingOpen) {
+    setVisibility(elements.stockDialog, false);
+    return;
+  }
+
+  elements.stockBody.innerHTML = `
+    <section class="stock-news-board">
+      <div class="section-kicker">今日新聞</div>
+      <div class="stock-news-list">
+        ${state.stockNews
+          .map(
+            (news) => `
+              <article class="stock-news-card">
+                <div class="stock-news-top">
+                  <strong>${news.headline}</strong>
+                  <span class="stock-news-horizon">${news.horizon === "today" ? "今日" : "後續"}</span>
+                </div>
+                <p>${news.body}</p>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+    <div class="stock-list">
+      ${state.stocks
+        .map((stock) => {
+          const delta = stock.price - stock.previousPrice;
+          const deltaText = delta >= 0 ? `+${delta}` : `${delta}`;
+          const deltaClass = delta < 0 ? "loss" : "gain";
+          const qty = getStockQty(stock.id);
+          const canBuy = state.money >= stock.price * qty;
+          const canSell = stock.owned >= qty;
+          return `
+            <article class="stock-card">
+              <div class="stock-head">
+                <strong>${stock.name}</strong>
+                <span class="stock-price">$${stock.price}</span>
+              </div>
+              <div class="stock-meta">
+                <span class="stock-delta ${deltaClass}">${deltaText}</span>
+                <span>持有 ${stock.owned} 股</span>
+              </div>
+              ${stock.owned > 0 ? `<div class="stock-meta"><span>買入均價 $${stock.averageCost}</span></div>` : ""}
+              <div class="stock-qty-row">
+                <button class="qty-btn" data-stock-id="${stock.id}" data-action="minus" aria-label="減少股數">−</button>
+                <input class="qty-input" type="number" min="1" value="${qty}" data-stock-id="${stock.id}" aria-label="${stock.name} 股數" />
+                <button class="qty-btn" data-stock-id="${stock.id}" data-action="plus" aria-label="增加股數">+</button>
+                <span class="qty-cost">≈ $${(stock.price * qty).toLocaleString()}</span>
+              </div>
+              <div class="stock-controls">
+                <button class="stock-trade-btn stock-buy" data-stock-id="${stock.id}" ${!canBuy ? "disabled" : ""}>買入 ${qty} 股</button>
+                <button class="stock-trade-btn stock-sell" data-stock-id="${stock.id}" ${!canSell ? "disabled" : ""}>賣出 ${qty} 股</button>
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+  elements.stockActions.innerHTML = "";
+
+  elements.stockBody.querySelectorAll(".qty-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const { stockId, action } = btn.dataset;
+      const current = getStockQty(stockId);
+      setStockQty(stockId, action === "plus" ? current + 1 : current - 1);
+      renderStockDialog();
+    });
+  });
+
+  elements.stockBody.querySelectorAll(".qty-input").forEach((input) => {
+    input.addEventListener("change", () => {
+      setStockQty(input.dataset.stockId, Number(input.value));
+      renderStockDialog();
+    });
+  });
+
+  elements.stockBody.querySelectorAll(".stock-buy").forEach((button) => {
+    button.addEventListener("click", () => {
+      playSelectSfx();
+      const qty = getStockQty(button.dataset.stockId);
+      state = dispatchStockTrade(state, button.dataset.stockId, "buy", qty);
+      renderStockDialog();
+    });
+  });
+
+  elements.stockBody.querySelectorAll(".stock-sell").forEach((button) => {
+    button.addEventListener("click", () => {
+      playSelectSfx();
+      const qty = getStockQty(button.dataset.stockId);
+      state = dispatchStockTrade(state, button.dataset.stockId, "sell", qty);
+      renderStockDialog();
+    });
+  });
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "dialog-close";
+  closeButton.textContent = "先返回";
+  closeButton.addEventListener("click", () => {
+    playClickSfx();
+    uiState.stockDialogOpen = false;
+    uiState.actionDialogMode = "result";
+    render();
+  });
+  elements.stockActions.append(closeButton);
+
+  setVisibility(elements.stockDialog, true);
 };
 
 const getEndingRank = () => {
@@ -851,6 +1151,8 @@ const resetGame = () => {
   uiState.actionDialogMode = "closed";
   uiState.detailsExpanded = false;
   uiState.expandedActionInfoId = null;
+  uiState.stockDialogOpen = false;
+  uiState.stockQuantities = {};
   uiState.achievementToastVisible = false;
   uiState.achievementSignature = "";
   if (uiState.achievementTimer) {
@@ -874,8 +1176,12 @@ const render = () => {
   renderMeta(diff);
   renderMainButtons();
   renderIntroDialog();
+  renderChoiceDialog();
+  renderAttendanceDialog();
+  renderStartupDecisionDialog();
   renderActionDialog();
   renderEventDialog();
+  renderStockDialog();
   renderEndingDialog();
   renderAchievementToast();
   setBodyOverlayState();
