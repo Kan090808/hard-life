@@ -24,6 +24,7 @@ const uiState = {
   expandedActionInfoId: null,
   stockDialogOpen: false,
   stockQuantities: {},
+  endingShown: false,
 };
 let renderSnapshot = null;
 
@@ -96,6 +97,8 @@ const elements = {
   endingCopy: document.querySelector("#ending-copy"),
   endingReport: document.querySelector("#ending-report"),
   restartButton: document.querySelector("#restart-button"),
+  screenshotButton: document.querySelector("#screenshot-button"),
+  shareButton: document.querySelector("#share-button"),
 };
 
 const ACTION_FLAVOR = {
@@ -1076,8 +1079,12 @@ const renderEndingDialog = () => {
     return;
   }
 
-  stopBgm();
-  playEndingSfx();
+  if (!uiState.endingShown) {
+    uiState.endingShown = true;
+    stopBgm();
+    playEndingSfx();
+  }
+
   elements.endingDialog.dataset.tone = state.ending.type === "failure" ? "danger" : "growth";
 
   const rank = getEndingRank();
@@ -1156,6 +1163,118 @@ const renderAchievementToast = () => {
     .join("");
 };
 
+const buildShareText = () => {
+  const rank = getEndingRank();
+  const lines = [
+    "【打工人生：月底前活下去】",
+    state.ending?.title ?? "",
+    rank?.label ?? "",
+    `存款 $${state.money.toLocaleString()}・體力 ${state.energy}・壓力 ${state.stress}・技能 ${state.skill}`,
+    window.location.href,
+  ];
+  return lines.filter(Boolean).join("\n");
+};
+
+const drawResultCard = () => {
+  const isFailure = state.ending?.type === "failure";
+  const rank = getEndingRank();
+  const W = 640, H = 800;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  if (isFailure) {
+    grad.addColorStop(0, "#1e0707");
+    grad.addColorStop(1, "#0e0303");
+  } else {
+    grad.addColorStop(0, "#0a2018");
+    grad.addColorStop(1, "#040d09");
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  const accent = isFailure ? "#ffb3ae" : "#a8ffd4";
+  const muted = "rgba(255,255,255,0.42)";
+  let y = 80;
+
+  ctx.font = "600 22px sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.fillText("月底結算  /  打工人生", 56, y);
+  y += 60;
+
+  ctx.font = `bold ${(state.ending?.title?.length ?? 0) > 6 ? "52" : "62"}px serif`;
+  ctx.fillStyle = accent;
+  ctx.fillText(state.ending?.title ?? "", 56, y);
+  y += 24;
+
+  if (rank?.label) {
+    ctx.font = "500 22px sans-serif";
+    ctx.fillStyle = muted;
+    ctx.fillText(rank.label, 56, y + 32);
+    y += 64;
+  }
+
+  y += 40;
+  const stats = [
+    ["存款", `$${state.money.toLocaleString()}`],
+    ["體力", `${state.energy}`],
+    ["心情", `${state.mood}`],
+    ["壓力", `${state.stress}`],
+    ["技能", `${state.skill}`],
+  ];
+  const colW = (W - 112) / stats.length;
+  for (let i = 0; i < stats.length; i++) {
+    const x = 56 + i * colW;
+    ctx.font = "500 19px sans-serif";
+    ctx.fillStyle = muted;
+    ctx.fillText(stats[i][0], x, y);
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(stats[i][1], x, y + 38);
+  }
+
+  y += 110;
+  ctx.font = "400 20px sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.28)";
+  ctx.fillText(window.location.hostname, 56, H - 48);
+
+  return canvas;
+};
+
+const handleScreenshot = async () => {
+  const canvas = drawResultCard();
+  canvas.toBlob(async (blob) => {
+    const file = new File([blob], "打工人生結果.png", { type: "image/png" });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: "打工人生：月底前活下去" }).catch(() => {});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "打工人生結果.png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  }, "image/png");
+};
+
+const handleShare = async () => {
+  const text = buildShareText();
+  if (navigator.share) {
+    await navigator.share({ title: "打工人生：月底前活下去", text }).catch(() => {});
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = elements.shareButton;
+    const original = btn.textContent;
+    btn.textContent = "已複製！";
+    setTimeout(() => { btn.textContent = original; }, 1800);
+  } catch {}
+};
+
 const resetGame = () => {
   stopBgm();
   state = createInitialState();
@@ -1165,6 +1284,7 @@ const resetGame = () => {
   uiState.expandedActionInfoId = null;
   uiState.stockDialogOpen = false;
   uiState.stockQuantities = {};
+  uiState.endingShown = false;
   uiState.achievementToastVisible = false;
   uiState.achievementSignature = "";
   if (uiState.achievementTimer) {
@@ -1236,6 +1356,16 @@ elements.resetButton.addEventListener("click", () => {
 elements.restartButton.addEventListener("click", () => {
   playClickSfx();
   resetGame();
+});
+
+elements.screenshotButton.addEventListener("click", () => {
+  playClickSfx();
+  handleScreenshot();
+});
+
+elements.shareButton.addEventListener("click", () => {
+  playClickSfx();
+  handleShare();
 });
 
 elements.soundToggle.addEventListener("click", () => {
