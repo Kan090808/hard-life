@@ -273,7 +273,8 @@
       aria-labelledby="ending-title"
       aria-describedby="ending-copy"
     >
-      <div class="ending-content">
+      <div class="ending-band" aria-hidden="true"></div>
+      <div class="ending-content" id="ending-capture">
         <header class="ending-header">
           <p class="ending-kicker">月底結算</p>
           <h2 class="ending-headline" id="ending-title"></h2>
@@ -281,15 +282,16 @@
         </header>
         <div class="ending-report" id="ending-report"></div>
         <footer class="ending-footer">
-          <div class="ending-share-row">
-            <button class="ending-share-btn" id="screenshot-button" type="button">截圖成績單</button>
-            <button class="ending-share-btn" id="share-button" type="button">分享結果</button>
+          <div class="ending-action-row">
+            <button class="ending-action-btn" id="screenshot-button" type="button">截圖成績</button>
+            <button class="ending-action-btn" id="share-button" type="button">分享結果</button>
           </div>
           <button class="ending-restart-btn" id="restart-button" type="button">重新開始，下個月再撐一次</button>
         </footer>
       </div>
     </section>
 
+    <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
     <script type="module" src="./src/main.mjs"></script>
   </body>
 </html>
