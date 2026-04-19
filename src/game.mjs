@@ -327,8 +327,8 @@ const createDailyWorkOptions = (state, rng) =>
       moneyBonus = (physique - 1) * 60 + (luck - 1) * 20;
       energyBonus = (physique - 1) * 2;
     } else if (gig.type === "mental") {
-      // 智力型（家教）：智力大幅提升收入與教學滿足感
-      moneyBonus = (intelligence - 1) * 100 + (luck - 1) * 20;
+      // 智力型（家教）：智力大幅提升收入與教學滿足感；技能代表教學實力
+      moneyBonus = (intelligence - 1) * 100 + (luck - 1) * 20 + Math.floor(state.skill * 4);
       moodBonus = (intelligence - 1) * 3;
       stressBonus -= (intelligence - 1) * 2;
     } else if (gig.type === "mixed") {
@@ -614,6 +614,18 @@ const resolveJobSearch = (state, rng) => {
   };
 };
 
+
+const getStudyCost = (skill) => 400 + Math.floor(skill / 10) * 80;
+
+const resolveStudy = (state) => ({
+  effects: {
+    money: -getStudyCost(state.skill),
+    energy: -14,
+    mood: -4,
+    stress: 5,
+    skill: 10,
+  },
+});
 
 const getRestRecoveryEffects = (state) => {
   const physique = state.character.physique;
@@ -938,6 +950,9 @@ const resolveBaseAction = (state, actionId, rng) => {
   let resolution;
 
   switch (action.special) {
+    case "study":
+      resolution = resolveStudy(state);
+      break;
     case "rest":
       resolution = resolveRest(state);
       break;
@@ -1239,6 +1254,7 @@ export const createInitialState = (rng = Math.random) => {
 
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
+    .filter((action) => !["stockTrade", "venture"].includes(action.id))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .map((action) => {
     const availability = getActionAvailability(state, action);
@@ -1262,7 +1278,9 @@ export const getActionViewModels = (state) =>
     let tag = action.tag;
 
     if (action.id === "jobSearch") {
-      tag = `${Math.round(Math.min(1, 0.2 + state.skill * 0.008 + (state.conditions.hasFreelanceContact ? 0.05 : 0)) * 100)}% 成功率`;
+      tag = `${Math.round(Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)) * 100)}% 成功率`;
+    } else if (action.id === "study") {
+      tag = `課程費 $${getStudyCost(state.skill)}`;
     } else if (action.id === "venture" && state.businessLevel > 0) {
       tag = state.businessLevel > 1 ? "擴張中" : "剛起步";
     } else if (action.id === "stockTrade") {
@@ -1273,8 +1291,14 @@ export const getActionViewModels = (state) =>
       tag = `今日收入 $${income}`;
     }
 
+    const dynamicEffects =
+      action.id === "study"
+        ? { ...action.effects, money: -getStudyCost(state.skill) }
+        : action.effects;
+
     return {
       ...action,
+      effects: dynamicEffects,
       label: dynamicLabel,
       description: dynamicDescription,
       tag,
