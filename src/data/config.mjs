@@ -262,7 +262,7 @@ export const CONDITION_CONFIG = {
 export const DEFAULT_PLAYER_STATE = {
   day: 1,
   totalDays: TOTAL_DAYS,
-  money: 6000,
+  money: 3500,
   energy: 80,
   mood: 60,
   stress: 20,
@@ -316,15 +316,15 @@ export const JOBS = {
   2: {
     level: 2,
     name: "穩定兼職",
-    workIncome: 1150,
-    overtimeIncome: 500,
+    workIncome: 700,
+    overtimeIncome: 300,
     tagline: "每天都要進班，時間開始被固定吃掉。",
     badge: "Lv.2 穩定兼職",
     mark: "兼職工牌",
     requiresAttendance: true,
     leaveThreshold: 35,
     attendanceEffects: {
-      money: 1150,
+      money: 700,
       energy: -18,
       mood: -5,
       stress: 6,
@@ -339,15 +339,15 @@ export const JOBS = {
   3: {
     level: 3,
     name: "正職新人",
-    workIncome: 1600,
-    overtimeIncome: 700,
+    workIncome: 980,
+    overtimeIncome: 420,
     tagline: "收入提高了，但每天先被公司拿走一格。",
     badge: "Lv.3 正職新人",
     mark: "識別證",
     requiresAttendance: true,
     leaveThreshold: 45,
     attendanceEffects: {
-      money: 1600,
+      money: 980,
       energy: -26,
       mood: -8,
       stress: 10,
@@ -362,7 +362,7 @@ export const JOBS = {
   4: {
     level: 4,
     name: "遠端接案者",
-    workIncome: 2800,
+    workIncome: 1700,
     overtimeIncome: null,
     tagline: "自由多一點，但案子不會自己長出來。",
     badge: "Lv.4 遠端接案",
@@ -494,12 +494,12 @@ export const ACTIONS = {
 };
 
 export const WORK_GIGS = [
-  { id: "flyer", label: "發傳單", type: "physical", effects: { money: 800, energy: -12, mood: -3, stress: 4 } },
-  { id: "dishwash", label: "洗碗支援", type: "physical", effects: { money: 1050, energy: -20, mood: -6, stress: 7 } },
-  { id: "warehouse", label: "倉庫搬貨", type: "physical", effects: { money: 1500, energy: -28, mood: -8, stress: 10 } },
-  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 1050, energy: -10, mood: 2, stress: 5 } },
-  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 1050, energy: -18, mood: -4, stress: 8 } },
-  { id: "promoter", label: "商場活動工讀", type: "social", effects: { money: 1000, energy: -14, mood: 1, stress: 5 } },
+  { id: "flyer", label: "發傳單", type: "physical", effects: { money: 480, energy: -12, mood: -3, stress: 4 } },
+  { id: "dishwash", label: "洗碗支援", type: "physical", effects: { money: 650, energy: -20, mood: -6, stress: 7 } },
+  { id: "warehouse", label: "倉庫搬貨", type: "physical", effects: { money: 900, energy: -28, mood: -8, stress: 10 } },
+  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 700, energy: -10, mood: 2, stress: 5 } },
+  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 650, energy: -18, mood: -4, stress: 8 } },
+  { id: "promoter", label: "商場活動工讀", type: "social", effects: { money: 620, energy: -14, mood: 1, stress: 5 } },
 ];
 
 export const REWARD_ACTIVITIES = [
