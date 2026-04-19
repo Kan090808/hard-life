@@ -316,15 +316,15 @@ export const JOBS = {
   2: {
     level: 2,
     name: "穩定兼職",
-    workIncome: 1300,
-    overtimeIncome: 900,
+    workIncome: 1150,
+    overtimeIncome: 500,
     tagline: "每天都要進班，時間開始被固定吃掉。",
     badge: "Lv.2 穩定兼職",
     mark: "兼職工牌",
     requiresAttendance: true,
     leaveThreshold: 35,
     attendanceEffects: {
-      money: 1300,
+      money: 1150,
       energy: -18,
       mood: -5,
       stress: 6,
@@ -339,15 +339,15 @@ export const JOBS = {
   3: {
     level: 3,
     name: "正職新人",
-    workIncome: 1850,
-    overtimeIncome: 1400,
+    workIncome: 1600,
+    overtimeIncome: 700,
     tagline: "收入提高了，但每天先被公司拿走一格。",
     badge: "Lv.3 正職新人",
     mark: "識別證",
     requiresAttendance: true,
     leaveThreshold: 45,
     attendanceEffects: {
-      money: 1850,
+      money: 1600,
       energy: -26,
       mood: -8,
       stress: 10,
@@ -497,8 +497,8 @@ export const WORK_GIGS = [
   { id: "flyer", label: "發傳單", type: "physical", effects: { money: 800, energy: -12, mood: -3, stress: 4 } },
   { id: "dishwash", label: "洗碗支援", type: "physical", effects: { money: 1050, energy: -20, mood: -6, stress: 7 } },
   { id: "warehouse", label: "倉庫搬貨", type: "physical", effects: { money: 1500, energy: -28, mood: -8, stress: 10 } },
-  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 1400, energy: -10, mood: 2, stress: 5 } },
-  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 1300, energy: -18, mood: -4, stress: 8 } },
+  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 1050, energy: -10, mood: 2, stress: 5 } },
+  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 1050, energy: -18, mood: -4, stress: 8 } },
   { id: "promoter", label: "商場活動工讀", type: "social", effects: { money: 1000, energy: -14, mood: 1, stress: 5 } },
 ];
 
