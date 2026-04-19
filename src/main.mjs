@@ -1,4 +1,4 @@
-import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchEventChoice, dispatchStartupDecision, dispatchStockTrade, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
+import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, dispatchStartupDecision, dispatchStockTrade, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
 import { CHARACTER_STAT_DISPLAY, CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
 import {
   isAudioSupported,
@@ -24,6 +24,7 @@ const uiState = {
   expandedActionInfoId: null,
   stockDialogOpen: false,
   stockQuantities: {},
+  eventHidden: false,
 };
 let renderSnapshot = null;
 
@@ -96,6 +97,8 @@ const elements = {
   endingCopy: document.querySelector("#ending-copy"),
   endingReport: document.querySelector("#ending-report"),
   restartButton: document.querySelector("#restart-button"),
+  eventResumeBanner: document.querySelector("#event-resume-banner"),
+  eventResumeButton: document.querySelector("#event-resume-button"),
 };
 
 const ACTION_FLAVOR = {
@@ -187,7 +190,7 @@ const hasBlockingDialog = () =>
   Boolean(state.pendingActionChoice) ||
   Boolean(state.pendingAttendance) ||
   Boolean(state.pendingStartupDecision) ||
-  Boolean(state.pendingEvent) ||
+  (!uiState.eventHidden && Boolean(state.pendingEvent)) ||
   Boolean(state.ending);
 
 const setBodyOverlayState = () => {
@@ -814,6 +817,18 @@ const renderChoiceDialog = () => {
     elements.choiceOptions.append(button);
   }
 
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = "dialog-close";
+  backButton.textContent = "再想想";
+  backButton.addEventListener("click", () => {
+    playClickSfx();
+    state = dispatchCancelActionChoice(state);
+    uiState.actionDialogMode = "select";
+    render();
+  });
+  elements.choiceOptions.append(backButton);
+
   setVisibility(elements.choiceDialog, true);
 };
 
@@ -878,7 +893,7 @@ const renderStartupDecisionDialog = () => {
 };
 
 const renderEventDialog = () => {
-  if (!state.pendingEvent || uiState.onboardingOpen) {
+  if (!state.pendingEvent || uiState.onboardingOpen || uiState.eventHidden) {
     setVisibility(elements.eventDialog, false);
     return;
   }
@@ -899,6 +914,7 @@ const renderEventDialog = () => {
     `;
     button.addEventListener("click", () => {
       playSelectSfx();
+      uiState.eventHidden = false;
       state = dispatchEventChoice(state, option.id);
       if (!state.ending) {
         uiState.actionDialogMode = "result";
@@ -907,6 +923,17 @@ const renderEventDialog = () => {
     });
     elements.eventOptions.append(button);
   }
+
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = "dialog-close";
+  backButton.textContent = "再想想";
+  backButton.addEventListener("click", () => {
+    playClickSfx();
+    uiState.eventHidden = true;
+    render();
+  });
+  elements.eventOptions.append(backButton);
 
   setVisibility(elements.eventDialog, true);
 };
@@ -1119,6 +1146,15 @@ const renderEndingDialog = () => {
   setVisibility(elements.endingDialog, true);
 };
 
+const renderEventResumeBanner = () => {
+  const show = uiState.eventHidden && Boolean(state.pendingEvent) && !uiState.onboardingOpen;
+  setVisibility(elements.eventResumeBanner, show);
+  if (show) {
+    elements.eventResumeBanner.querySelector(".event-resume-text").textContent =
+      `有一件事等你決定：${state.pendingEvent.title}`;
+  }
+};
+
 const renderAchievementToast = () => {
   const achievements = state.latestAchievements;
   const shouldShow = uiState.achievementToastVisible && achievements.length > 0;
@@ -1153,6 +1189,7 @@ const resetGame = () => {
   uiState.expandedActionInfoId = null;
   uiState.stockDialogOpen = false;
   uiState.stockQuantities = {};
+  uiState.eventHidden = false;
   uiState.achievementToastVisible = false;
   uiState.achievementSignature = "";
   if (uiState.achievementTimer) {
@@ -1181,6 +1218,7 @@ const render = () => {
   renderStartupDecisionDialog();
   renderActionDialog();
   renderEventDialog();
+  renderEventResumeBanner();
   renderStockDialog();
   renderEndingDialog();
   renderAchievementToast();
@@ -1241,6 +1279,12 @@ elements.soundToggle.addEventListener("click", () => {
 elements.detailsToggle.addEventListener("click", () => {
   playClickSfx();
   uiState.detailsExpanded = !uiState.detailsExpanded;
+  render();
+});
+
+elements.eventResumeButton.addEventListener("click", () => {
+  playClickSfx();
+  uiState.eventHidden = false;
   render();
 });
 
