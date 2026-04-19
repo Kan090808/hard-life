@@ -180,8 +180,8 @@ export const STARTUP_FIXED_EVENTS = [
 ];
 
 export const TOTAL_DAYS = 30;
-export const DAILY_LIVING_COST = 150;
-export const RENT_AMOUNT = 3000;
+export const DAILY_LIVING_COST = 280;
+export const RENT_AMOUNT = 4000;
 export const RENT_DAYS = [7, 14, 21, 28];
 export const EVENT_TRIGGER_RATE = 0.3;
 export const MAX_LOG_ENTRIES = 8;
@@ -262,7 +262,7 @@ export const CONDITION_CONFIG = {
 export const DEFAULT_PLAYER_STATE = {
   day: 1,
   totalDays: TOTAL_DAYS,
-  money: 3000,
+  money: 6000,
   energy: 80,
   mood: 60,
   stress: 20,
@@ -316,21 +316,21 @@ export const JOBS = {
   2: {
     level: 2,
     name: "穩定兼職",
-    workIncome: 1100,
-    overtimeIncome: 700,
+    workIncome: 1300,
+    overtimeIncome: 900,
     tagline: "每天都要進班，時間開始被固定吃掉。",
     badge: "Lv.2 穩定兼職",
     mark: "兼職工牌",
     requiresAttendance: true,
     leaveThreshold: 35,
     attendanceEffects: {
-      money: 1100,
+      money: 1300,
       energy: -18,
       mood: -5,
       stress: 6,
     },
     leaveEffects: {
-      money: -250,
+      money: -400,
       mood: -6,
       stress: 8,
     },
@@ -339,21 +339,21 @@ export const JOBS = {
   3: {
     level: 3,
     name: "正職新人",
-    workIncome: 1500,
-    overtimeIncome: 1100,
+    workIncome: 1850,
+    overtimeIncome: 1400,
     tagline: "收入提高了，但每天先被公司拿走一格。",
     badge: "Lv.3 正職新人",
     mark: "識別證",
     requiresAttendance: true,
     leaveThreshold: 45,
     attendanceEffects: {
-      money: 1500,
+      money: 1850,
       energy: -26,
       mood: -8,
       stress: 10,
     },
     leaveEffects: {
-      money: -500,
+      money: -700,
       mood: -10,
       stress: 10,
     },
@@ -362,7 +362,7 @@ export const JOBS = {
   4: {
     level: 4,
     name: "遠端接案者",
-    workIncome: 2000,
+    workIncome: 2800,
     overtimeIncome: null,
     tagline: "自由多一點，但案子不會自己長出來。",
     badge: "Lv.4 遠端接案",
@@ -408,7 +408,7 @@ export const ACTIONS = {
     category: "recovery",
     special: "rest",
     effects: {
-      money: -100,
+      money: -150,
       energy: 28,
       mood: 10,
       stress: -15,
@@ -423,7 +423,7 @@ export const ACTIONS = {
     intensity: "light",
     category: "growth",
     effects: {
-      money: -350,
+      money: -400,
       energy: -14,
       mood: -4,
       stress: 5,
@@ -493,20 +493,20 @@ export const ACTIONS = {
 };
 
 export const WORK_GIGS = [
-  { id: "flyer", label: "發傳單", effects: { money: 650, energy: -12, mood: -3, stress: 4 } },
-  { id: "dishwash", label: "洗碗支援", effects: { money: 900, energy: -20, mood: -6, stress: 7 } },
-  { id: "warehouse", label: "倉庫搬貨", effects: { money: 1200, energy: -28, mood: -8, stress: 10 } },
-  { id: "tutor", label: "家教代班", effects: { money: 980, energy: -10, mood: 2, stress: 5 } },
-  { id: "delivery", label: "跑單外送", effects: { money: 1080, energy: -18, mood: -4, stress: 8 } },
-  { id: "promoter", label: "商場活動工讀", effects: { money: 860, energy: -14, mood: 1, stress: 5 } },
+  { id: "flyer", label: "發傳單", type: "physical", effects: { money: 800, energy: -12, mood: -3, stress: 4 } },
+  { id: "dishwash", label: "洗碗支援", type: "physical", effects: { money: 1050, energy: -20, mood: -6, stress: 7 } },
+  { id: "warehouse", label: "倉庫搬貨", type: "physical", effects: { money: 1500, energy: -28, mood: -8, stress: 10 } },
+  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 1400, energy: -10, mood: 2, stress: 5 } },
+  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 1300, energy: -18, mood: -4, stress: 8 } },
+  { id: "promoter", label: "商場活動工讀", type: "social", effects: { money: 1000, energy: -14, mood: 1, stress: 5 } },
 ];
 
 export const REWARD_ACTIVITIES = [
-  { id: "snack", label: "買點好吃的", effects: { money: -180, mood: 10, stress: -5 } },
-  { id: "movie", label: "看場電影", effects: { money: -380, mood: 18, stress: -10 } },
-  { id: "shopping", label: "小額購物", effects: { money: -520, mood: 22, stress: -12 } },
-  { id: "massage", label: "去按摩", effects: { money: -760, energy: 10, mood: 20, stress: -16 } },
-  { id: "cafeday", label: "咖啡廳耍廢", effects: { money: -260, mood: 14, stress: -7 } },
+  { id: "snack", label: "買點好吃的", effects: { money: -150, mood: 10, stress: -5 } },
+  { id: "movie", label: "看場電影", effects: { money: -350, mood: 18, stress: -10 } },
+  { id: "shopping", label: "小額購物", effects: { money: -500, mood: 22, stress: -12 } },
+  { id: "massage", label: "去按摩", effects: { money: -700, energy: 10, mood: 20, stress: -16 } },
+  { id: "cafeday", label: "咖啡廳耍廢", effects: { money: -220, mood: 14, stress: -7 } },
 ];
 
 export const STOCK_CATALOG = [
@@ -545,7 +545,7 @@ export const SUCCESS_ENDINGS = [
     id: "free-life",
     title: "自由人生",
     body: "你沒有變成大富翁，但你終於有選擇生活的能力。",
-    matches: (state) => state.money >= 30000 && state.skill >= 80 && state.stress <= 50,
+    matches: (state) => state.money >= 40000 && state.skill >= 80 && state.stress <= 50,
   },
   {
     id: "career-shift",
@@ -557,7 +557,7 @@ export const SUCCESS_ENDINGS = [
     id: "stable-life",
     title: "穩定生活",
     body: "日子還是辛苦，但你已經能穩穩過下去。",
-    matches: (state) => state.money >= 10000 && state.mood >= 50 && state.stress <= 60,
+    matches: (state) => state.money >= 15000 && state.mood >= 50 && state.stress <= 60,
   },
   {
     id: "busy-cycle",
@@ -575,10 +575,10 @@ export const MILESTONES = [
     matches: (state) => state.day >= 8,
   },
   {
-    id: "save-five-thousand",
-    title: "存到 5000",
+    id: "save-fifteen-thousand",
+    title: "存到 15000",
     body: "戶頭第一次有點厚度，雖然還不到能安心。",
-    matches: (state) => state.money >= 5000,
+    matches: (state) => state.money >= 15000,
   },
   {
     id: "skill-thirty",
