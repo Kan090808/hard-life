@@ -555,32 +555,6 @@ h3 {
   box-shadow: 6px 6px 0 rgba(24, 28, 38, 0.14);
 }
 
-.event-resume-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.72rem;
-  padding: 0.72rem 0.82rem;
-  border: 3px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  background: #fff4e0;
-  box-shadow: 4px 4px 0 rgba(24, 28, 38, 0.14);
-}
-
-.event-resume-text {
-  flex: 1;
-  font-size: 0.88rem;
-  font-weight: 500;
-  margin: 0;
-}
-
-.event-resume-banner .primary-button {
-  flex-shrink: 0;
-  min-height: 36px;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-}
-
 .goal-title {
   font-size: 1.06rem;
   line-height: 1.35;
