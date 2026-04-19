@@ -42,7 +42,7 @@ export const EVENTS = [
               money: 400,
               energy: gotHit ? -18 : -10,
               stress: gotHit ? 18 : 10,
-              mood: gotHit ? -8 : -3,
+              mood: gotHit ? -14 : -6,
             },
             gotHit
               ? "你硬撐著把今天做完，回家時整個人都像快散架。"
@@ -144,7 +144,7 @@ export const EVENTS = [
         resolve: () =>
           withLog(
             {
-              mood: -5,
+              mood: -9,
               stress: -6,
             },
             "你把姿態放低，至少暫時沒有被追得更緊。",
@@ -159,7 +159,7 @@ export const EVENTS = [
           withLog(
             {
               stress: 12,
-              mood: -8,
+              mood: -14,
             },
             "你先不回，壓力沒有因此消失，只是轉成更晚要面對的麻煩。",
             { conditionChanges: { landlordAngry: true } }
@@ -197,7 +197,7 @@ export const EVENTS = [
         resolve: () =>
           withLog(
             {
-              mood: -2,
+              mood: -6,
             },
             "你把機會放掉了，心裡知道這可能不是天天都有。"
           ),
@@ -213,23 +213,47 @@ export const EVENTS = [
     condition: () => false,
     options: [
       {
-        id: "accept",
-        text: "接下來",
-        caption: "接了才知道值不值得。",
-        resolve: (state, rng) => {
-          const { income = 600, energyCost = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
-          const bonusStress = energyCost > 18 ? 8 : 4;
+        id: "1day",
+        text: "接 1 天",
+        caption: "完工即拿錢。",
+        resolve: (state) => {
+          const { income1 = 600, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
+          const bonusStress = energyCostPerDay > 18 ? 8 : 4;
           return withLog(
-            {
-              money: income,
-              energy: -energyCost,
-              mood: -2,
-              stress: bonusStress,
-              skill: 1,
-            },
+            { money: income1, energy: -energyCostPerDay, mood: -4, stress: bonusStress, skill: 1 },
             fromLead
-              ? `你把手上的案源變現了，拿到 $${income}，消耗了 ${energyCost} 點體力。`
-              : `你接了這筆案子，拿到 $${income}，消耗了 ${energyCost} 點體力。`,
+              ? `你把手上的案源變現了，拿到 $${income1}。`
+              : `你接了一天的案子，完工拿到 $${income1}。`,
+            fromLead ? { conditionChanges: { clientLead: false } } : {}
+          );
+        },
+      },
+      {
+        id: "2day",
+        text: "接 2 天",
+        caption: "收益較高，連跑兩天才結案。",
+        resolve: (state) => {
+          const { income2 = 1000, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
+          state.activeCaseProject = { totalIncome: income2, daysLeft: 2, energyCostPerDay };
+          const bonusStress = energyCostPerDay > 18 ? 8 : 4;
+          return withLog(
+            { energy: -energyCostPerDay, stress: bonusStress },
+            `你接了兩天的案子，今天先開始跑，完工後收款 $${income2}。`,
+            fromLead ? { conditionChanges: { clientLead: false } } : {}
+          );
+        },
+      },
+      {
+        id: "3day",
+        text: "接 3 天",
+        caption: "收益最高，但連跑三天才結案。",
+        resolve: (state) => {
+          const { income3 = 1400, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
+          state.activeCaseProject = { totalIncome: income3, daysLeft: 3, energyCostPerDay };
+          const bonusStress = energyCostPerDay > 18 ? 8 : 4;
+          return withLog(
+            { energy: -energyCostPerDay, stress: bonusStress },
+            `你接了三天的案子，今天先開始跑，完工後收款 $${income3}。`,
             fromLead ? { conditionChanges: { clientLead: false } } : {}
           );
         },
@@ -238,11 +262,19 @@ export const EVENTS = [
         id: "decline",
         text: "婉拒",
         caption: "今天精力留給其他事。",
-        resolve: () =>
-          withLog(
-            { mood: -2 },
-            "你婉拒了這筆案子，有點可惜但也無所謂。"
-          ),
+        resolve: (state) => {
+          const { fromLead = false } = state.pendingEvent?._offer ?? {};
+          const conditionChanges = {};
+          if (state.conditions.clientLead) conditionChanges.clientLead = false;
+          if (state.conditions.hasFreelanceContact) conditionChanges.hasFreelanceContact = false;
+          return withLog(
+            { mood: -8, stress: 3 },
+            fromLead
+              ? "你放掉了手上的案源，對方那邊的人脈也跟著冷掉了。"
+              : "你婉拒了這筆案子，對方可能不會再主動找你。",
+            Object.keys(conditionChanges).length ? { conditionChanges } : {}
+          );
+        },
       },
     ],
   },
@@ -272,14 +304,15 @@ export const EVENTS = [
         id: "skip",
         text: "先不去",
         caption: "月底前還是現實先贏。",
-        resolve: () =>
-          withLog(
-            {
-              mood: -4,
-              stress: 2,
-            },
-            "你留在家裡省下那筆開銷，但心情也跟著薄了一點。"
-          ),
+        resolve: (state) => {
+          const conditionChanges = {};
+          if (state.conditions.hasFreelanceContact) conditionChanges.hasFreelanceContact = false;
+          return withLog(
+            { mood: -10, stress: 3 },
+            "你留在家裡，但朋友那邊的線也跟著淡了，人脈就是這樣一次次消耗掉的。",
+            Object.keys(conditionChanges).length ? { conditionChanges } : {}
+          );
+        },
       },
     ],
   },
@@ -328,7 +361,7 @@ export const EVENTS = [
         {
           money: serious ? -400 : -100,
           businessIncome: serious ? -80 : -20,
-          mood: -6,
+          mood: -10,
           stress: serious ? 15 : 6,
         },
         serious
@@ -347,7 +380,7 @@ export const EVENTS = [
     autoResolve: (_state, rng) => {
       const serious = rng() < 0.4;
       return withLog(
-        { money: serious ? -600 : -200, stress: serious ? 14 : 7, mood: -5 },
+        { money: serious ? -600 : -200, stress: serious ? 14 : 7, mood: -9 },
         serious
           ? "系統修了很久，幾筆訂單跑掉了，今天損失比預期大。"
           : "問題比想像中快解決，但還是耽誤了一些事，小虧一筆。"

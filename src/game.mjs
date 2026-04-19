@@ -458,10 +458,16 @@ const generateDailyFreelanceOffer = (state, rng) => {
   if (rng() > rate) return null;
 
   const baseIncome = 480 + Math.round(state.skill * 9) + state.character.intelligence * 80 + (hasContact ? 120 : 0) + (hasLead ? 180 : 0);
-  const income = Math.round(baseIncome * (0.75 + rng() * 0.5));
-  const energyCost = 8 + Math.floor(rng() * 15);
+  const income1 = Math.round(baseIncome * (0.75 + rng() * 0.5));
+  const energyCostPerDay = 8 + Math.floor(rng() * 15);
 
-  return { income, energyCost, fromLead: hasLead };
+  return {
+    income1,
+    income2: Math.round(income1 * 1.8),
+    income3: Math.round(income1 * 2.5),
+    energyCostPerDay,
+    fromLead: hasLead,
+  };
 };
 
 const refreshDailyBoards = (state, rng) => {
@@ -856,9 +862,50 @@ const applyAttendanceOutcome = (state, choice) => {
   );
 };
 
+const applyActiveCaseWork = (state, rng) => {
+  const project = state.activeCaseProject;
+  project.daysLeft -= 1;
+  const isDone = project.daysLeft === 0;
+
+  state.dayPlan.remainingSlots = Math.max(0, state.dayPlan.remainingSlots - 1);
+  noteRecentAction(state, "caseWork");
+
+  beginTurnLogIfNeeded(state);
+  appendResolution(state, {
+    effects: {
+      energy: -project.energyCostPerDay,
+      stress: 4,
+      ...(isDone ? { money: project.totalIncome, mood: 4, skill: 1 } : {}),
+    },
+  });
+
+  if (isDone) {
+    pushLine(state, `案子跑完了，收到款項 $${project.totalIncome}。`);
+    state.activeCaseProject = null;
+  } else {
+    pushLine(state, `今天繼續推進案子（還剩 ${project.daysLeft} 天），先吃掉一格時段。`);
+  }
+
+  const failure = detectFailure(state);
+  if (failure) {
+    setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
+    commitTurnLog(state);
+    return state;
+  }
+
+  return maybeTriggerEventOrContinue(state, rng);
+};
+
+const continueAfterAttendance = (state, rng) => {
+  if (state.activeCaseProject) {
+    return applyActiveCaseWork(state, rng);
+  }
+  return maybeTriggerEventOrContinue(state, rng);
+};
+
 const continueAfterStartupDecision = (state, rng) => {
   if (!getHasScheduledJob(state)) {
-    return maybeTriggerEventOrContinue(state, rng);
+    return continueAfterAttendance(state, rng);
   }
 
   const job = getJob(state);
@@ -877,7 +924,7 @@ const continueAfterStartupDecision = (state, rng) => {
 
   applyAttendanceOutcome(state, "work");
   state.pendingAttendance = null;
-  return maybeTriggerEventOrContinue(state, rng);
+  return continueAfterAttendance(state, rng);
 };
 
 const maybeApplyDailyAttendance = (state, rng) => {
@@ -1070,21 +1117,25 @@ const maybeTriggerEventOrContinue = (state, rng) => {
   if (state.dailyFreelanceOffer) {
     const offer = state.dailyFreelanceOffer;
     state.dailyFreelanceOffer = null;
-    beginTurnLogIfNeeded(state);
-    const incomeHint = offer.income >= 1200 ? "這筆出價還不錯" : offer.income >= 700 ? "普通行情" : "出價偏低";
-    state.pendingEvent = {
-      id: "freelance-offer",
-      title: offer.fromLead ? "手上的案源來確認了" : "有人找你接案子",
-      category: "接案機會",
-      description: `對方願意出 $${offer.income}（${incomeHint}），估計要花 ${offer.energyCost} 點體力。`,
-      options: [
-        { id: "accept", text: "接下來", caption: `+$${offer.income} / 體力 -${offer.energyCost}` },
-        { id: "decline", text: "婉拒", caption: "今天精力留給其他事。" },
-      ],
-      _offer: offer,
-    };
-    state.phase = PHASES.EVENT;
-    return state;
+    if (!state.activeCaseProject) {
+      beginTurnLogIfNeeded(state);
+      const incomeHint = offer.income1 >= 1200 ? "這筆出價還不錯" : offer.income1 >= 700 ? "普通行情" : "出價偏低";
+      state.pendingEvent = {
+        id: "freelance-offer",
+        title: offer.fromLead ? "手上的案源來確認了" : "有人找你接案子",
+        category: "接案機會",
+        description: `對方日薪出 $${offer.income1}（${incomeHint}），可以談 1 到 3 天的合作，每天消耗 ${offer.energyCostPerDay} 點體力。`,
+        options: [
+          { id: "1day", text: "接 1 天", caption: `完工 $${offer.income1}・體力 -${offer.energyCostPerDay}/天` },
+          { id: "2day", text: "接 2 天", caption: `完工 $${offer.income2}・體力 -${offer.energyCostPerDay}/天` },
+          { id: "3day", text: "接 3 天", caption: `完工 $${offer.income3}・體力 -${offer.energyCostPerDay}/天` },
+          { id: "decline", text: "婉拒", caption: "今天精力留給其他事。" },
+        ],
+        _offer: offer,
+      };
+      state.phase = PHASES.EVENT;
+      return state;
+    }
   }
 
   if (rng() < EVENT_TRIGGER_RATE) {
@@ -1246,6 +1297,7 @@ export const createInitialState = (rng = Math.random) => {
     dailyWorkOptions: [],
     dailyRewardOptions: [],
     dailyFreelanceOffer: null,
+    activeCaseProject: null,
   };
   initializeDayPlan(state);
   refreshDailyBoards(state, rng);
@@ -1317,7 +1369,7 @@ export const getActionViewModels = (state) =>
 
 export const getStatusMeta = (state) => {
   const nextRent = getNextRentDay(state.day);
-  const rentCountdown = nextRent === null ? "本月房租已處理完" : nextRent === state.day ? "今天要繳" : `${nextRent - state.day} 天後`;
+  const rentCountdown = nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${RENT_AMOUNT}` : `${nextRent - state.day} 天後・$${RENT_AMOUNT}`;
   const phaseCopy = {
     [PHASES.READY]:
       state.dayPlan.remainingSlots === state.dayPlan.totalSlots
@@ -1348,6 +1400,17 @@ export const getStatusMeta = (state) => {
       compactLabel: "創業",
       icon: "briefcase",
       description: state.businessLevel > 1 ? `你的生意已經開始擴張，今日被動收入 ${state.businessIncome}。` : `你已經把錢和壓力投進自己的生意了，今日被動收入 ${state.businessIncome}。`,
+    });
+  }
+
+  if (state.activeCaseProject) {
+    const p = state.activeCaseProject;
+    activeConditions.push({
+      id: "active-case",
+      label: `案子進行中（剩 ${p.daysLeft} 天）`,
+      compactLabel: "跑案中",
+      icon: "briefcase",
+      description: `你正在跑一個案子，還有 ${p.daysLeft} 天，完工後收款 $${p.totalIncome}。每天自動吃掉一格時段。`,
     });
   }
 
@@ -1416,7 +1479,7 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
     return nextState;
   }
 
-  return maybeTriggerEventOrContinue(nextState, rng);
+  return continueAfterAttendance(nextState, rng);
 };
 
 export const dispatchEventChoice = (state, optionId, rng = Math.random) => resolveEvent(state, optionId, rng);
