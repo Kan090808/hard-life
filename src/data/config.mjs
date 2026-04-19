@@ -183,7 +183,7 @@ export const TOTAL_DAYS = 30;
 export const DAILY_LIVING_COST = 280;
 export const RENT_AMOUNT = 4000;
 export const RENT_DAYS = [7, 14, 21, 28];
-export const EVENT_TRIGGER_RATE = 0.3;
+export const EVENT_TRIGGER_RATE = 0.4;
 export const MAX_LOG_ENTRIES = 8;
 
 export const STAT_BOUNDS = {
