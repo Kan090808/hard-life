@@ -54,6 +54,7 @@ body.dialog-open {
 
 button {
   font: inherit;
+  touch-action: manipulation;
 }
 
 .backdrop {

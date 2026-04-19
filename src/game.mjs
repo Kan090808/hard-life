@@ -1318,7 +1318,6 @@ export const createInitialState = (rng = Math.random) => {
 
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
-    .filter((action) => !["stockTrade", "venture"].includes(action.id))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .map((action) => {
     const availability = getActionAvailability(state, action);

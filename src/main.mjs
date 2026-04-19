@@ -366,7 +366,7 @@ const getActionPreview = (action) => {
 
   if (action.id === "rest") {
     const physique = state.character.physique;
-    const restEnergy = 22 + physique * 2;
+    const restEnergy = 18 + physique * 2;
     const restStress = 12 + physique;
     preview.push(`體力 +${restEnergy}`, "心情 +10", `壓力 -${restStress}`, "體能越高，休息回得越多");
     return preview;
@@ -596,7 +596,7 @@ const handleActionChoice = (actionId) => {
   if (state.pendingActionChoice || state.pendingEvent || state.ending) {
     uiState.actionDialogMode = "closed";
   } else {
-    uiState.actionDialogMode = "result";
+    uiState.actionDialogMode = getLatestLog(state) ? "result" : "select";
   }
   render();
 };
