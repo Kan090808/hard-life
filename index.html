@@ -266,25 +266,27 @@
     </section>
 
     <section
-      class="dialog hidden"
+      class="ending-screen hidden"
       id="ending-dialog"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ending-title"
       aria-describedby="ending-copy"
     >
-      <div class="dialog-shell ending-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">月底結算</p>
-            <h3 id="ending-title"></h3>
-          </div>
-        </div>
-        <p class="dialog-copy" id="ending-copy"></p>
+      <div class="ending-content">
+        <header class="ending-header">
+          <p class="ending-kicker">月底結算</p>
+          <h2 class="ending-headline" id="ending-title"></h2>
+          <p class="ending-body-copy" id="ending-copy"></p>
+        </header>
         <div class="ending-report" id="ending-report"></div>
-        <div class="dialog-actions">
-          <button class="primary-button" id="restart-button" type="button">重新開始，下個月再撐一次</button>
-        </div>
+        <footer class="ending-footer">
+          <div class="ending-share-row">
+            <button class="ending-share-btn" id="screenshot-button" type="button">截圖成績單</button>
+            <button class="ending-share-btn" id="share-button" type="button">分享結果</button>
+          </div>
+          <button class="ending-restart-btn" id="restart-button" type="button">重新開始，下個月再撐一次</button>
+        </footer>
       </div>
     </section>
 
