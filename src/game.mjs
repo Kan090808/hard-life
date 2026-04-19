@@ -1129,15 +1129,18 @@ const maybeTriggerEventOrContinue = (state, rng) => {
     if (!state.activeCaseProject) {
       beginTurnLogIfNeeded(state);
       const incomeHint = offer.income1 >= 1200 ? "這筆出價還不錯" : offer.income1 >= 700 ? "普通行情" : "出價偏低";
+      const e1 = Math.round(offer.energyCostPerDay * 1.5);
+      const e2 = Math.round(offer.energyCostPerDay * 1.1);
+      const e3 = Math.round(offer.energyCostPerDay * 0.8);
       state.pendingEvent = {
         id: "freelance-offer",
         title: offer.fromLead ? "手上的案源來確認了" : "有人找你接案子",
         category: "接案機會",
-        description: `對方日薪出 $${offer.income1}（${incomeHint}），可以談 1 到 3 天的合作，每天消耗 ${offer.energyCostPerDay} 點體力。`,
+        description: `對方日薪出 $${offer.income1}（${incomeHint}），短單衝高薪、長單壓節奏，體力消耗也不同。`,
         options: [
-          { id: "1day", text: "接 1 天", caption: `完工 $${offer.income1}・體力 -${offer.energyCostPerDay}/天` },
-          { id: "2day", text: "接 2 天", caption: `完工 $${offer.income2}・體力 -${offer.energyCostPerDay}/天` },
-          { id: "3day", text: "接 3 天", caption: `完工 $${offer.income3}・體力 -${offer.energyCostPerDay}/天` },
+          { id: "1day", text: "接 1 天", caption: `完工 $${offer.income1}・體力 -${e1}・高強度` },
+          { id: "2day", text: "接 2 天", caption: `完工 $${offer.income2}・體力 -${e2}/天` },
+          { id: "3day", text: "接 3 天", caption: `完工 $${offer.income3}・體力 -${e3}/天・節奏穩` },
           { id: "decline", text: "婉拒", caption: "今天精力留給其他事。" },
         ],
         _offer: offer,
@@ -1438,6 +1441,14 @@ export const getStatusMeta = (state) => {
 export const getLatestLog = (state) => state.turnLog ?? state.activityLog[0] ?? null;
 
 export const dispatchAction = (state, actionId, rng = Math.random) => resolveAction(state, actionId, rng);
+
+export const dispatchCancelActionChoice = (state) => {
+  const nextState = cloneState(state);
+  if (!nextState.pendingActionChoice) return nextState;
+  nextState.pendingActionChoice = null;
+  nextState.phase = PHASES.READY;
+  return nextState;
+};
 
 export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
   const nextState = cloneState(state);

@@ -215,15 +215,16 @@ export const EVENTS = [
       {
         id: "1day",
         text: "接 1 天",
-        caption: "完工即拿錢。",
+        caption: "一天衝完，日薪最高但消耗最大。",
         resolve: (state) => {
           const { income1 = 600, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
-          const bonusStress = energyCostPerDay > 18 ? 8 : 4;
+          const energy1 = Math.round(energyCostPerDay * 1.5);
+          const bonusStress = energy1 > 22 ? 12 : 8;
           return withLog(
-            { money: income1, energy: -energyCostPerDay, mood: -4, stress: bonusStress, skill: 1 },
+            { money: income1, energy: -energy1, mood: -8, stress: bonusStress, skill: 1 },
             fromLead
-              ? `你把手上的案源變現了，拿到 $${income1}。`
-              : `你接了一天的案子，完工拿到 $${income1}。`,
+              ? `你把手上的案源全力變現，一天衝完拿到 $${income1}。`
+              : `你接了一天的案子，全力衝完，拿到 $${income1}。`,
             fromLead ? { conditionChanges: { clientLead: false } } : {}
           );
         },
@@ -231,13 +232,14 @@ export const EVENTS = [
       {
         id: "2day",
         text: "接 2 天",
-        caption: "收益較高，連跑兩天才結案。",
+        caption: "總收益較高，節奏比一天輕一點。",
         resolve: (state) => {
           const { income2 = 1000, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
-          state.activeCaseProject = { totalIncome: income2, daysLeft: 2, energyCostPerDay };
-          const bonusStress = energyCostPerDay > 18 ? 8 : 4;
+          const energy2 = Math.round(energyCostPerDay * 1.1);
+          state.activeCaseProject = { totalIncome: income2, daysLeft: 2, energyCostPerDay: energy2 };
+          const bonusStress = energy2 > 18 ? 7 : 5;
           return withLog(
-            { energy: -energyCostPerDay, stress: bonusStress },
+            { energy: -energy2, mood: -5, stress: bonusStress },
             `你接了兩天的案子，今天先開始跑，完工後收款 $${income2}。`,
             fromLead ? { conditionChanges: { clientLead: false } } : {}
           );
@@ -246,13 +248,14 @@ export const EVENTS = [
       {
         id: "3day",
         text: "接 3 天",
-        caption: "收益最高，但連跑三天才結案。",
+        caption: "總收益最高，分三天跑，每天消耗最低。",
         resolve: (state) => {
           const { income3 = 1400, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
-          state.activeCaseProject = { totalIncome: income3, daysLeft: 3, energyCostPerDay };
-          const bonusStress = energyCostPerDay > 18 ? 8 : 4;
+          const energy3 = Math.round(energyCostPerDay * 0.8);
+          state.activeCaseProject = { totalIncome: income3, daysLeft: 3, energyCostPerDay: energy3 };
+          const bonusStress = energy3 > 14 ? 5 : 3;
           return withLog(
-            { energy: -energyCostPerDay, stress: bonusStress },
+            { energy: -energy3, mood: -3, stress: bonusStress },
             `你接了三天的案子，今天先開始跑，完工後收款 $${income3}。`,
             fromLead ? { conditionChanges: { clientLead: false } } : {}
           );
