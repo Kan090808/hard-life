@@ -667,6 +667,42 @@ h3 {
   transform: translateX(-50%);
 }
 
+.share-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 60;
+  width: min(calc(100% - 1.2rem), 24rem);
+  transform: translateX(-50%);
+}
+
+.share-toast-card {
+  padding: 0.78rem 0.9rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: #fff9df;
+  box-shadow: 8px 8px 0 rgba(24, 28, 38, 0.16);
+  animation: toast-slide 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.share-toast-card.success {
+  background: #edfff4;
+}
+
+.share-toast-card.warning {
+  background: #fff4d7;
+}
+
+.share-toast-card.error {
+  background: #ffe5df;
+}
+
+.share-toast-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .achievement-card {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -716,6 +752,10 @@ h3 {
   padding: 0.7rem;
 }
 
+.share-dialog {
+  z-index: 60;
+}
+
 .dialog-shell {
   width: min(100%, 24.5625rem);
   padding: 1rem;
@@ -734,6 +774,10 @@ h3 {
   border: 2px dashed rgba(24, 28, 38, 0.14);
   border-radius: calc(var(--radius-xl) - 0.4rem);
   pointer-events: none;
+}
+
+.share-dialog-shell {
+  max-height: calc(100dvh - 2rem);
 }
 
 #event-dialog[data-tone="work"] .dialog-shell {
@@ -1411,6 +1455,44 @@ h3 {
 .ending-screen[data-tone="growth"] .ending-restart-btn { background: var(--accent); }
 .ending-restart-btn:hover { transform: translate(-2px, -2px); box-shadow: 8px 8px 0 rgba(24, 28, 38, 0.28); }
 .ending-restart-btn:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 rgba(24, 28, 38, 0.28); }
+
+.share-textarea {
+  width: 100%;
+  min-height: 12rem;
+  margin-top: 0.9rem;
+  padding: 0.9rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: #fffdf6;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.share-image-frame {
+  margin-top: 0.9rem;
+  padding: 0.75rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: #fffdf6;
+}
+
+.share-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #fff8d8 0%, #ffd7bb 100%);
+}
+
+.share-preview-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
 
 .hidden {
   display: none !important;

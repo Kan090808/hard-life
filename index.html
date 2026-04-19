@@ -100,6 +100,7 @@
 
     <div class="overlay hidden" id="overlay" aria-hidden="true"></div>
     <section class="achievement-toast hidden" id="achievement-toast" aria-live="polite" aria-atomic="true"></section>
+    <section class="share-toast hidden" id="share-toast" aria-live="polite" aria-atomic="true"></section>
 
     <section
       class="dialog hidden"
@@ -291,7 +292,56 @@
       </div>
     </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+    <section
+      class="dialog share-dialog hidden"
+      id="share-text-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-text-title"
+      aria-describedby="share-text-description"
+    >
+      <div class="dialog-shell share-dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">手動分享</p>
+            <h3 id="share-text-title">這個環境不能直接複製</h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="share-text-description">請直接選取下面這段文字，再貼到你要分享的地方。</p>
+        <textarea class="share-textarea" id="share-textarea" rows="8" readonly spellcheck="false"></textarea>
+        <div class="dialog-actions">
+          <button class="dialog-close" id="share-text-select-button" type="button">選取文字</button>
+          <button class="primary-button" id="share-text-close-button" type="button">知道了</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="dialog share-dialog hidden"
+      id="share-image-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-image-title"
+      aria-describedby="share-image-description"
+    >
+      <div class="dialog-shell share-dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">圖片預覽</p>
+            <h3 id="share-image-title">長按或右鍵儲存這張圖</h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="share-image-description">如果瀏覽器不能直接下載，你還是可以從這裡把圖片存下來。</p>
+        <div class="share-image-frame">
+          <img class="share-preview-image" id="share-preview-image" alt="分享圖片預覽" />
+        </div>
+        <p class="share-preview-hint" id="share-preview-hint">長按或右鍵儲存圖片，再分享到其他地方。</p>
+        <div class="dialog-actions">
+          <button class="primary-button" id="share-image-close-button" type="button">知道了</button>
+        </div>
+      </div>
+    </section>
+
     <script type="module" src="./src/main.mjs"></script>
   </body>
 </html>

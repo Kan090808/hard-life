@@ -11,6 +11,7 @@ import {
   startBgm,
   stopBgm,
 } from "./audio.mjs";
+import { SHARE_TITLE, buildShareText, detectShareCapabilities, getShareButtonLabels, renderShareImage, shareImage, shareText } from "./share.mjs";
 
 let state = createInitialState();
 const uiState = {
@@ -25,6 +26,18 @@ const uiState = {
   stockDialogOpen: false,
   stockQuantities: {},
   endingShown: false,
+  shareCapabilities: detectShareCapabilities(),
+  shareActionState: { image: "idle", text: "idle" },
+  shareToastVisible: false,
+  shareToastTone: "info",
+  shareToastMessage: "",
+  shareToastTimer: null,
+  shareTextDialogOpen: false,
+  shareTextValue: "",
+  shareImageDialogOpen: false,
+  shareImageUrl: "",
+  shareImageHint: "",
+  shareImageAlt: "",
 };
 let renderSnapshot = null;
 
@@ -100,6 +113,15 @@ const elements = {
   restartButton: document.querySelector("#restart-button"),
   screenshotButton: document.querySelector("#screenshot-button"),
   shareButton: document.querySelector("#share-button"),
+  shareToast: document.querySelector("#share-toast"),
+  shareTextDialog: document.querySelector("#share-text-dialog"),
+  shareTextArea: document.querySelector("#share-textarea"),
+  shareTextSelectButton: document.querySelector("#share-text-select-button"),
+  shareTextCloseButton: document.querySelector("#share-text-close-button"),
+  shareImageDialog: document.querySelector("#share-image-dialog"),
+  sharePreviewImage: document.querySelector("#share-preview-image"),
+  sharePreviewHint: document.querySelector("#share-preview-hint"),
+  shareImageCloseButton: document.querySelector("#share-image-close-button"),
 };
 
 const ACTION_FLAVOR = {
@@ -171,7 +193,6 @@ const ICONS = {
 
 const getIconSvg = (iconId) => ICONS[iconId] ?? ICONS.info;
 
-
 const getWeekInfo = (day) => {
   const weekNumber = Math.ceil(day / 7);
   const dayInWeek = ((day - 1) % 7) + 1;
@@ -184,10 +205,86 @@ const setVisibility = (element, isVisible) => {
   element.setAttribute("aria-hidden", String(!isVisible));
 };
 
+const revokeShareImageUrl = () => {
+  if (!uiState.shareImageUrl) {
+    return;
+  }
+  try {
+    URL.revokeObjectURL(uiState.shareImageUrl);
+  } catch {}
+  uiState.shareImageUrl = "";
+};
+
+const dismissShareToast = () => {
+  uiState.shareToastVisible = false;
+  uiState.shareToastMessage = "";
+  uiState.shareToastTone = "info";
+  if (uiState.shareToastTimer) {
+    clearTimeout(uiState.shareToastTimer);
+    uiState.shareToastTimer = null;
+  }
+};
+
+const showShareToast = (message, tone = "info", duration = 2200) => {
+  uiState.shareToastVisible = true;
+  uiState.shareToastMessage = message;
+  uiState.shareToastTone = tone;
+  if (uiState.shareToastTimer) {
+    clearTimeout(uiState.shareToastTimer);
+  }
+  uiState.shareToastTimer = setTimeout(() => {
+    uiState.shareToastVisible = false;
+    uiState.shareToastMessage = "";
+    uiState.shareToastTone = "info";
+    uiState.shareToastTimer = null;
+    render();
+  }, duration);
+};
+
+const closeShareTextDialog = () => {
+  uiState.shareTextDialogOpen = false;
+};
+
+const openShareTextDialog = (text) => {
+  uiState.shareTextValue = text;
+  uiState.shareTextDialogOpen = true;
+};
+
+const closeShareImageDialog = () => {
+  uiState.shareImageDialogOpen = false;
+  uiState.shareImageHint = "";
+  uiState.shareImageAlt = "";
+  revokeShareImageUrl();
+};
+
+const openShareImageDialog = (objectUrl, hint, alt) => {
+  closeShareImageDialog();
+  uiState.shareImageDialogOpen = true;
+  uiState.shareImageUrl = objectUrl;
+  uiState.shareImageHint = hint;
+  uiState.shareImageAlt = alt;
+};
+
+const setShareActionState = (key, value) => {
+  uiState.shareActionState[key] = value;
+};
+
+const logShareWarnings = (channel, warnings) => {
+  if (!warnings?.length) {
+    return;
+  }
+  console.warn(`[share:${channel}]`, {
+    warnings,
+    capabilities: uiState.shareCapabilities,
+  });
+};
+
 const hasBlockingDialog = () =>
   uiState.onboardingOpen ||
   uiState.actionDialogMode !== "closed" ||
   uiState.stockDialogOpen ||
+  uiState.shareTextDialogOpen ||
+  uiState.shareImageDialogOpen ||
   Boolean(state.pendingActionChoice) ||
   Boolean(state.pendingAttendance) ||
   Boolean(state.pendingStartupDecision) ||
@@ -201,6 +298,16 @@ const setBodyOverlayState = () => {
 };
 
 const focusDialogAction = () => {
+  if (uiState.shareImageDialogOpen) {
+    elements.shareImageCloseButton.focus();
+    return;
+  }
+
+  if (uiState.shareTextDialogOpen) {
+    elements.shareTextCloseButton.focus();
+    return;
+  }
+
   if (uiState.onboardingOpen) {
     elements.startButton.focus();
     return;
@@ -1138,6 +1245,13 @@ const renderEndingDialog = () => {
     </section>
   `;
 
+  uiState.shareCapabilities = detectShareCapabilities();
+  const shareLabels = getShareButtonLabels(uiState.shareCapabilities);
+  elements.screenshotButton.disabled = uiState.shareActionState.image === "loading";
+  elements.screenshotButton.textContent = uiState.shareActionState.image === "loading" ? "生成中…" : shareLabels.image;
+  elements.shareButton.disabled = uiState.shareActionState.text === "loading";
+  elements.shareButton.textContent = uiState.shareActionState.text === "loading" ? "處理中…" : shareLabels.text;
+
   setVisibility(elements.endingDialog, true);
 };
 
@@ -1166,75 +1280,144 @@ const renderAchievementToast = () => {
     .join("");
 };
 
-const buildShareText = () => {
-  const rank = getEndingRank();
-  return [
-    "【打工人生：月底前活下去】",
-    state.ending?.title ?? "",
-    rank?.label ?? "",
-    `存款 $${state.money.toLocaleString()} ・ 體力 ${state.energy} ・ 壓力 ${state.stress} ・ 技能 ${state.skill}`,
-    window.location.href,
-  ].filter(Boolean).join("\n");
+const renderShareToast = () => {
+  setVisibility(elements.shareToast, uiState.shareToastVisible && Boolean(uiState.shareToastMessage));
+  if (!uiState.shareToastVisible || !uiState.shareToastMessage) {
+    elements.shareToast.innerHTML = "";
+    return;
+  }
+
+  elements.shareToast.innerHTML = `
+    <article class="share-toast-card ${uiState.shareToastTone}">
+      <p>${uiState.shareToastMessage}</p>
+    </article>
+  `;
+};
+
+const renderShareTextDialog = () => {
+  setVisibility(elements.shareTextDialog, uiState.shareTextDialogOpen);
+  if (!uiState.shareTextDialogOpen) {
+    return;
+  }
+
+  elements.shareTextArea.value = uiState.shareTextValue;
+};
+
+const renderShareImageDialog = () => {
+  setVisibility(elements.shareImageDialog, uiState.shareImageDialogOpen);
+  if (!uiState.shareImageDialogOpen) {
+    elements.sharePreviewImage.removeAttribute("src");
+    return;
+  }
+
+  elements.sharePreviewImage.src = uiState.shareImageUrl;
+  elements.sharePreviewImage.alt = uiState.shareImageAlt || "分享圖片預覽";
+  elements.sharePreviewHint.textContent = uiState.shareImageHint || "長按或右鍵儲存圖片，再分享到其他地方。";
 };
 
 const handleScreenshot = async () => {
-  const btn = elements.screenshotButton;
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "生成中…";
+  if (!state.ending || uiState.shareActionState.image === "loading") {
+    return;
+  }
+
+  uiState.shareCapabilities = detectShareCapabilities();
+  setShareActionState("image", "loading");
+  render();
 
   try {
-    // Temporarily hide footer buttons for a cleaner capture
-    const footer = elements.endingCapture.querySelector(".ending-footer");
-    footer.style.visibility = "hidden";
+    const image = await renderShareImage(state, window.location.href);
+    const result = await shareImage(uiState.shareCapabilities, image);
+    logShareWarnings("image", result.warnings);
 
-    // eslint-disable-next-line no-undef
-    const lib = typeof htmlToImage !== "undefined" ? htmlToImage : null;
-    if (!lib) throw new Error("html-to-image not loaded");
-
-    const blob = await lib.toBlob(elements.endingCapture, {
-      pixelRatio: 2,
-      cacheBust: true,
-      backgroundColor: getComputedStyle(elements.endingDialog).backgroundColor,
-    });
-
-    footer.style.visibility = "";
-    if (!blob) throw new Error("blob is null");
-
-    const file = new File([blob], "打工人生結果.png", { type: "image/png" });
-
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: "打工人生：月底前活下去" }).catch(() => {});
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "打工人生結果.png";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (result.status === "aborted") {
+      return;
     }
-  } catch {
-    // fallback: share as text
-    await handleShare();
+
+    if (result.status === "shared") {
+      return;
+    }
+
+    if (result.status === "downloaded") {
+      showShareToast("圖片已開始下載。", "success");
+      return;
+    }
+
+    if (result.status === "preview") {
+      openShareImageDialog(result.objectUrl, "長按或右鍵儲存圖片，再分享到其他地方。", result.alt);
+      return;
+    }
+
+    console.warn("[share:image]", {
+      reason: result.reason,
+      capabilities: uiState.shareCapabilities,
+      warnings: result.warnings,
+    });
+    showShareToast("這個環境無法開啟圖片分享，請改用文字結果。", "error", 2600);
+  } catch (error) {
+    console.warn("[share:image-render]", {
+      name: error?.name ?? "Error",
+      message: error?.message ?? String(error),
+      capabilities: uiState.shareCapabilities,
+    });
+    showShareToast("圖片產生失敗，請改用文字結果。", "error", 2600);
   } finally {
-    btn.disabled = false;
-    btn.textContent = original;
+    setShareActionState("image", "idle");
+    render();
   }
 };
 
 const handleShare = async () => {
-  const text = buildShareText();
-  if (navigator.share) {
-    await navigator.share({ title: "打工人生：月底前活下去", text, url: window.location.href }).catch(() => {});
+  if (!state.ending || uiState.shareActionState.text === "loading") {
     return;
   }
+
+  uiState.shareCapabilities = detectShareCapabilities();
+  setShareActionState("text", "loading");
+  render();
+
+  const payload = {
+    title: SHARE_TITLE,
+    text: buildShareText(state, window.location.href),
+    url: window.location.href,
+  };
+
   try {
-    await navigator.clipboard.writeText(text);
-    const btn = elements.shareButton;
-    const original = btn.textContent;
-    btn.textContent = "已複製！";
-    setTimeout(() => { btn.textContent = original; }, 1800);
-  } catch {}
+    const result = await shareText(uiState.shareCapabilities, payload);
+    logShareWarnings("text", result.warnings);
+
+    if (result.status === "shared") {
+      if (result.copied) {
+        showShareToast("結果已先複製，現在可以直接選 app 分享。", "success");
+      }
+      return;
+    }
+
+    if (result.status === "aborted") {
+      if (result.copied) {
+        showShareToast("結果已先複製，你可以直接貼上分享。", "success");
+      }
+      return;
+    }
+
+    if (result.status === "copied") {
+      showShareToast("結果已複製，可以直接貼上分享。", "success");
+      return;
+    }
+
+    if (result.status === "manual") {
+      openShareTextDialog(result.text);
+      if (result.reason === "insecure-context") {
+        showShareToast("這個頁面不是安全來源，改用手動複製。", "warning", 2600);
+      }
+      return;
+    }
+
+    openShareTextDialog(payload.text);
+    showShareToast("這個環境不能直接分享，已顯示可手動複製的文字。", "warning", 2600);
+  } finally {
+    setShareActionState("text", "idle");
+    render();
+  }
 };
 
 const resetGame = () => {
@@ -1249,6 +1432,11 @@ const resetGame = () => {
   uiState.endingShown = false;
   uiState.achievementToastVisible = false;
   uiState.achievementSignature = "";
+  uiState.shareCapabilities = detectShareCapabilities();
+  uiState.shareActionState = { image: "idle", text: "idle" };
+  closeShareTextDialog();
+  closeShareImageDialog();
+  dismissShareToast();
   if (uiState.achievementTimer) {
     clearTimeout(uiState.achievementTimer);
     uiState.achievementTimer = null;
@@ -1278,6 +1466,9 @@ const render = () => {
   renderStockDialog();
   renderEndingDialog();
   renderAchievementToast();
+  renderShareToast();
+  renderShareTextDialog();
+  renderShareImageDialog();
   setBodyOverlayState();
 
   renderSnapshot = {
@@ -1328,6 +1519,24 @@ elements.screenshotButton.addEventListener("click", () => {
 elements.shareButton.addEventListener("click", () => {
   playClickSfx();
   handleShare();
+});
+
+elements.shareTextSelectButton.addEventListener("click", () => {
+  playClickSfx();
+  elements.shareTextArea.focus();
+  elements.shareTextArea.select();
+});
+
+elements.shareTextCloseButton.addEventListener("click", () => {
+  playClickSfx();
+  closeShareTextDialog();
+  render();
+});
+
+elements.shareImageCloseButton.addEventListener("click", () => {
+  playClickSfx();
+  closeShareImageDialog();
+  render();
 });
 
 elements.soundToggle.addEventListener("click", () => {
