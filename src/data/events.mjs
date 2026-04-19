@@ -401,6 +401,38 @@ export const EVENTS = [
       ),
   },
   {
+    id: "craving-reward",
+    tier: "ambient",
+    category: "生活事件",
+    title: "好想犒賞自己一下",
+    description: "壓力太久了，心裡有個聲音一直說：就這一次，讓自己喘一下。",
+    condition: (state) => state.mood <= 40 && state.stress >= 60 && state.dayPlan.remainingSlots > 0,
+    options: [
+      {
+        id: "splurge",
+        text: "就花一次",
+        caption: "先把今晚過好再說。",
+        resolve: (_state, rng) => {
+          const spent = 300 + Math.floor(rng() * 300);
+          return withLog(
+            { money: -spent, mood: 16, stress: -12 },
+            `你花了 $${spent} 讓自己好一點，那個當下是真的有用。`
+          );
+        },
+      },
+      {
+        id: "resist",
+        text: "忍住不花",
+        caption: "帳戶不能再少了。",
+        resolve: () =>
+          withLog(
+            { stress: 8, mood: -8 },
+            "你硬把那個衝動壓下去，但情緒沒有地方去，只好繼續悶著。"
+          ),
+      },
+    ],
+  },
+  {
     id: "course-sale",
     tier: "opportunity",
     category: "轉機",

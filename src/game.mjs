@@ -453,7 +453,7 @@ const generateDailyFreelanceOffer = (state, rng) => {
   const hasLead = state.conditions.clientLead;
   const rate = hasLead
     ? 1.0
-    : Math.min(0.82, 0.05 + state.skill * 0.006 + (hasContact ? 0.26 : 0));
+    : Math.min(0.75, 0.03 + state.skill * 0.007 + (hasContact ? 0.15 : 0));
 
   if (rng() > rate) return null;
 
@@ -637,7 +637,7 @@ const getRestRecoveryEffects = (state) => {
   const physique = state.character.physique;
   return {
     money: -150,
-    energy: 22 + physique * 2,
+    energy: 18 + physique * 2,
     mood: 10,
     stress: -(12 + physique),
   };
@@ -1033,11 +1033,20 @@ const resolveBaseAction = (state, actionId, rng) => {
   [getCommuterPenalty(state, action), getComputerPenalty(state, action), getBurnoutPenalty(state, action)]
     .filter(Boolean)
     .forEach((penalty) => appendResolution(state, penalty));
+
+  if (actionId === "overtime" && state.history.consecutiveHeavyDays >= 1 && !state.conditions.burnoutRisk) {
+    appendResolution(state, {
+      effects: { stress: 5 },
+      conditionChanges: { burnoutRisk: true },
+    });
+    pushLine(state, "你連續加班，身體開始發出警告。");
+  }
 };
 
-const applyRecurringCosts = (state) => {
-  appendResolution(state, { effects: { money: -DAILY_LIVING_COST } });
-  pushLine(state, `今天結束，生活費自動扣了 ${DAILY_LIVING_COST}。`);
+const applyRecurringCosts = (state, rng) => {
+  const livingCost = DAILY_LIVING_COST + Math.floor((rng() - 0.5) * 100);
+  appendResolution(state, { effects: { money: -livingCost } });
+  pushLine(state, `今天結束，生活費自動扣了 ${livingCost}。`);
 
   if (!RENT_DAYS.includes(state.day)) {
     return;
@@ -1176,7 +1185,7 @@ const maybeTriggerEventOrContinue = (state, rng) => {
 
   pushLine(state, "今天能安排的時段已經用完了。");
   updateHistoryAtEndOfDay(state);
-  applyRecurringCosts(state);
+  applyRecurringCosts(state, rng);
   return finalizeDay(state, rng);
 };
 
@@ -1190,7 +1199,7 @@ const resolveEndDay = (state, rng) => {
   beginTurnLogIfNeeded(state);
   pushLine(state, "你決定今天先到這裡。");
   updateHistoryAtEndOfDay(state);
-  applyRecurringCosts(state);
+  applyRecurringCosts(state, rng);
   return finalizeDay(state, rng);
 };
 
@@ -1271,7 +1280,7 @@ const resolveEvent = (state, optionId, rng) => {
 
   pushLine(nextState, "今天能安排的時段已經用完了。");
   updateHistoryAtEndOfDay(nextState);
-  applyRecurringCosts(nextState);
+  applyRecurringCosts(nextState, rng);
   return finalizeDay(nextState, rng);
 };
 
