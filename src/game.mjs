@@ -296,7 +296,7 @@ const createCharacter = (rng) => {
 
 const getStartingState = (character) => ({
   ...DEFAULT_PLAYER_STATE,
-  money: DEFAULT_PLAYER_STATE.money + 500 * (character.wealth - 3),
+  money: DEFAULT_PLAYER_STATE.money + 300 * (character.wealth - 3),
   energy: clampStat("energy", DEFAULT_PLAYER_STATE.energy + 5 * (character.physique - 3)),
   mood: clampStat("mood", DEFAULT_PLAYER_STATE.mood + 3 * (character.luck - 3)),
   skill: clampStat("skill", 4 * (character.intelligence - 1)),
@@ -457,7 +457,7 @@ const generateDailyFreelanceOffer = (state, rng) => {
 
   if (rng() > rate) return null;
 
-  const baseIncome = 480 + Math.round(state.skill * 9) + state.character.intelligence * 80 + (hasContact ? 120 : 0) + (hasLead ? 180 : 0);
+  const baseIncome = 290 + Math.round(state.skill * 5) + state.character.intelligence * 48 + (hasContact ? 72 : 0) + (hasLead ? 108 : 0);
   const income1 = Math.round(baseIncome * (0.75 + rng() * 0.5));
   const energyCostPerDay = 8 + Math.floor(rng() * 15);
 
