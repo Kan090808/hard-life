@@ -1141,8 +1141,8 @@ h3 {
   animation: endingFadeIn 0.35s ease-out both;
 }
 
-.ending-screen[data-tone="danger"] { background: #fff2f0; }
-.ending-screen[data-tone="growth"] { background: #f0fef6; }
+.ending-screen[data-tone="danger"] { background: #ffd6d2; }
+.ending-screen[data-tone="growth"] { background: #c8f5de; }
 
 @keyframes endingFadeIn {
   from { opacity: 0; transform: translateY(18px); }
