@@ -296,7 +296,7 @@ const createCharacter = (rng) => {
 
 const getStartingState = (character) => ({
   ...DEFAULT_PLAYER_STATE,
-  money: DEFAULT_PLAYER_STATE.money + 300 * (character.wealth - 3),
+  money: DEFAULT_PLAYER_STATE.money + 500 * (character.wealth - 3),
   energy: clampStat("energy", DEFAULT_PLAYER_STATE.energy + 5 * (character.physique - 3)),
   mood: clampStat("mood", DEFAULT_PLAYER_STATE.mood + 3 * (character.luck - 3)),
   skill: clampStat("skill", 4 * (character.intelligence - 1)),
@@ -313,15 +313,45 @@ const pickDistinct = (items, count, rng) => {
 };
 
 const createDailyWorkOptions = (state, rng) =>
-  pickDistinct(WORK_GIGS, 3, rng).map((gig) => ({
-    ...gig,
-    effects: {
-      ...gig.effects,
-      money: gig.effects.money + state.character.luck * 20 + state.character.physique * 15,
-      energy: gig.effects.energy - Math.max(0, state.character.physique - 3) * 2,
-      stress: gig.effects.stress + Math.max(0, state.character.wealth - 4),
-    },
-  }));
+  pickDistinct(WORK_GIGS, 3, rng).map((gig) => {
+    const { intelligence, physique, luck, wealth } = state.character;
+    // 財力高的人心態比較鬆，工作壓力相對小
+    const wealthStressReduction = (wealth - 1) * 2;
+    let moneyBonus = 0;
+    let energyBonus = 0;
+    let stressBonus = -wealthStressReduction;
+    let moodBonus = 0;
+
+    if (gig.type === "physical") {
+      // 體力型（發傳單、洗碗、倉庫）：體能決定報酬與耐力
+      moneyBonus = (physique - 1) * 60 + (luck - 1) * 20;
+      energyBonus = (physique - 1) * 2;
+    } else if (gig.type === "mental") {
+      // 智力型（家教）：智力大幅提升收入與教學滿足感
+      moneyBonus = (intelligence - 1) * 100 + (luck - 1) * 20;
+      moodBonus = (intelligence - 1) * 3;
+      stressBonus -= (intelligence - 1) * 2;
+    } else if (gig.type === "mixed") {
+      // 綜合型（外送）：體能＋運氣共同影響
+      moneyBonus = (physique - 1) * 40 + (luck - 1) * 40;
+      energyBonus = (physique - 1) * 2;
+    } else if (gig.type === "social") {
+      // 社交型（活動工讀）：運氣左右客戶互動與小費
+      moneyBonus = (luck - 1) * 60 + (intelligence - 1) * 20;
+      moodBonus = (luck - 1) * 3;
+    }
+
+    return {
+      ...gig,
+      effects: {
+        ...gig.effects,
+        money: gig.effects.money + moneyBonus,
+        energy: gig.effects.energy + energyBonus,
+        mood: gig.effects.mood + moodBonus,
+        stress: gig.effects.stress + stressBonus,
+      },
+    };
+  });
 
 const createDailyRewardOptions = (rng) => pickDistinct(REWARD_ACTIVITIES, 3, rng).map((entry) => ({ ...entry }));
 
@@ -427,7 +457,7 @@ const generateDailyFreelanceOffer = (state, rng) => {
 
   if (rng() > rate) return null;
 
-  const baseIncome = 480 + Math.round(state.skill * 9) + (hasContact ? 120 : 0) + (hasLead ? 180 : 0);
+  const baseIncome = 480 + Math.round(state.skill * 9) + state.character.intelligence * 80 + (hasContact ? 120 : 0) + (hasLead ? 180 : 0);
   const income = Math.round(baseIncome * (0.75 + rng() * 0.5));
   const energyCost = 8 + Math.floor(rng() * 15);
 
@@ -484,8 +514,8 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
     return { available: false, reason: action.disabledReason };
   }
 
-  if (action.id === "venture" && state.businessLevel === 0 && state.money < 4000) {
-    return { available: false, reason: "創業至少要先準備 4000。"};
+  if (action.id === "venture" && state.businessLevel === 0 && state.money < 6000) {
+    return { available: false, reason: "創業至少要先準備 6000。"};
   }
 
   if (action.id !== "stockTrade" && state.dayPlan.actionsTaken.includes(action.id)) {
@@ -541,7 +571,7 @@ const getBurnoutPenalty = (state, action) => {
 };
 
 const resolveJobSearch = (state, rng) => {
-  const successRate = Math.min(1, 0.2 + state.skill * 0.008 + (state.conditions.hasFreelanceContact ? 0.05 : 0));
+  const successRate = Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0));
   const success = rng() < successRate;
 
   if (!success) {
@@ -588,7 +618,7 @@ const resolveJobSearch = (state, rng) => {
 const getRestRecoveryEffects = (state) => {
   const physique = state.character.physique;
   return {
-    money: -100,
+    money: -150,
     energy: 22 + physique * 2,
     mood: 10,
     stress: -(12 + physique),
@@ -604,7 +634,7 @@ const resolveLifeAdmin = (state) => {
   if (state.conditions.scooterBroken) {
     return {
       effects: {
-        money: -900,
+        money: -1200,
         stress: -8,
       },
       conditionChanges: { scooterBroken: false },
@@ -615,7 +645,7 @@ const resolveLifeAdmin = (state) => {
   if (state.conditions.computerBroken) {
     return {
       effects: {
-        money: -1100,
+        money: -1500,
         stress: -6,
       },
       conditionChanges: { computerBroken: false },
@@ -773,18 +803,18 @@ const resolveVenture = (state, rng) => {
     return success
       ? {
           effects: {
-            money: -4000,
+            money: -6000,
             energy: -14,
             mood: 12,
             stress: 14,
             businessLevel: 1,
-            businessIncome: 280 + state.character.intelligence * 20 + state.character.wealth * 15 + (state.conditions.hasFreelanceContact ? 60 : 0),
+            businessIncome: 400 + state.character.intelligence * 30 + state.character.wealth * 20 + (state.conditions.hasFreelanceContact ? 80 : 0),
           },
           log: "你真的把第一筆資金砸進去了，事業剛起步，壓力也跟著一起長出來。",
         }
       : {
           effects: {
-            money: -2600,
+            money: -3500,
             energy: -10,
             mood: -8,
             stress: 16,
