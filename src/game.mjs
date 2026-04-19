@@ -615,6 +615,18 @@ const resolveJobSearch = (state, rng) => {
 };
 
 
+const getStudyCost = (skill) => 400 + Math.floor(skill / 10) * 80;
+
+const resolveStudy = (state) => ({
+  effects: {
+    money: -getStudyCost(state.skill),
+    energy: -14,
+    mood: -4,
+    stress: 5,
+    skill: 10,
+  },
+});
+
 const getRestRecoveryEffects = (state) => {
   const physique = state.character.physique;
   return {
@@ -938,6 +950,9 @@ const resolveBaseAction = (state, actionId, rng) => {
   let resolution;
 
   switch (action.special) {
+    case "study":
+      resolution = resolveStudy(state);
+      break;
     case "rest":
       resolution = resolveRest(state);
       break;
@@ -1264,6 +1279,8 @@ export const getActionViewModels = (state) =>
 
     if (action.id === "jobSearch") {
       tag = `${Math.round(Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)) * 100)}% 成功率`;
+    } else if (action.id === "study") {
+      tag = `課程費 $${getStudyCost(state.skill)}`;
     } else if (action.id === "venture" && state.businessLevel > 0) {
       tag = state.businessLevel > 1 ? "擴張中" : "剛起步";
     } else if (action.id === "stockTrade") {
@@ -1274,8 +1291,14 @@ export const getActionViewModels = (state) =>
       tag = `今日收入 $${income}`;
     }
 
+    const dynamicEffects =
+      action.id === "study"
+        ? { ...action.effects, money: -getStudyCost(state.skill) }
+        : action.effects;
+
     return {
       ...action,
+      effects: dynamicEffects,
       label: dynamicLabel,
       description: dynamicDescription,
       tag,

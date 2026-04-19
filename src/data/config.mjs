@@ -418,10 +418,11 @@ export const ACTIONS = {
     id: "study",
     label: "學技能",
     tag: "長期投資",
-    description: "花一格時間和一點錢，把未來往前推。",
+    description: "花一格時間和一點錢，把未來往前推。技能越高，課程費越貴。",
     slotCost: 1,
     intensity: "light",
     category: "growth",
+    special: "study",
     effects: {
       money: -400,
       energy: -14,
