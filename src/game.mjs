@@ -463,8 +463,8 @@ const generateDailyFreelanceOffer = (state, rng) => {
 
   return {
     income1,
-    income2: Math.round(income1 * 1.8),
-    income3: Math.round(income1 * 2.5),
+    income2: Math.round(income1 * 0.88),
+    income3: Math.round(income1 * 0.75),
     energyCostPerDay,
     fromLead: hasLead,
   };
@@ -1136,7 +1136,7 @@ const maybeTriggerEventOrContinue = (state, rng) => {
         id: "freelance-offer",
         title: offer.fromLead ? "手上的案源來確認了" : "有人找你接案子",
         category: "接案機會",
-        description: `對方日薪出 $${offer.income1}（${incomeHint}），短單衝高薪、長單壓節奏，體力消耗也不同。`,
+        description: `對方急件出 $${offer.income1}（${incomeHint}）。1 天衝完總收最高，天數越多總收越低但每天壓力越輕。`,
         options: [
           { id: "1day", text: "接 1 天", caption: `完工 $${offer.income1}・體力 -${e1}・高強度` },
           { id: "2day", text: "接 2 天", caption: `完工 $${offer.income2}・體力 -${e2}/天` },

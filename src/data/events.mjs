@@ -234,7 +234,7 @@ export const EVENTS = [
         text: "接 2 天",
         caption: "總收益較高，節奏比一天輕一點。",
         resolve: (state) => {
-          const { income2 = 1000, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
+          const { income2 = 530, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
           const energy2 = Math.round(energyCostPerDay * 1.1);
           state.activeCaseProject = { totalIncome: income2, daysLeft: 2, energyCostPerDay: energy2 };
           const bonusStress = energy2 > 18 ? 7 : 5;
@@ -250,7 +250,7 @@ export const EVENTS = [
         text: "接 3 天",
         caption: "總收益最高，分三天跑，每天消耗最低。",
         resolve: (state) => {
-          const { income3 = 1400, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
+          const { income3 = 450, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
           const energy3 = Math.round(energyCostPerDay * 0.8);
           state.activeCaseProject = { totalIncome: income3, daysLeft: 3, energyCostPerDay: energy3 };
           const bonusStress = energy3 > 14 ? 5 : 3;
