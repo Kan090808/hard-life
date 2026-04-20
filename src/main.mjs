@@ -98,6 +98,7 @@ const elements = {
   goalTitle: document.querySelector("#goal-title"),
   goalCopy: document.querySelector("#goal-copy"),
   takeActionButton: document.querySelector("#take-action-button"),
+  endDayButton: document.querySelector("#end-day-button"),
   resetButton: document.querySelector("#reset-button"),
   introDialog: document.querySelector("#intro-dialog"),
   startButton: document.querySelector("#start-button"),
@@ -932,9 +933,11 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
 
 const renderMainButtons = () => {
   const disabled = hasBlockingDialog() || state.phase !== "ready-for-action";
-  elements.takeActionButton.disabled = disabled;
+  const slotsEmpty = state.dayPlan.remainingSlots === 0;
+  elements.takeActionButton.disabled = disabled || slotsEmpty;
   elements.takeActionButton.textContent =
     state.dayPlan.remainingSlots === state.dayPlan.totalSlots ? "安排今天" : "繼續安排今天";
+  elements.endDayButton.disabled = disabled;
   elements.resetButton.disabled = isMode("intro");
   elements.soundToggle.textContent = uiState.audioEnabled ? AUDIO_COPY.on : AUDIO_COPY.off;
   elements.soundToggle.setAttribute("aria-pressed", String(uiState.audioEnabled));
@@ -1176,15 +1179,6 @@ const renderActionSelection = () => {
   }
 
   elements.actionDialogBody.append(grid);
-
-  if (meta.canEndDay) {
-    const endDayButton = document.createElement("button");
-    endDayButton.type = "button";
-    endDayButton.className = "dialog-close";
-    endDayButton.textContent = "今天先到這裡";
-    endDayButton.dataset.role = "end-day";
-    elements.actionDialogActions.append(endDayButton);
-  }
 
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
@@ -1917,6 +1911,7 @@ assertRequiredElements(
   "goalTitle",
   "goalCopy",
   "takeActionButton",
+  "endDayButton",
   "resetButton",
   "introDialog",
   "startButton",
@@ -2006,6 +2001,11 @@ bindClick(elements.takeActionButton, () => {
   uiState.expandedActionInfoId = null;
   setMode("action-select");
   render();
+});
+
+bindClick(elements.endDayButton, () => {
+  playClickSfx();
+  handleActionChoice("endDay");
 });
 
 bindClick(elements.resetButton, () => {

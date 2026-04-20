@@ -1183,16 +1183,8 @@ const maybeTriggerEventOrContinue = (state, rng) => {
     }
   }
 
-  if (canTakeAnotherAction(state)) {
-    state.phase = PHASES.READY;
-    return state;
-  }
-
-  beginTurnLogIfNeeded(state);
-  pushLine(state, "今天能安排的時段已經用完了。");
-  updateHistoryAtEndOfDay(state);
-  applyRecurringCosts(state, rng);
-  return finalizeDay(state, rng);
+  state.phase = PHASES.READY;
+  return state;
 };
 
 const beginTurnLogIfNeeded = (state) => {

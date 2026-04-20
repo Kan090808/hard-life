@@ -720,6 +720,12 @@ h3 {
   color: var(--ink);
 }
 
+.danger-control {
+  background: rgba(255, 101, 101, 0.12);
+  color: var(--danger);
+  grid-column: 1 / -1;
+}
+
 .control-button:hover:not(:disabled),
 .primary-button:hover,
 .dialog-close:hover,
