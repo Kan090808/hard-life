@@ -1154,6 +1154,7 @@ const maybeTriggerEventOrContinue = (state, rng) => {
   if (rng() < EVENT_TRIGGER_RATE) {
     const event = selectEvent(state, rng);
     if (event) {
+      beginTurnLogIfNeeded(state);
       pushLine(state, `今天又有一件事找上你：${event.title}`);
 
       if (event.autoResolve) {
@@ -1187,6 +1188,7 @@ const maybeTriggerEventOrContinue = (state, rng) => {
     return state;
   }
 
+  beginTurnLogIfNeeded(state);
   pushLine(state, "今天能安排的時段已經用完了。");
   updateHistoryAtEndOfDay(state);
   applyRecurringCosts(state, rng);

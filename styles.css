@@ -778,6 +778,10 @@ h3 {
   padding: 0.7rem;
 }
 
+#boot-failure-dialog {
+  align-items: center;
+}
+
 .share-dialog {
   z-index: 60;
 }
@@ -834,6 +838,15 @@ h3 {
 
 .intro-shell {
   padding-top: 1.05rem;
+}
+
+.boot-failure-shell {
+  width: min(100%, 22rem);
+  text-align: center;
+}
+
+.boot-failure-shell .dialog-actions {
+  justify-content: center;
 }
 
 .dialog-body {

@@ -14,9 +14,13 @@ import {
 } from "./audio.mjs";
 import { SHARE_TITLE, buildShareText, detectShareCapabilities, getShareButtonLabels, renderShareImage, shareImage, shareText } from "./share.mjs";
 
+const SAVE_KEY = "hard-life-save-v1";
+const SAVE_VERSION = 1;
+
 let state = createInitialState();
 const uiState = {
   mode: "intro",
+  hasStarted: false,
   achievementToastVisible: false,
   achievementSignature: "",
   achievementTimer: null,
@@ -227,6 +231,8 @@ const setMode = (mode) => {
   uiState.mode = mode;
 };
 
+const cloneSerializable = (value) => JSON.parse(JSON.stringify(value));
+
 const isRenderableState = (candidate) => {
   if (!candidate || typeof candidate !== "object") {
     return false;
@@ -245,6 +251,106 @@ const isRenderableState = (candidate) => {
   return hasCharacter && hasDayPlan && hasCoreStats;
 };
 
+const normalizeSavedState = (savedState) => {
+  const baseline = createInitialState();
+  if (!savedState || typeof savedState !== "object") {
+    return baseline;
+  }
+
+  return {
+    ...baseline,
+    ...savedState,
+    character: { ...baseline.character, ...(savedState.character ?? {}) },
+    dayPlan: {
+      ...baseline.dayPlan,
+      ...(savedState.dayPlan ?? {}),
+      actionsTaken: Array.isArray(savedState.dayPlan?.actionsTaken) ? [...savedState.dayPlan.actionsTaken] : [...baseline.dayPlan.actionsTaken],
+    },
+    conditions: { ...baseline.conditions, ...(savedState.conditions ?? {}) },
+    history: { ...baseline.history, ...(savedState.history ?? {}) },
+    stocks: Array.isArray(savedState.stocks) ? cloneSerializable(savedState.stocks) : baseline.stocks,
+    stockNews: Array.isArray(savedState.stockNews) ? cloneSerializable(savedState.stockNews) : baseline.stockNews,
+    activityLog: Array.isArray(savedState.activityLog) ? cloneSerializable(savedState.activityLog) : baseline.activityLog,
+    unlockedMilestones: Array.isArray(savedState.unlockedMilestones) ? [...savedState.unlockedMilestones] : baseline.unlockedMilestones,
+    latestAchievements: Array.isArray(savedState.latestAchievements) ? cloneSerializable(savedState.latestAchievements) : baseline.latestAchievements,
+    dailyWorkOptions: Array.isArray(savedState.dailyWorkOptions) ? cloneSerializable(savedState.dailyWorkOptions) : baseline.dailyWorkOptions,
+    dailyRewardOptions: Array.isArray(savedState.dailyRewardOptions) ? cloneSerializable(savedState.dailyRewardOptions) : baseline.dailyRewardOptions,
+    pendingAttendance: savedState.pendingAttendance ?? null,
+    pendingStartupDecision: savedState.pendingStartupDecision ?? null,
+    pendingActionChoice: savedState.pendingActionChoice ?? null,
+    pendingEvent: savedState.pendingEvent ?? null,
+    ending: savedState.ending ?? null,
+    turnLog: savedState.turnLog ?? null,
+    dailyFreelanceOffer: savedState.dailyFreelanceOffer ?? null,
+    activeCaseProject: savedState.activeCaseProject ?? null,
+  };
+};
+
+const resolveSavedMode = (savedMode, hasStarted, candidateState) => {
+  if (!hasStarted) {
+    return "intro";
+  }
+
+  if (candidateState.pendingAttendance || candidateState.pendingStartupDecision || candidateState.pendingActionChoice || candidateState.pendingEvent || candidateState.ending) {
+    return "idle";
+  }
+
+  if (["action-select", "action-result", "stock"].includes(savedMode)) {
+    return savedMode;
+  }
+
+  return "idle";
+};
+
+const loadSavedSession = () => {
+  try {
+    const raw = window.localStorage.getItem(SAVE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (parsed?.version !== SAVE_VERSION) {
+      return;
+    }
+
+    const nextState = normalizeSavedState(parsed.state);
+    if (!isRenderableState(nextState)) {
+      console.warn("[storage:load-invalid]", parsed);
+      return;
+    }
+
+    state = nextState;
+    uiState.hasStarted = parsed.ui?.hasStarted === true;
+    uiState.mode = resolveSavedMode(parsed.ui?.mode, uiState.hasStarted, nextState);
+    uiState.detailsExpanded = parsed.ui?.detailsExpanded === true;
+    uiState.expandedActionInfoId = typeof parsed.ui?.expandedActionInfoId === "string" ? parsed.ui.expandedActionInfoId : null;
+    uiState.stockQuantities = parsed.ui?.stockQuantities && typeof parsed.ui.stockQuantities === "object" ? { ...parsed.ui.stockQuantities } : {};
+  } catch (error) {
+    console.warn("[storage:load]", error);
+  }
+};
+
+const saveSession = () => {
+  try {
+    const payload = {
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      state,
+      ui: {
+        hasStarted: uiState.hasStarted,
+        mode: uiState.mode,
+        detailsExpanded: uiState.detailsExpanded,
+        expandedActionInfoId: uiState.expandedActionInfoId,
+        stockQuantities: uiState.stockQuantities,
+      },
+    };
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("[storage:save]", error);
+  }
+};
+
 const ensureRenderableState = (reason) => {
   if (isRenderableState(state)) {
     return;
@@ -255,6 +361,7 @@ const ensureRenderableState = (reason) => {
     state,
   });
   state = createInitialState();
+  uiState.hasStarted = false;
   setMode("intro");
 };
 
@@ -1549,6 +1656,7 @@ const handleShare = async () => {
 const resetGame = () => {
   stopBgm();
   state = createInitialState();
+  uiState.hasStarted = false;
   setMode("intro");
   uiState.detailsExpanded = false;
   uiState.expandedActionInfoId = null;
@@ -1610,6 +1718,7 @@ const performRender = () => {
     requestAnimationFrame(focusDialogAction);
   }
   lastActiveDialog = activeDialog;
+  saveSession();
   window.__hardLifeMarkBooted?.();
 };
 
@@ -1629,7 +1738,9 @@ const render = () => {
         ensureRenderableState("render-catch");
         setVisibility(elements.overlay, true);
         document.body.classList.add("dialog-open");
-        setVisibility(elements.introDialog, true);
+        if (document.body.dataset.appBoot !== "failed") {
+          setVisibility(elements.introDialog, true);
+        }
         if (!elements.statGrid.children.length) {
           renderCurrentStats(new Set());
         }
@@ -1716,6 +1827,8 @@ assertRequiredElements(
   "shareImageCloseButton"
 );
 
+loadSavedSession();
+
 bindClick(elements.actionDialog, handleActionDialogClick);
 bindClick(elements.choiceOptions, handleChoiceDialogClick);
 bindClick(elements.attendanceOptions, handleAttendanceDialogClick);
@@ -1726,6 +1839,9 @@ bindClick(elements.stockActions, handleStockDialogClick);
 elements.stockBody.addEventListener("change", handleStockQtyChange);
 
 bindClick(elements.startButton, async () => {
+  if (!uiState.hasStarted) {
+    uiState.hasStarted = true;
+  }
   playClickSfx();
   setMode("idle");
   if (isAudioSupported()) {

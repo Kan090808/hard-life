@@ -17,8 +17,6 @@ const MIME_TYPES = {
 };
 
 const projectRoot = resolve(import.meta.dirname, "..");
-const reloadIterations = 3;
-
 const loadPlaywright = () => {
   try {
     return require("playwright");
@@ -158,6 +156,26 @@ const runDirectActionSmoke = async (page) => {
   console.log("PASS direct action result closes correctly");
 };
 
+const runPersistenceReloadSmoke = async (page, origin) => {
+  const introDialog = page.locator("#intro-dialog");
+  const takeActionButton = page.locator("#take-action-button");
+  const walletAmount = page.locator("#wallet-amount");
+  const slotSummary = page.locator("#slot-summary");
+
+  const savedWalletAmount = await walletAmount.textContent();
+  const savedSlotSummary = await slotSummary.textContent();
+
+  await page.goto(origin, { waitUntil: "networkidle" });
+  assert.equal(await introDialog.isVisible(), false, "intro dialog should stay hidden after reloading an active run");
+  console.log("PASS active run does not return to intro after reload");
+  assert.equal(await walletAmount.textContent(), savedWalletAmount, "wallet amount should persist after reload");
+  console.log("PASS wallet amount persists after reload");
+  assert.equal(await slotSummary.textContent(), savedSlotSummary, "slot summary should persist after reload");
+  console.log("PASS slot summary persists after reload");
+  assert.equal(await takeActionButton.isDisabled(), false, "take action should remain available after reload");
+  console.log("PASS take action stays available after reload");
+};
+
 const runResetSmoke = async (page) => {
   const resetButton = page.locator("#reset-button");
   const introDialog = page.locator("#intro-dialog");
@@ -167,24 +185,22 @@ const runResetSmoke = async (page) => {
 };
 
 const runReloadSmoke = async (page, origin) => {
-  for (let index = 0; index < reloadIterations; index += 1) {
-    await page.goto(origin, { waitUntil: "networkidle" });
+  await page.goto(origin, { waitUntil: "networkidle" });
 
-    const introDialog = page.locator("#intro-dialog");
-    const statCards = page.locator("#stat-grid .stat-card");
-    const attributeCards = page.locator("#character-grid .attribute-card");
-    const startButton = page.locator("#start-button");
+  const introDialog = page.locator("#intro-dialog");
+  const statCards = page.locator("#stat-grid .stat-card");
+  const attributeCards = page.locator("#character-grid .attribute-card");
+  const startButton = page.locator("#start-button");
 
-    await assertVisible(introDialog, `intro dialog is visible after reload ${index + 1}`);
-    assert.equal(await statCards.count() >= 4, true, `stat cards should exist after reload ${index + 1}`);
-    console.log(`PASS stat cards render after reload ${index + 1}`);
-    assert.equal(await attributeCards.count() >= 4, true, `character cards should exist after reload ${index + 1}`);
-    console.log(`PASS character cards render after reload ${index + 1}`);
+  await assertVisible(introDialog, "intro dialog is visible after reload from reset state");
+  assert.equal(await statCards.count() >= 4, true, "stat cards should exist after reload from reset state");
+  console.log("PASS stat cards render after reload from reset state");
+  assert.equal(await attributeCards.count() >= 4, true, "character cards should exist after reload from reset state");
+  console.log("PASS character cards render after reload from reset state");
 
-    await clickAndWait(page, startButton, `start button responds after reload ${index + 1}`);
-    await page.waitForFunction(() => document.querySelector("#intro-dialog")?.classList.contains("hidden"));
-    console.log(`PASS intro dialog closes after reload ${index + 1}`);
-  }
+  await clickAndWait(page, startButton, "start button responds after reload from reset state");
+  await page.waitForFunction(() => document.querySelector("#intro-dialog")?.classList.contains("hidden"));
+  console.log("PASS intro dialog closes after reload from reset state");
 };
 
 const main = async () => {
@@ -197,6 +213,7 @@ const main = async () => {
     const errors = createErrorTracker(page);
     await setupPage(page, server.origin);
     await runStartFlowSmoke(page);
+    await runPersistenceReloadSmoke(page, server.origin);
     await runDirectActionSmoke(page);
     await runResetSmoke(page);
     await runReloadSmoke(page, server.origin);

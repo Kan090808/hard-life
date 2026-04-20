@@ -184,6 +184,21 @@
       </div>
     </section>
 
+    <section class="dialog hidden" id="boot-failure-dialog" role="alertdialog" aria-modal="true" aria-labelledby="boot-failure-title">
+      <div class="dialog-shell boot-failure-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">載入失敗</p>
+            <h3 id="boot-failure-title">遊戲沒有成功載入</h3>
+          </div>
+        </div>
+        <p class="dialog-copy">請重新載入頁面再試一次。如果還是失敗，通常是網路或快取中的舊檔案還沒同步完成。</p>
+        <div class="dialog-actions">
+          <button class="primary-button" id="boot-reload-button" type="button">重新載入</button>
+        </div>
+      </div>
+    </section>
+
     <section
       class="dialog hidden"
       id="attendance-dialog"
@@ -396,18 +411,37 @@
         const body = document.body;
         const startButton = document.querySelector("#start-button");
         const bootStatus = document.querySelector("#boot-status");
+        const introDialog = document.querySelector("#intro-dialog");
+        const bootFailureDialog = document.querySelector("#boot-failure-dialog");
+        const bootReloadButton = document.querySelector("#boot-reload-button");
+        const overlay = document.querySelector("#overlay");
 
         const setBootStatus = (status, message = "") => {
           body.dataset.appBoot = status;
 
           if (startButton) {
-            startButton.disabled = status === "booting";
-            startButton.textContent = status === "ready" ? "開始遊玩" : status === "failed" ? "重新載入" : "載入中…";
+            startButton.disabled = status !== "ready";
+            startButton.textContent = status === "ready" ? "開始遊玩" : "載入中…";
           }
 
           if (bootStatus) {
             bootStatus.hidden = !message;
             bootStatus.textContent = message;
+          }
+
+          if (introDialog) {
+            introDialog.classList.toggle("hidden", status === "failed");
+            introDialog.setAttribute("aria-hidden", String(status === "failed"));
+          }
+
+          if (bootFailureDialog) {
+            bootFailureDialog.classList.toggle("hidden", status !== "failed");
+            bootFailureDialog.setAttribute("aria-hidden", String(status !== "failed"));
+          }
+
+          if (overlay) {
+            overlay.classList.toggle("hidden", status === "ready");
+            overlay.setAttribute("aria-hidden", String(status === "ready"));
           }
         };
 
@@ -434,10 +468,7 @@
           window.__hardLifeSetBootFailed("timeout");
         }, BOOT_TIMEOUT_MS);
 
-        startButton?.addEventListener("click", () => {
-          if (body.dataset.appBoot !== "failed") {
-            return;
-          }
+        bootReloadButton?.addEventListener("click", () => {
           window.location.reload();
         });
       })();
