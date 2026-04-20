@@ -213,6 +213,17 @@ const setVisibility = (element, isVisible) => {
   element.setAttribute("aria-hidden", String(!isVisible));
 };
 
+const assertRequiredElements = (...keys) => {
+  const missing = keys.filter((key) => !elements[key]);
+  if (missing.length > 0) {
+    throw new Error(`[ui:init] Missing required elements: ${missing.join(", ")}`);
+  }
+};
+
+const bindClick = (element, handler) => {
+  element.addEventListener("click", handler);
+};
+
 const revokeShareImageUrl = () => {
   if (!uiState.shareImageUrl) {
     return;
@@ -287,72 +298,63 @@ const logShareWarnings = (channel, warnings) => {
   });
 };
 
-const hasBlockingDialog = () =>
-  uiState.onboardingOpen ||
-  uiState.actionDialogMode !== "closed" ||
-  uiState.stockDialogOpen ||
-  uiState.shareTextDialogOpen ||
-  uiState.shareImageDialogOpen ||
-  Boolean(state.pendingActionChoice) ||
-  Boolean(state.pendingAttendance) ||
-  Boolean(state.pendingStartupDecision) ||
-  Boolean(state.pendingEvent) ||
-  Boolean(state.ending);
+const getActiveDialog = () => {
+  if (uiState.shareImageDialogOpen) return "share-image";
+  if (uiState.shareTextDialogOpen) return "share-text";
+  if (uiState.onboardingOpen) return "intro";
+  if (state.ending) return "ending";
+  if (state.pendingEvent) return "event";
+  if (state.pendingActionChoice) return "choice";
+  if (state.pendingAttendance) return "attendance";
+  if (state.pendingStartupDecision) return "startup";
+  if (uiState.stockDialogOpen) return "stock";
+  if (uiState.actionDialogMode !== "closed") return `action-${uiState.actionDialogMode}`;
+  return null;
+};
+
+const hasBlockingDialog = () => getActiveDialog() !== null;
 
 const setBodyOverlayState = () => {
-  const overlayVisible = hasBlockingDialog();
+  const overlayVisible = getActiveDialog() !== null;
   document.body.classList.toggle("dialog-open", overlayVisible);
   setVisibility(elements.overlay, overlayVisible);
 };
 
 const focusDialogAction = () => {
-  if (uiState.shareImageDialogOpen) {
+  switch (getActiveDialog()) {
+    case "share-image":
     elements.shareImageCloseButton.focus();
     return;
-  }
-
-  if (uiState.shareTextDialogOpen) {
+    case "share-text":
     elements.shareTextCloseButton.focus();
     return;
-  }
-
-  if (uiState.onboardingOpen) {
+    case "intro":
     elements.startButton.focus();
     return;
-  }
-
-  if (state.ending) {
+    case "ending":
     elements.restartButton.focus();
     return;
-  }
-
-  if (state.pendingEvent) {
+    case "event":
     elements.eventOptions.querySelector("button")?.focus();
     return;
-  }
-
-  if (state.pendingActionChoice) {
+    case "choice":
     elements.choiceOptions.querySelector("button")?.focus();
     return;
-  }
-
-  if (state.pendingAttendance) {
+    case "attendance":
     elements.attendanceOptions.querySelector("button")?.focus();
     return;
-  }
-
-  if (state.pendingStartupDecision) {
+    case "startup":
     elements.startupDecisionOptions.querySelector("button")?.focus();
     return;
-  }
-
-  if (uiState.stockDialogOpen) {
+    case "stock":
     elements.stockBody.querySelector("button")?.focus();
     return;
-  }
-
-  if (uiState.actionDialogMode !== "closed") {
-    elements.actionDialogBody.querySelector("button")?.focus();
+    case "action-select":
+    case "action-result":
+      elements.actionDialog.querySelector("button")?.focus();
+      return;
+    default:
+      return;
   }
 };
 
@@ -491,7 +493,7 @@ const getActionPreview = (action) => {
     return preview;
   }
 
-  if (action.id === "work" && action.label === "離職") {
+  if (action.id === "resign") {
     preview.push("工作狀態 → 待業中", "時間壓力解除", "現金流變差");
     return preview;
   }
@@ -555,7 +557,7 @@ const getPlanningNote = () => {
 };
 
 const getActionContextHint = (action) => {
-  if (action.id === "work" && action.label === "離職") {
+  if (action.id === "resign") {
     return "離職後明天開始不再被固定班表吃掉一格。";
   }
   if (action.id === "jobSearch") {
@@ -720,6 +722,156 @@ const handleActionChoice = (actionId) => {
   render();
 };
 
+const handleActionDialogClick = (event) => {
+  const button = event.target.closest("button");
+  if (!button || !elements.actionDialog.contains(button)) {
+    return;
+  }
+
+  const role = button.dataset.role;
+  if (!role) {
+    return;
+  }
+
+  if (role === "action-choice") {
+    handleActionChoice(button.dataset.actionId);
+    return;
+  }
+
+  if (role === "action-info") {
+    event.stopPropagation();
+    const actionId = button.dataset.actionId;
+    uiState.expandedActionInfoId = uiState.expandedActionInfoId === actionId ? null : actionId;
+    render();
+    return;
+  }
+
+  if (role === "end-day") {
+    handleActionChoice("endDay");
+    return;
+  }
+
+  if (role === "cancel-action-dialog") {
+    playClickSfx();
+    uiState.expandedActionInfoId = null;
+    uiState.actionDialogMode = "closed";
+    render();
+    return;
+  }
+
+  if (role === "confirm-action-result") {
+    playClickSfx();
+    uiState.actionDialogMode = "closed";
+    render();
+  }
+};
+
+const handleChoiceDialogClick = (event) => {
+  const button = event.target.closest("button");
+  if (!button || !elements.choiceOptions.contains(button)) {
+    return;
+  }
+
+  const role = button.dataset.role;
+  if (role === "choice-option") {
+    playSelectSfx();
+    state = dispatchActionChoice(state, button.dataset.optionId);
+    if (!state.pendingEvent && !state.ending) {
+      uiState.actionDialogMode = "result";
+    }
+    render();
+    return;
+  }
+
+  if (role === "choice-back") {
+    playClickSfx();
+    state = dispatchCancelActionChoice(state);
+    uiState.actionDialogMode = "select";
+    render();
+  }
+};
+
+const handleAttendanceDialogClick = (event) => {
+  const button = event.target.closest("button");
+  if (!button || !elements.attendanceOptions.contains(button) || button.dataset.role !== "attendance-option") {
+    return;
+  }
+
+  playSelectSfx();
+  state = dispatchAttendanceChoice(state, button.dataset.optionId);
+  uiState.actionDialogMode = "closed";
+  render();
+};
+
+const handleStartupDecisionClick = (event) => {
+  const button = event.target.closest("button");
+  if (!button || !elements.startupDecisionOptions.contains(button) || button.dataset.role !== "startup-option") {
+    return;
+  }
+
+  playSelectSfx();
+  state = dispatchStartupDecision(state, button.dataset.optionId);
+  uiState.actionDialogMode = "closed";
+  render();
+};
+
+const handleEventDialogClick = (event) => {
+  const button = event.target.closest("button");
+  if (!button || !elements.eventOptions.contains(button) || button.dataset.role !== "event-option") {
+    return;
+  }
+
+  playSelectSfx();
+  state = dispatchEventChoice(state, button.dataset.optionId);
+  if (!state.ending) {
+    uiState.actionDialogMode = "result";
+  }
+  render();
+};
+
+const handleStockDialogClick = (event) => {
+  const button = event.target.closest("button");
+  if (!button) {
+    return;
+  }
+
+  if (elements.stockBody.contains(button)) {
+    const role = button.dataset.role;
+    if (role === "qty-step") {
+      const { stockId, action } = button.dataset;
+      const current = getStockQty(stockId);
+      setStockQty(stockId, action === "plus" ? current + 1 : current - 1);
+      renderStockDialog();
+      return;
+    }
+
+    if (role === "stock-trade") {
+      playSelectSfx();
+      const qty = getStockQty(button.dataset.stockId);
+      state = dispatchStockTrade(state, button.dataset.stockId, button.dataset.tradeType, qty);
+      renderStockDialog();
+    }
+    return;
+  }
+
+  if (elements.stockActions.contains(button) && button.dataset.role === "close-stock-dialog") {
+    playClickSfx();
+    uiState.stockDialogOpen = false;
+    uiState.actionDialogMode = "result";
+    render();
+  }
+};
+
+const handleStockQtyChange = (event) => {
+  const input = event.target.closest(".qty-input");
+  if (!input || !elements.stockBody.contains(input)) {
+    return;
+  }
+
+  setStockQty(input.dataset.stockId, Number(input.value));
+  renderStockDialog();
+};
+
 const renderActionSelection = () => {
   const actions = getActionViewModels(state);
   const meta = getStatusMeta(state);
@@ -745,7 +897,8 @@ const renderActionSelection = () => {
     actionButton.className = "action-row-button";
     actionButton.disabled = action.disabled;
     actionButton.textContent = action.label;
-    actionButton.addEventListener("click", () => handleActionChoice(action.id));
+    actionButton.dataset.role = "action-choice";
+    actionButton.dataset.actionId = action.id;
 
     const infoButton = document.createElement("button");
     infoButton.type = "button";
@@ -753,12 +906,9 @@ const renderActionSelection = () => {
     infoButton.setAttribute("aria-label", `${action.label} 詳細資訊`);
     infoButton.setAttribute("aria-expanded", String(uiState.expandedActionInfoId === action.id));
     infoButton.setAttribute("aria-controls", infoId);
+    infoButton.dataset.role = "action-info";
+    infoButton.dataset.actionId = action.id;
     infoButton.innerHTML = '<span class="action-info-glyph" aria-hidden="true">i</span>';
-    infoButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      uiState.expandedActionInfoId = uiState.expandedActionInfoId === action.id ? null : action.id;
-      render();
-    });
 
     row.append(actionButton, infoButton);
     item.append(row);
@@ -790,7 +940,7 @@ const renderActionSelection = () => {
     endDayButton.type = "button";
     endDayButton.className = "dialog-close";
     endDayButton.textContent = "今天先到這裡";
-    endDayButton.addEventListener("click", () => handleActionChoice("endDay"));
+    endDayButton.dataset.role = "end-day";
     elements.actionDialogActions.append(endDayButton);
   }
 
@@ -798,12 +948,7 @@ const renderActionSelection = () => {
   cancelButton.type = "button";
   cancelButton.className = "dialog-close";
   cancelButton.textContent = "先返回";
-  cancelButton.addEventListener("click", () => {
-    playClickSfx();
-    uiState.expandedActionInfoId = null;
-    uiState.actionDialogMode = "closed";
-    render();
-  });
+  cancelButton.dataset.role = "cancel-action-dialog";
   elements.actionDialogActions.append(cancelButton);
 };
 
@@ -872,11 +1017,7 @@ const renderActionResult = () => {
   confirmButton.type = "button";
   confirmButton.className = "primary-button";
   confirmButton.textContent = getResultButtonCopy();
-  confirmButton.addEventListener("click", () => {
-    playClickSfx();
-    uiState.actionDialogMode = "closed";
-    render();
-  });
+  confirmButton.dataset.role = "confirm-action-result";
   elements.actionDialogActions.append(confirmButton);
 };
 
@@ -918,18 +1059,12 @@ const renderChoiceDialog = () => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "event-button event-choice";
+    button.dataset.role = "choice-option";
+    button.dataset.optionId = option.id;
     button.innerHTML = `
       <span class="event-choice-text">${option.label}</span>
       <span class="event-choice-caption">${option.caption}</span>
     `;
-    button.addEventListener("click", () => {
-      playSelectSfx();
-      state = dispatchActionChoice(state, option.id);
-      if (!state.pendingEvent && !state.ending) {
-        uiState.actionDialogMode = "result";
-      }
-      render();
-    });
     elements.choiceOptions.append(button);
   }
 
@@ -937,12 +1072,7 @@ const renderChoiceDialog = () => {
   backButton.type = "button";
   backButton.className = "dialog-close";
   backButton.textContent = "再想想";
-  backButton.addEventListener("click", () => {
-    playClickSfx();
-    state = dispatchCancelActionChoice(state);
-    uiState.actionDialogMode = "select";
-    render();
-  });
+  backButton.dataset.role = "choice-back";
   elements.choiceOptions.append(backButton);
 
   setVisibility(elements.choiceDialog, true);
@@ -962,16 +1092,12 @@ const renderAttendanceDialog = () => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "event-button event-choice";
+    button.dataset.role = "attendance-option";
+    button.dataset.optionId = option.id;
     button.innerHTML = `
       <span class="event-choice-text">${option.text}</span>
       <span class="event-choice-caption">${option.caption}</span>
     `;
-    button.addEventListener("click", () => {
-      playSelectSfx();
-      state = dispatchAttendanceChoice(state, option.id);
-      uiState.actionDialogMode = "closed";
-      render();
-    });
     elements.attendanceOptions.append(button);
   }
 
@@ -992,16 +1118,12 @@ const renderStartupDecisionDialog = () => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "event-button event-choice";
+    button.dataset.role = "startup-option";
+    button.dataset.optionId = option.id;
     button.innerHTML = `
       <span class="event-choice-text">${option.text}</span>
       <span class="event-choice-caption">${option.caption}</span>
     `;
-    button.addEventListener("click", () => {
-      playSelectSfx();
-      state = dispatchStartupDecision(state, option.id);
-      uiState.actionDialogMode = "closed";
-      render();
-    });
     elements.startupDecisionOptions.append(button);
   }
 
@@ -1024,18 +1146,12 @@ const renderEventDialog = () => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "event-button event-choice";
+    button.dataset.role = "event-option";
+    button.dataset.optionId = option.id;
     button.innerHTML = `
       <span class="event-choice-text">${option.text}</span>
       <span class="event-choice-caption">${option.caption || "這個決定的代價會一路跟到明天。"}</span>
     `;
-    button.addEventListener("click", () => {
-      playSelectSfx();
-      state = dispatchEventChoice(state, option.id);
-      if (!state.ending) {
-        uiState.actionDialogMode = "result";
-      }
-      render();
-    });
     elements.eventOptions.append(button);
   }
 
@@ -1094,14 +1210,14 @@ const renderStockDialog = () => {
               </div>
               ${stock.owned > 0 ? `<div class="stock-meta"><span>買入均價 $${stock.averageCost}</span></div>` : ""}
               <div class="stock-qty-row">
-                <button class="qty-btn" data-stock-id="${stock.id}" data-action="minus" aria-label="減少股數">−</button>
+                <button class="qty-btn" data-role="qty-step" data-stock-id="${stock.id}" data-action="minus" aria-label="減少股數">−</button>
                 <input class="qty-input" type="number" min="1" value="${qty}" data-stock-id="${stock.id}" aria-label="${stock.name} 股數" />
-                <button class="qty-btn" data-stock-id="${stock.id}" data-action="plus" aria-label="增加股數">+</button>
+                <button class="qty-btn" data-role="qty-step" data-stock-id="${stock.id}" data-action="plus" aria-label="增加股數">+</button>
                 <span class="qty-cost">≈ $${(stock.price * qty).toLocaleString()}</span>
               </div>
               <div class="stock-controls">
-                <button class="stock-trade-btn stock-buy" data-stock-id="${stock.id}" ${!canBuy ? "disabled" : ""}>買入 ${qty} 股</button>
-                <button class="stock-trade-btn stock-sell" data-stock-id="${stock.id}" ${!canSell ? "disabled" : ""}>賣出 ${qty} 股</button>
+                <button class="stock-trade-btn stock-buy" data-role="stock-trade" data-trade-type="buy" data-stock-id="${stock.id}" ${!canBuy ? "disabled" : ""}>買入 ${qty} 股</button>
+                <button class="stock-trade-btn stock-sell" data-role="stock-trade" data-trade-type="sell" data-stock-id="${stock.id}" ${!canSell ? "disabled" : ""}>賣出 ${qty} 股</button>
               </div>
             </article>
           `;
@@ -1111,50 +1227,11 @@ const renderStockDialog = () => {
   `;
   elements.stockActions.innerHTML = "";
 
-  elements.stockBody.querySelectorAll(".qty-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const { stockId, action } = btn.dataset;
-      const current = getStockQty(stockId);
-      setStockQty(stockId, action === "plus" ? current + 1 : current - 1);
-      renderStockDialog();
-    });
-  });
-
-  elements.stockBody.querySelectorAll(".qty-input").forEach((input) => {
-    input.addEventListener("change", () => {
-      setStockQty(input.dataset.stockId, Number(input.value));
-      renderStockDialog();
-    });
-  });
-
-  elements.stockBody.querySelectorAll(".stock-buy").forEach((button) => {
-    button.addEventListener("click", () => {
-      playSelectSfx();
-      const qty = getStockQty(button.dataset.stockId);
-      state = dispatchStockTrade(state, button.dataset.stockId, "buy", qty);
-      renderStockDialog();
-    });
-  });
-
-  elements.stockBody.querySelectorAll(".stock-sell").forEach((button) => {
-    button.addEventListener("click", () => {
-      playSelectSfx();
-      const qty = getStockQty(button.dataset.stockId);
-      state = dispatchStockTrade(state, button.dataset.stockId, "sell", qty);
-      renderStockDialog();
-    });
-  });
-
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "dialog-close";
   closeButton.textContent = "先返回";
-  closeButton.addEventListener("click", () => {
-    playClickSfx();
-    uiState.stockDialogOpen = false;
-    uiState.actionDialogMode = "result";
-    render();
-  });
+  closeButton.dataset.role = "close-stock-dialog";
   elements.stockActions.append(closeButton);
 
   setVisibility(elements.stockDialog, true);
@@ -1453,7 +1530,7 @@ const resetGame = () => {
   render();
 };
 
-const render = () => {
+const performRender = () => {
   const diff = getRenderDiff();
   const achievementSignature = getAchievementSignature();
   if (achievementSignature && achievementSignature !== uiState.achievementSignature) {
@@ -1493,7 +1570,97 @@ const render = () => {
   }
 };
 
-elements.startButton.addEventListener("click", async () => {
+const render = () => {
+  try {
+    performRender();
+  } catch (error) {
+    console.error("[ui:render]", error);
+  }
+};
+
+assertRequiredElements(
+  "overlay",
+  "statusPanel",
+  "detailsToggle",
+  "weekLabel",
+  "statGrid",
+  "characterGrid",
+  "dayLabel",
+  "walletCard",
+  "walletAmount",
+  "threatCard",
+  "rentCountdown",
+  "jobIdentityCard",
+  "jobBadge",
+  "jobTitle",
+  "jobLabel",
+  "rentStrikes",
+  "phaseLabel",
+  "slotSummary",
+  "slotCaption",
+  "conditionStrip",
+  "goalTitle",
+  "goalCopy",
+  "takeActionButton",
+  "resetButton",
+  "introDialog",
+  "startButton",
+  "soundToggle",
+  "attendanceDialog",
+  "attendanceTitle",
+  "attendanceDescription",
+  "attendanceOptions",
+  "startupDecisionDialog",
+  "startupDecisionTitle",
+  "startupDecisionDescription",
+  "startupDecisionOptions",
+  "choiceDialog",
+  "choiceTitle",
+  "choiceDescription",
+  "choiceOptions",
+  "actionDialog",
+  "actionDialogKicker",
+  "actionDialogTitle",
+  "actionDialogCopy",
+  "actionDialogBody",
+  "actionDialogActions",
+  "eventDialog",
+  "eventKicker",
+  "eventTitle",
+  "eventDescription",
+  "eventOptions",
+  "stockDialog",
+  "stockBody",
+  "stockActions",
+  "endingDialog",
+  "endingCapture",
+  "endingTitle",
+  "endingCopy",
+  "endingReport",
+  "restartButton",
+  "screenshotButton",
+  "shareButton",
+  "shareToast",
+  "shareTextDialog",
+  "shareTextArea",
+  "shareTextSelectButton",
+  "shareTextCloseButton",
+  "shareImageDialog",
+  "sharePreviewImage",
+  "sharePreviewHint",
+  "shareImageCloseButton"
+);
+
+bindClick(elements.actionDialog, handleActionDialogClick);
+bindClick(elements.choiceOptions, handleChoiceDialogClick);
+bindClick(elements.attendanceOptions, handleAttendanceDialogClick);
+bindClick(elements.startupDecisionOptions, handleStartupDecisionClick);
+bindClick(elements.eventOptions, handleEventDialogClick);
+bindClick(elements.stockBody, handleStockDialogClick);
+bindClick(elements.stockActions, handleStockDialogClick);
+elements.stockBody.addEventListener("change", handleStockQtyChange);
+
+bindClick(elements.startButton, async () => {
   playClickSfx();
   uiState.onboardingOpen = false;
   if (isAudioSupported()) {
@@ -1502,52 +1669,52 @@ elements.startButton.addEventListener("click", async () => {
   render();
 });
 
-elements.takeActionButton.addEventListener("click", () => {
+bindClick(elements.takeActionButton, () => {
   playClickSfx();
   uiState.expandedActionInfoId = null;
   uiState.actionDialogMode = "select";
   render();
 });
 
-elements.resetButton.addEventListener("click", () => {
+bindClick(elements.resetButton, () => {
   playClickSfx();
   resetGame();
 });
 
-elements.restartButton.addEventListener("click", () => {
+bindClick(elements.restartButton, () => {
   playClickSfx();
   resetGame();
 });
 
-elements.screenshotButton.addEventListener("click", () => {
+bindClick(elements.screenshotButton, () => {
   playClickSfx();
   handleScreenshot();
 });
 
-elements.shareButton.addEventListener("click", () => {
+bindClick(elements.shareButton, () => {
   playClickSfx();
   handleShare();
 });
 
-elements.shareTextSelectButton.addEventListener("click", () => {
+bindClick(elements.shareTextSelectButton, () => {
   playClickSfx();
   elements.shareTextArea.focus();
   elements.shareTextArea.select();
 });
 
-elements.shareTextCloseButton.addEventListener("click", () => {
+bindClick(elements.shareTextCloseButton, () => {
   playClickSfx();
   closeShareTextDialog();
   render();
 });
 
-elements.shareImageCloseButton.addEventListener("click", () => {
+bindClick(elements.shareImageCloseButton, () => {
   playClickSfx();
   closeShareImageDialog();
   render();
 });
 
-elements.soundToggle.addEventListener("click", () => {
+bindClick(elements.soundToggle, () => {
   uiState.audioEnabled = !uiState.audioEnabled;
   setAudioEnabled(uiState.audioEnabled);
   try {
@@ -1559,7 +1726,7 @@ elements.soundToggle.addEventListener("click", () => {
   render();
 });
 
-elements.detailsToggle.addEventListener("click", () => {
+bindClick(elements.detailsToggle, () => {
   playClickSfx();
   uiState.detailsExpanded = !uiState.detailsExpanded;
   render();

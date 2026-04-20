@@ -382,6 +382,16 @@ export const ACTIONS = {
     category: "job",
     special: "workChoice",
   },
+  resign: {
+    id: "resign",
+    label: "離職",
+    tag: "退出工作",
+    description: "直接把目前這份固定工作停掉，拿回之後每天被班表吃掉的那一格時間。",
+    slotCost: 1,
+    intensity: "light",
+    category: "recovery",
+    special: "resign",
+  },
   overtime: {
     id: "overtime",
     label: "加班",

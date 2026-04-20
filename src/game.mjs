@@ -481,9 +481,6 @@ const refreshDailyBoards = (state, rng) => {
 const getHasScheduledJob = (state) => Boolean(getJob(state).requiresAttendance);
 
 const getActionLogLabel = (state, action) => {
-  if (action.id === "work" && getHasScheduledJob(state)) {
-    return "離職";
-  }
   if (action.id === "venture" && state.businessLevel > 0) {
     return "經營事業";
   }
@@ -491,9 +488,6 @@ const getActionLogLabel = (state, action) => {
 };
 
 const getActionLogId = (state, action) => {
-  if (action.id === "work" && getHasScheduledJob(state)) {
-    return "resign";
-  }
   return action.id;
 };
 
@@ -518,6 +512,14 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
 
   if (action.id === "overtime" && ![2, 3].includes(state.jobLevel)) {
     return { available: false, reason: action.disabledReason };
+  }
+
+  if (action.id === "work" && getHasScheduledJob(state)) {
+    return { available: false, reason: "你現在有固定工作，這格會改成離職。" };
+  }
+
+  if (action.id === "resign" && !getHasScheduledJob(state)) {
+    return { available: false, reason: "你現在沒有需要離掉的固定工作。" };
   }
 
   if (action.id === "venture" && state.businessLevel === 0 && state.money < 6000) {
@@ -1015,16 +1017,15 @@ const resolveBaseAction = (state, actionId, rng) => {
     case "venture":
       resolution = resolveVenture(state, rng);
       break;
+    case "resign":
+      resolution = resolveResignation(state);
+      break;
     default: {
-      if (action.id === "work" && getHasScheduledJob(state)) {
-        resolution = resolveResignation(state);
-      } else {
-        const effects = { ...action.effects };
-        if (action.incomeKey) {
-          effects.money = (effects.money ?? 0) + job[action.incomeKey];
-        }
-        resolution = { effects };
+      const effects = { ...action.effects };
+      if (action.incomeKey) {
+        effects.money = (effects.money ?? 0) + job[action.incomeKey];
       }
+      resolution = { effects };
     }
   }
 
@@ -1227,7 +1228,11 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
-  if (["workChoice", "rewardChoice"].includes(action.special)) {
+  const opensChoice =
+    ["workChoice", "rewardChoice"].includes(action.special) &&
+    !(action.id === "work" && getHasScheduledJob(nextState));
+
+  if (opensChoice) {
     return openActionChoice(nextState, action.id);
   }
 
@@ -1319,6 +1324,7 @@ export const createInitialState = (rng = Math.random) => {
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
     .filter((action) => !["stockTrade", "venture"].includes(action.id))
+    .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .map((action) => {
     const availability = getActionAvailability(state, action);
@@ -1326,19 +1332,13 @@ export const getActionViewModels = (state) =>
     const income = action.incomeKey ? currentJob[action.incomeKey] : null;
     const hasScheduledJob = getHasScheduledJob(state);
     const dynamicLabel =
-      action.id === "work" && hasScheduledJob
-        ? "離職"
-        : action.id === "venture"
-          ? state.businessLevel > 0
-            ? "結束創業"
-            : "創業"
-          : action.label;
+      action.id === "venture" && state.businessLevel > 0
+        ? "結束創業"
+        : action.label;
     const dynamicDescription =
-      action.id === "work" && hasScheduledJob
-        ? "你今天如果再按這個，就不是去上班，而是直接把這份工作停掉。"
-        : action.id === "venture" && state.businessLevel > 0
-          ? "把現在的事業收掉，之後不再拿被動收入，也不再吃創業事件。"
-          : action.description;
+      action.id === "venture" && state.businessLevel > 0
+        ? "把現在的事業收掉，之後不再拿被動收入，也不再吃創業事件。"
+        : action.description;
     let tag = action.tag;
 
     if (action.id === "jobSearch") {
@@ -1349,8 +1349,6 @@ export const getActionViewModels = (state) =>
       tag = state.businessLevel > 1 ? "擴張中" : "剛起步";
     } else if (action.id === "stockTrade") {
       tag = "高波動";
-    } else if (action.id === "work" && hasScheduledJob) {
-      tag = "退出工作";
     } else if (income) {
       tag = `今日收入 $${income}`;
     }
@@ -1374,7 +1372,7 @@ export const getActionViewModels = (state) =>
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["work", "jobSearch", "overtime", "rest", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"]
+        ? ["resign", "jobSearch", "overtime", "rest", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"]
         : ["work", "jobSearch", "rest", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });

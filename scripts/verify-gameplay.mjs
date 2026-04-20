@@ -36,6 +36,21 @@ assert.equal(workThenCommit.phase, "ready-for-action");
 assert.equal(workThenCommit.dayPlan.remainingSlots, 1);
 assert.equal(workThenCommit.money, 3800);
 assert.equal(workThenCommit.energy, 55);
+
+const resignationState = createInitialState();
+resignationState.jobLevel = 2;
+resignationState.phase = "ready-for-action";
+resignationState.pendingAttendance = null;
+resignationState.dayPlan.totalSlots = 2;
+resignationState.dayPlan.remainingSlots = 2;
+resignationState.dayPlan.actionsTaken = [];
+resignationState.turnLog = null;
+const resigned = dispatchAction(resignationState, "resign", sequence(0.99));
+assert.equal(resigned.pendingActionChoice, null);
+assert.equal(resigned.jobLevel, 1);
+assert.equal(resigned.dayPlan.remainingSlots, 1);
+assert.equal(resigned.phase, "ready-for-action");
+
 const workDayDone = dispatchAction(workThenCommit, "endDay", sequence(0.99));
 assert.equal(workDayDone.day, 2);
 assert.equal(workDayDone.money, 3650);
