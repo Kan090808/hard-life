@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="dialog-open" data-app-boot="booting">
     <div class="backdrop backdrop-a"></div>
     <div class="backdrop backdrop-b"></div>
     <div class="version-badge" id="version-badge" aria-label="目前版本">v1.0</div>
@@ -54,12 +54,58 @@
 
           <section class="compact-section" aria-label="生存狀態">
             <div class="section-kicker">生存</div>
-            <div class="stat-grid compact" id="stat-grid"></div>
+            <div class="stat-grid compact" id="stat-grid">
+              <article class="stat-card compact-stat stat-energy">
+                <span class="stat-icon" aria-hidden="true">E</span>
+                <span class="stat-label">體力</span>
+                <strong class="stat-value">--</strong>
+                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
+              </article>
+              <article class="stat-card compact-stat stat-mood">
+                <span class="stat-icon" aria-hidden="true">M</span>
+                <span class="stat-label">心情</span>
+                <strong class="stat-value">--</strong>
+                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
+              </article>
+              <article class="stat-card compact-stat stat-stress">
+                <span class="stat-icon" aria-hidden="true">S</span>
+                <span class="stat-label">壓力</span>
+                <strong class="stat-value">--</strong>
+                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
+              </article>
+              <article class="stat-card compact-stat stat-skill">
+                <span class="stat-icon" aria-hidden="true">K</span>
+                <span class="stat-label">技能</span>
+                <strong class="stat-value">--</strong>
+                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
+              </article>
+            </div>
           </section>
 
           <section class="compact-section" aria-label="角色屬性">
             <div class="section-kicker">角色</div>
-            <div class="character-grid" id="character-grid"></div>
+            <div class="character-grid" id="character-grid">
+              <article class="attribute-card attribute-intelligence">
+                <span class="stat-icon" aria-hidden="true">I</span>
+                <span class="stat-label">智力</span>
+                <strong class="stat-value">--</strong>
+              </article>
+              <article class="attribute-card attribute-physique">
+                <span class="stat-icon" aria-hidden="true">P</span>
+                <span class="stat-label">體能</span>
+                <strong class="stat-value">--</strong>
+              </article>
+              <article class="attribute-card attribute-luck">
+                <span class="stat-icon" aria-hidden="true">L</span>
+                <span class="stat-label">運氣</span>
+                <strong class="stat-value">--</strong>
+              </article>
+              <article class="attribute-card attribute-wealth">
+                <span class="stat-icon" aria-hidden="true">W</span>
+                <span class="stat-label">財力</span>
+                <strong class="stat-value">--</strong>
+              </article>
+            </div>
           </section>
 
           <div class="condition-strip" id="condition-strip" aria-label="持續狀態"></div>
@@ -99,12 +145,12 @@
       </section>
     </main>
 
-    <div class="overlay hidden" id="overlay" aria-hidden="true"></div>
+    <div class="overlay" id="overlay" aria-hidden="false"></div>
     <section class="achievement-toast hidden" id="achievement-toast" aria-live="polite" aria-atomic="true"></section>
     <section class="share-toast hidden" id="share-toast" aria-live="polite" aria-atomic="true"></section>
 
     <section
-      class="dialog hidden"
+      class="dialog"
       id="intro-dialog"
       role="dialog"
       aria-modal="true"
@@ -121,6 +167,7 @@
         <p class="dialog-copy" id="intro-copy">
           《打工人生：月底前活下去》是一款 30 天生存決策遊戲。每天通常能安排一到兩件事，但體力、房租與突發事件會讓你的時間一下就不夠用。
         </p>
+        <p class="boot-status" id="boot-status" hidden aria-live="polite"></p>
         <div class="intro-points">
           <div class="intro-point">
             <span>目標</span>
@@ -132,7 +179,7 @@
           </div>
         </div>
         <div class="dialog-actions">
-          <button class="primary-button" id="start-button" type="button">開始遊玩</button>
+          <button class="primary-button" id="start-button" type="button" disabled>載入中…</button>
         </div>
       </div>
     </section>
@@ -343,6 +390,63 @@
       </div>
     </section>
 
-    <script type="module" src="./src/main.mjs"></script>
+    <script>
+      (() => {
+        const BOOT_TIMEOUT_MS = 4000;
+        const body = document.body;
+        const startButton = document.querySelector("#start-button");
+        const bootStatus = document.querySelector("#boot-status");
+
+        const setBootStatus = (status, message = "") => {
+          body.dataset.appBoot = status;
+
+          if (startButton) {
+            startButton.disabled = status === "booting";
+            startButton.textContent = status === "ready" ? "開始遊玩" : status === "failed" ? "重新載入" : "載入中…";
+          }
+
+          if (bootStatus) {
+            bootStatus.hidden = !message;
+            bootStatus.textContent = message;
+          }
+        };
+
+        window.__hardLifeBooted = false;
+        window.__hardLifeSetBootFailed = (reason = "unknown") => {
+          if (window.__hardLifeBooted || body.dataset.appBoot === "failed") {
+            return;
+          }
+          window.clearTimeout(window.__hardLifeBootTimer);
+          setBootStatus("failed", "遊戲載入失敗，請按重新載入再試一次。");
+          console.error("[boot:failed]", reason);
+        };
+        window.__hardLifeMarkBooted = () => {
+          if (window.__hardLifeBooted) {
+            return;
+          }
+          window.__hardLifeBooted = true;
+          window.clearTimeout(window.__hardLifeBootTimer);
+          setBootStatus("ready");
+        };
+
+        setBootStatus("booting");
+        window.__hardLifeBootTimer = window.setTimeout(() => {
+          window.__hardLifeSetBootFailed("timeout");
+        }, BOOT_TIMEOUT_MS);
+
+        startButton?.addEventListener("click", () => {
+          if (body.dataset.appBoot !== "failed") {
+            return;
+          }
+          window.location.reload();
+        });
+      })();
+    </script>
+    <script type="module" id="app-entry" src="./src/main.mjs"></script>
+    <script>
+      document.querySelector("#app-entry")?.addEventListener("error", () => {
+        window.__hardLifeSetBootFailed?.("module-load-error");
+      });
+    </script>
   </body>
 </html>

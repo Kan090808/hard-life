@@ -16,15 +16,13 @@ import { SHARE_TITLE, buildShareText, detectShareCapabilities, getShareButtonLab
 
 let state = createInitialState();
 const uiState = {
-  onboardingOpen: true,
-  actionDialogMode: "closed",
+  mode: "intro",
   achievementToastVisible: false,
   achievementSignature: "",
   achievementTimer: null,
   audioEnabled: true,
   detailsExpanded: false,
   expandedActionInfoId: null,
-  stockDialogOpen: false,
   stockQuantities: {},
   endingShown: false,
   shareCapabilities: detectShareCapabilities(),
@@ -33,14 +31,14 @@ const uiState = {
   shareToastTone: "info",
   shareToastMessage: "",
   shareToastTimer: null,
-  shareTextDialogOpen: false,
   shareTextValue: "",
-  shareImageDialogOpen: false,
   shareImageUrl: "",
   shareImageHint: "",
   shareImageAlt: "",
 };
 let renderSnapshot = null;
+let renderQueued = false;
+let lastActiveDialog = null;
 
 try {
   const savedAudio = window.localStorage.getItem("hard-life-audio-enabled");
@@ -224,6 +222,42 @@ const bindClick = (element, handler) => {
   element.addEventListener("click", handler);
 };
 
+const isMode = (mode) => uiState.mode === mode;
+const setMode = (mode) => {
+  uiState.mode = mode;
+};
+
+const isRenderableState = (candidate) => {
+  if (!candidate || typeof candidate !== "object") {
+    return false;
+  }
+
+  const hasCharacter =
+    candidate.character &&
+    ["intelligence", "physique", "luck", "wealth"].every((key) => Number.isFinite(candidate.character[key]));
+  const hasDayPlan =
+    candidate.dayPlan &&
+    Number.isFinite(candidate.dayPlan.remainingSlots) &&
+    Number.isFinite(candidate.dayPlan.totalSlots) &&
+    Array.isArray(candidate.dayPlan.actionsTaken);
+  const hasCoreStats = ["day", "money", "energy", "mood", "stress", "skill", "jobLevel"].every((key) => Number.isFinite(candidate[key]));
+
+  return hasCharacter && hasDayPlan && hasCoreStats;
+};
+
+const ensureRenderableState = (reason) => {
+  if (isRenderableState(state)) {
+    return;
+  }
+
+  console.warn("[ui:state-recover]", {
+    reason,
+    state,
+  });
+  state = createInitialState();
+  setMode("intro");
+};
+
 const revokeShareImageUrl = () => {
   if (!uiState.shareImageUrl) {
     return;
@@ -261,27 +295,31 @@ const showShareToast = (message, tone = "info", duration = 2200) => {
 };
 
 const closeShareTextDialog = () => {
-  uiState.shareTextDialogOpen = false;
+  if (isMode("share-text")) {
+    setMode("idle");
+  }
 };
 
 const openShareTextDialog = (text) => {
   uiState.shareTextValue = text;
-  uiState.shareTextDialogOpen = true;
+  setMode("share-text");
 };
 
 const closeShareImageDialog = () => {
-  uiState.shareImageDialogOpen = false;
   uiState.shareImageHint = "";
   uiState.shareImageAlt = "";
   revokeShareImageUrl();
+  if (isMode("share-image")) {
+    setMode("idle");
+  }
 };
 
 const openShareImageDialog = (objectUrl, hint, alt) => {
   closeShareImageDialog();
-  uiState.shareImageDialogOpen = true;
   uiState.shareImageUrl = objectUrl;
   uiState.shareImageHint = hint;
   uiState.shareImageAlt = alt;
+  setMode("share-image");
 };
 
 const setShareActionState = (key, value) => {
@@ -299,16 +337,17 @@ const logShareWarnings = (channel, warnings) => {
 };
 
 const getActiveDialog = () => {
-  if (uiState.shareImageDialogOpen) return "share-image";
-  if (uiState.shareTextDialogOpen) return "share-text";
-  if (uiState.onboardingOpen) return "intro";
+  if (isMode("share-image")) return "share-image";
+  if (isMode("share-text")) return "share-text";
+  if (isMode("intro")) return "intro";
   if (state.ending) return "ending";
   if (state.pendingEvent) return "event";
   if (state.pendingActionChoice) return "choice";
   if (state.pendingAttendance) return "attendance";
   if (state.pendingStartupDecision) return "startup";
-  if (uiState.stockDialogOpen) return "stock";
-  if (uiState.actionDialogMode !== "closed") return `action-${uiState.actionDialogMode}`;
+  if (isMode("stock")) return "stock";
+  if (isMode("action-select")) return "action-select";
+  if (isMode("action-result")) return "action-result";
   return null;
 };
 
@@ -695,29 +734,28 @@ const renderMainButtons = () => {
   elements.takeActionButton.disabled = disabled;
   elements.takeActionButton.textContent =
     state.dayPlan.remainingSlots === state.dayPlan.totalSlots ? "安排今天" : "繼續安排今天";
-  elements.resetButton.disabled = uiState.onboardingOpen;
+  elements.resetButton.disabled = isMode("intro");
   elements.soundToggle.textContent = uiState.audioEnabled ? AUDIO_COPY.on : AUDIO_COPY.off;
   elements.soundToggle.setAttribute("aria-pressed", String(uiState.audioEnabled));
 };
 
 const renderIntroDialog = () => {
-  setVisibility(elements.introDialog, uiState.onboardingOpen);
+  setVisibility(elements.introDialog, isMode("intro"));
 };
 
 const handleActionChoice = (actionId) => {
   playSelectSfx();
   uiState.expandedActionInfoId = null;
   if (actionId === "stockTrade") {
-    uiState.stockDialogOpen = true;
-    uiState.actionDialogMode = "closed";
+    setMode("stock");
     render();
     return;
   }
   state = dispatchAction(state, actionId);
-  if (state.pendingActionChoice || state.pendingEvent || state.ending) {
-    uiState.actionDialogMode = "closed";
+  if (state.pendingActionChoice || state.pendingAttendance || state.pendingStartupDecision || state.pendingEvent || state.ending) {
+    setMode("idle");
   } else {
-    uiState.actionDialogMode = getLatestLog(state) ? "result" : "select";
+    setMode(getLatestLog(state) ? "action-result" : "action-select");
   }
   render();
 };
@@ -754,14 +792,14 @@ const handleActionDialogClick = (event) => {
   if (role === "cancel-action-dialog") {
     playClickSfx();
     uiState.expandedActionInfoId = null;
-    uiState.actionDialogMode = "closed";
+    setMode("idle");
     render();
     return;
   }
 
   if (role === "confirm-action-result") {
     playClickSfx();
-    uiState.actionDialogMode = "closed";
+    setMode("idle");
     render();
   }
 };
@@ -777,7 +815,9 @@ const handleChoiceDialogClick = (event) => {
     playSelectSfx();
     state = dispatchActionChoice(state, button.dataset.optionId);
     if (!state.pendingEvent && !state.ending) {
-      uiState.actionDialogMode = "result";
+      setMode("action-result");
+    } else {
+      setMode("idle");
     }
     render();
     return;
@@ -786,7 +826,7 @@ const handleChoiceDialogClick = (event) => {
   if (role === "choice-back") {
     playClickSfx();
     state = dispatchCancelActionChoice(state);
-    uiState.actionDialogMode = "select";
+    setMode("action-select");
     render();
   }
 };
@@ -799,7 +839,7 @@ const handleAttendanceDialogClick = (event) => {
 
   playSelectSfx();
   state = dispatchAttendanceChoice(state, button.dataset.optionId);
-  uiState.actionDialogMode = "closed";
+  setMode("idle");
   render();
 };
 
@@ -811,7 +851,7 @@ const handleStartupDecisionClick = (event) => {
 
   playSelectSfx();
   state = dispatchStartupDecision(state, button.dataset.optionId);
-  uiState.actionDialogMode = "closed";
+  setMode("idle");
   render();
 };
 
@@ -824,7 +864,9 @@ const handleEventDialogClick = (event) => {
   playSelectSfx();
   state = dispatchEventChoice(state, button.dataset.optionId);
   if (!state.ending) {
-    uiState.actionDialogMode = "result";
+    setMode("action-result");
+  } else {
+    setMode("idle");
   }
   render();
 };
@@ -841,7 +883,7 @@ const handleStockDialogClick = (event) => {
       const { stockId, action } = button.dataset;
       const current = getStockQty(stockId);
       setStockQty(stockId, action === "plus" ? current + 1 : current - 1);
-      renderStockDialog();
+      render();
       return;
     }
 
@@ -849,15 +891,14 @@ const handleStockDialogClick = (event) => {
       playSelectSfx();
       const qty = getStockQty(button.dataset.stockId);
       state = dispatchStockTrade(state, button.dataset.stockId, button.dataset.tradeType, qty);
-      renderStockDialog();
+      render();
     }
     return;
   }
 
   if (elements.stockActions.contains(button) && button.dataset.role === "close-stock-dialog") {
     playClickSfx();
-    uiState.stockDialogOpen = false;
-    uiState.actionDialogMode = "result";
+    setMode("action-result");
     render();
   }
 };
@@ -869,7 +910,7 @@ const handleStockQtyChange = (event) => {
   }
 
   setStockQty(input.dataset.stockId, Number(input.value));
-  renderStockDialog();
+  render();
 };
 
 const renderActionSelection = () => {
@@ -955,7 +996,7 @@ const renderActionSelection = () => {
 const renderActionResult = () => {
   const latest = getLatestLog(state);
   if (!latest) {
-    uiState.actionDialogMode = "closed";
+    setMode("idle");
     setVisibility(elements.actionDialog, false);
     return;
   }
@@ -1023,9 +1064,9 @@ const renderActionResult = () => {
 
 const renderActionDialog = () => {
   if (
-    uiState.onboardingOpen ||
-    uiState.actionDialogMode === "closed" ||
-    uiState.stockDialogOpen ||
+    isMode("intro") ||
+    (!isMode("action-select") && !isMode("action-result")) ||
+    isMode("stock") ||
     state.pendingActionChoice ||
     state.pendingAttendance ||
     state.pendingStartupDecision ||
@@ -1036,7 +1077,7 @@ const renderActionDialog = () => {
     return;
   }
 
-  if (uiState.actionDialogMode === "select") {
+  if (isMode("action-select")) {
     renderActionSelection();
   } else {
     renderActionResult();
@@ -1046,7 +1087,7 @@ const renderActionDialog = () => {
 };
 
 const renderChoiceDialog = () => {
-  if (!state.pendingActionChoice || uiState.onboardingOpen) {
+  if (!state.pendingActionChoice || isMode("intro")) {
     setVisibility(elements.choiceDialog, false);
     return;
   }
@@ -1079,7 +1120,7 @@ const renderChoiceDialog = () => {
 };
 
 const renderAttendanceDialog = () => {
-  if (!state.pendingAttendance || uiState.onboardingOpen) {
+  if (!state.pendingAttendance || isMode("intro")) {
     setVisibility(elements.attendanceDialog, false);
     return;
   }
@@ -1105,7 +1146,7 @@ const renderAttendanceDialog = () => {
 };
 
 const renderStartupDecisionDialog = () => {
-  if (!state.pendingStartupDecision || uiState.onboardingOpen) {
+  if (!state.pendingStartupDecision || isMode("intro")) {
     setVisibility(elements.startupDecisionDialog, false);
     return;
   }
@@ -1131,7 +1172,7 @@ const renderStartupDecisionDialog = () => {
 };
 
 const renderEventDialog = () => {
-  if (!state.pendingEvent || uiState.onboardingOpen) {
+  if (!state.pendingEvent || isMode("intro")) {
     setVisibility(elements.eventDialog, false);
     return;
   }
@@ -1165,7 +1206,7 @@ const setStockQty = (stockId, value) => {
 };
 
 const renderStockDialog = () => {
-  if (!uiState.stockDialogOpen || uiState.onboardingOpen) {
+  if (!isMode("stock") || isMode("intro")) {
     setVisibility(elements.stockDialog, false);
     return;
   }
@@ -1267,7 +1308,7 @@ const getEndingEvaluation = () => {
 };
 
 const renderEndingDialog = () => {
-  if (!state.ending || uiState.onboardingOpen) {
+  if (!state.ending || isMode("intro")) {
     setVisibility(elements.endingDialog, false);
     return;
   }
@@ -1380,8 +1421,8 @@ const renderShareToast = () => {
 };
 
 const renderShareTextDialog = () => {
-  setVisibility(elements.shareTextDialog, uiState.shareTextDialogOpen);
-  if (!uiState.shareTextDialogOpen) {
+  setVisibility(elements.shareTextDialog, isMode("share-text"));
+  if (!isMode("share-text")) {
     return;
   }
 
@@ -1389,8 +1430,8 @@ const renderShareTextDialog = () => {
 };
 
 const renderShareImageDialog = () => {
-  setVisibility(elements.shareImageDialog, uiState.shareImageDialogOpen);
-  if (!uiState.shareImageDialogOpen) {
+  setVisibility(elements.shareImageDialog, isMode("share-image"));
+  if (!isMode("share-image")) {
     elements.sharePreviewImage.removeAttribute("src");
     return;
   }
@@ -1508,11 +1549,9 @@ const handleShare = async () => {
 const resetGame = () => {
   stopBgm();
   state = createInitialState();
-  uiState.onboardingOpen = true;
-  uiState.actionDialogMode = "closed";
+  setMode("intro");
   uiState.detailsExpanded = false;
   uiState.expandedActionInfoId = null;
-  uiState.stockDialogOpen = false;
   uiState.stockQuantities = {};
   uiState.endingShown = false;
   uiState.achievementToastVisible = false;
@@ -1531,6 +1570,7 @@ const resetGame = () => {
 };
 
 const performRender = () => {
+  ensureRenderableState("perform-render");
   const diff = getRenderDiff();
   const achievementSignature = getAchievementSignature();
   if (achievementSignature && achievementSignature !== uiState.achievementSignature) {
@@ -1565,17 +1605,42 @@ const performRender = () => {
     unpaidRentCount: state.unpaidRentCount,
   };
 
-  if (hasBlockingDialog()) {
+  const activeDialog = getActiveDialog();
+  if (activeDialog && activeDialog !== lastActiveDialog) {
     requestAnimationFrame(focusDialogAction);
   }
+  lastActiveDialog = activeDialog;
+  window.__hardLifeMarkBooted?.();
 };
 
 const render = () => {
-  try {
-    performRender();
-  } catch (error) {
-    console.error("[ui:render]", error);
+  if (renderQueued) {
+    return;
   }
+  renderQueued = true;
+  queueMicrotask(() => {
+    renderQueued = false;
+    try {
+      performRender();
+    } catch (error) {
+      console.error("[ui:render]", error);
+      window.__hardLifeSetBootFailed?.("render-error");
+      try {
+        ensureRenderableState("render-catch");
+        setVisibility(elements.overlay, true);
+        document.body.classList.add("dialog-open");
+        setVisibility(elements.introDialog, true);
+        if (!elements.statGrid.children.length) {
+          renderCurrentStats(new Set());
+        }
+        if (!elements.characterGrid.children.length) {
+          renderCharacterStats(getStatusMeta(state).character);
+        }
+      } catch (fallbackError) {
+        console.error("[ui:render:fallback]", fallbackError);
+      }
+    }
+  });
 };
 
 assertRequiredElements(
@@ -1662,7 +1727,7 @@ elements.stockBody.addEventListener("change", handleStockQtyChange);
 
 bindClick(elements.startButton, async () => {
   playClickSfx();
-  uiState.onboardingOpen = false;
+  setMode("idle");
   if (isAudioSupported()) {
     await startBgm(0.15);
   }
@@ -1672,7 +1737,7 @@ bindClick(elements.startButton, async () => {
 bindClick(elements.takeActionButton, () => {
   playClickSfx();
   uiState.expandedActionInfoId = null;
-  uiState.actionDialogMode = "select";
+  setMode("action-select");
   render();
 });
 
@@ -1732,5 +1797,8 @@ bindClick(elements.detailsToggle, () => {
   render();
 });
 
+window.addEventListener("pageshow", () => {
+  render();
+});
 
 render();

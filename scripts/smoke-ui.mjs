@@ -1,0 +1,216 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize, resolve } from "node:path";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
+const MIME_TYPES = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+};
+
+const projectRoot = resolve(import.meta.dirname, "..");
+const reloadIterations = 3;
+
+const loadPlaywright = () => {
+  try {
+    return require("playwright");
+  } catch (error) {
+    throw new Error(
+      "Playwright package not found. Install it locally or run with NODE_PATH pointing to a Playwright installation."
+    );
+  }
+};
+
+const getContentType = (pathname) => MIME_TYPES[extname(pathname)] ?? "application/octet-stream";
+
+const resolveRequestPath = (urlPathname) => {
+  const cleanPath = urlPathname === "/" ? "/index.html" : urlPathname;
+  const absolutePath = resolve(projectRoot, `.${cleanPath}`);
+  const normalizedRoot = `${normalize(projectRoot)}${projectRoot.endsWith("/") ? "" : "/"}`;
+
+  if (!absolutePath.startsWith(normalizedRoot) && absolutePath !== projectRoot) {
+    throw new Error("path-traversal");
+  }
+
+  return absolutePath;
+};
+
+const startStaticServer = async () => {
+  const server = createServer(async (req, res) => {
+    try {
+      const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
+      const filePath = resolveRequestPath(requestUrl.pathname);
+      const file = await readFile(filePath);
+      res.writeHead(200, { "content-type": getContentType(filePath), "cache-control": "no-store" });
+      res.end(file);
+    } catch (error) {
+      const status = error?.code === "ENOENT" ? 404 : 500;
+      res.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
+      res.end(status === 404 ? "Not found" : "Server error");
+    }
+  });
+
+  await new Promise((resolveServer, rejectServer) => {
+    server.once("error", rejectServer);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", rejectServer);
+      resolveServer();
+    });
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Could not resolve local server address.");
+  }
+
+  return {
+    server,
+    origin: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise((resolveClose, rejectClose) => server.close((error) => (error ? rejectClose(error) : resolveClose()))),
+  };
+};
+
+const setupPage = async (page, origin) => {
+  await page.addInitScript(() => {
+    Math.random = () => 0.99;
+    try {
+      window.localStorage.setItem("hard-life-audio-enabled", "false");
+    } catch {}
+  });
+  await page.goto(origin, { waitUntil: "networkidle" });
+};
+
+const createErrorTracker = (page) => {
+  const errors = [];
+  page.on("pageerror", (error) => {
+    errors.push(`[pageerror] ${error.message}`);
+  });
+  page.on("console", (message) => {
+    if (message.type() !== "error") {
+      return;
+    }
+    errors.push(`[console:error] ${message.text()}`);
+  });
+  return errors;
+};
+
+const clickAndWait = async (page, locator, description) => {
+  await locator.waitFor({ state: "visible" });
+  await locator.click();
+  await page.waitForTimeout(30);
+  console.log(`PASS ${description}`);
+};
+
+const assertVisible = async (locator, description) => {
+  assert.equal(await locator.isVisible(), true, description);
+  console.log(`PASS ${description}`);
+};
+
+const runStartFlowSmoke = async (page) => {
+  const introDialog = page.locator("#intro-dialog");
+  const startButton = page.locator("#start-button");
+  const takeActionButton = page.locator("#take-action-button");
+  const actionDialog = page.locator("#action-dialog");
+  const choiceDialog = page.locator("#choice-dialog");
+
+  await assertVisible(introDialog, "intro dialog is visible on first load");
+  await clickAndWait(page, startButton, "start button responds");
+  await page.waitForFunction(() => document.querySelector("#intro-dialog")?.classList.contains("hidden"));
+  assert.equal(await takeActionButton.isDisabled(), false, "take action button should be enabled after start");
+  console.log("PASS take action button is enabled after intro");
+
+  await clickAndWait(page, takeActionButton, "take action button opens action dialog");
+  await assertVisible(actionDialog, "action dialog is visible");
+
+  const workButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="work"]');
+  await clickAndWait(page, workButton, "work action button responds");
+  await assertVisible(choiceDialog, "work action opens the choice dialog");
+
+  const firstChoiceButton = page.locator('#choice-options button[data-role="choice-option"]').first();
+  await clickAndWait(page, firstChoiceButton, "choice option button responds");
+  await assertVisible(actionDialog, "result dialog is visible after resolving a work choice");
+
+  const confirmButton = page.locator('#action-dialog button[data-role="confirm-action-result"]');
+  await clickAndWait(page, confirmButton, "result confirm button responds");
+  assert.equal(await actionDialog.isVisible(), false, "action dialog should close after confirming result");
+  console.log("PASS action dialog closes after confirming result");
+};
+
+const runDirectActionSmoke = async (page) => {
+  const takeActionButton = page.locator("#take-action-button");
+  const actionDialog = page.locator("#action-dialog");
+  const restButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="rest"]');
+  const confirmButton = page.locator('#action-dialog button[data-role="confirm-action-result"]');
+
+  await clickAndWait(page, takeActionButton, "take action button re-opens action dialog");
+  await clickAndWait(page, restButton, "rest action button responds");
+  await assertVisible(actionDialog, "result dialog is visible after a direct action");
+  await clickAndWait(page, confirmButton, "direct action result can be confirmed");
+  assert.equal(await actionDialog.isVisible(), false, "action dialog should close after confirming a direct action result");
+  console.log("PASS direct action result closes correctly");
+};
+
+const runResetSmoke = async (page) => {
+  const resetButton = page.locator("#reset-button");
+  const introDialog = page.locator("#intro-dialog");
+
+  await clickAndWait(page, resetButton, "reset button responds");
+  await assertVisible(introDialog, "reset returns the app to intro state");
+};
+
+const runReloadSmoke = async (page, origin) => {
+  for (let index = 0; index < reloadIterations; index += 1) {
+    await page.goto(origin, { waitUntil: "networkidle" });
+
+    const introDialog = page.locator("#intro-dialog");
+    const statCards = page.locator("#stat-grid .stat-card");
+    const attributeCards = page.locator("#character-grid .attribute-card");
+    const startButton = page.locator("#start-button");
+
+    await assertVisible(introDialog, `intro dialog is visible after reload ${index + 1}`);
+    assert.equal(await statCards.count() >= 4, true, `stat cards should exist after reload ${index + 1}`);
+    console.log(`PASS stat cards render after reload ${index + 1}`);
+    assert.equal(await attributeCards.count() >= 4, true, `character cards should exist after reload ${index + 1}`);
+    console.log(`PASS character cards render after reload ${index + 1}`);
+
+    await clickAndWait(page, startButton, `start button responds after reload ${index + 1}`);
+    await page.waitForFunction(() => document.querySelector("#intro-dialog")?.classList.contains("hidden"));
+    console.log(`PASS intro dialog closes after reload ${index + 1}`);
+  }
+};
+
+const main = async () => {
+  const { chromium } = loadPlaywright();
+  const server = await startStaticServer();
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const errors = createErrorTracker(page);
+    await setupPage(page, server.origin);
+    await runStartFlowSmoke(page);
+    await runDirectActionSmoke(page);
+    await runResetSmoke(page);
+    await runReloadSmoke(page, server.origin);
+    assert.deepEqual(errors, [], `unexpected browser errors:\n${errors.join("\n")}`);
+    console.log("PASS browser console stayed clean during smoke tests");
+    console.log("Smoke UI tests passed.");
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+};
+
+main().catch((error) => {
+  console.error("Smoke UI tests failed.");
+  console.error(error);
+  process.exitCode = 1;
+});

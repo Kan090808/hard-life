@@ -1,9 +1,10 @@
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { APP_VERSION as SOURCE_APP_VERSION } from "../src/version.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const dist = resolve(root, "dist");
+const indexFile = resolve(dist, "index.html");
 const versionFile = resolve(dist, "src", "version.mjs");
 
 const parseInteger = (value) => {
@@ -30,6 +31,11 @@ await mkdir(dist, { recursive: true });
 await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
 await cp(resolve(root, "styles.css"), resolve(dist, "styles.css"));
 await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
+const assetVersionSuffix = `?v=${encodeURIComponent(appVersion)}`;
+const builtIndex = (await readFile(indexFile, "utf8"))
+  .replace("./styles.css", `./styles.css${assetVersionSuffix}`)
+  .replace("./src/main.mjs", `./src/main.mjs${assetVersionSuffix}`);
+await writeFile(indexFile, builtIndex);
 await writeFile(versionFile, `export const APP_VERSION = ${JSON.stringify(appVersion)};\n`);
 await writeFile(resolve(dist, ".nojekyll"), "");
 

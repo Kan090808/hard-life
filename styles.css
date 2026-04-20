@@ -53,6 +53,12 @@ body.dialog-open {
   overflow: hidden;
 }
 
+body.dialog-open .app-shell,
+body.dialog-open .backdrop,
+body.dialog-open .world-decor {
+  filter: blur(4px);
+}
+
 .version-badge {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
@@ -848,6 +854,18 @@ h3 {
 
 .dialog-copy {
   font-size: 1rem;
+}
+
+.boot-status {
+  margin: 0.85rem 0 0;
+  padding: 0.72rem 0.8rem;
+  border: 2px solid rgba(185, 39, 39, 0.28);
+  border-radius: var(--radius-md);
+  background: rgba(255, 231, 225, 0.92);
+  color: #8d2323;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .dialog-option-grid {
