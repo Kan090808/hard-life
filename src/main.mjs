@@ -24,6 +24,7 @@ import {
 import { SHARE_TITLE, buildShareText, detectShareCapabilities, getShareButtonLabels, renderShareImage, shareImage, shareText } from "./share.mjs";
 const SAVE_KEY = "hard-life-save-v1";
 const SAVE_VERSION = 1;
+const STATS_KEY = "hard-life-player-stats";
 
 let state = createInitialState();
 const uiState = {
@@ -101,6 +102,10 @@ const elements = {
   endDayButton: document.querySelector("#end-day-button"),
   resetButton: document.querySelector("#reset-button"),
   introDialog: document.querySelector("#intro-dialog"),
+  introStats: document.querySelector("#intro-stats"),
+  introTotalStarts: document.querySelector("#intro-total-starts"),
+  introTotalClears: document.querySelector("#intro-total-clears"),
+  introTotalBurnouts: document.querySelector("#intro-total-burnouts"),
   startButton: document.querySelector("#start-button"),
   soundToggle: document.querySelector("#sound-toggle"),
   attendanceDialog: document.querySelector("#attendance-dialog"),
@@ -364,6 +369,43 @@ const loadSavedSession = () => {
   } catch (error) {
     console.warn("[storage:load]", error);
   }
+};
+
+const loadPlayerStats = () => {
+  try {
+    const raw = window.localStorage.getItem(STATS_KEY);
+    if (!raw) {
+      return { totalRuns: 0, totalBurnouts: 0, totalClears: 0 };
+    }
+    const stats = JSON.parse(raw);
+    return {
+      totalRuns: stats.totalRuns ?? 0,
+      totalBurnouts: stats.totalBurnouts ?? 0,
+      totalClears: stats.totalClears ?? 0,
+    };
+  } catch {
+    return { totalRuns: 0, totalBurnouts: 0, totalClears: 0 };
+  }
+};
+
+const savePlayerStats = (stats) => {
+  try {
+    window.localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch (error) {
+    console.warn("[storage:save-stats]", error);
+  }
+};
+
+const updatePlayerStats = () => {
+  const stats = loadPlayerStats();
+  stats.totalRuns += 1;
+  if (state.ending?.id === "burnout") {
+    stats.totalBurnouts += 1;
+  }
+  if (state.ending?.type !== "failure") {
+    stats.totalClears += 1;
+  }
+  savePlayerStats(stats);
 };
 
 const saveSession = () => {
@@ -945,6 +987,11 @@ const renderMainButtons = () => {
 
 const renderIntroDialog = () => {
   setVisibility(elements.introDialog, isMode("intro"));
+  const stats = loadPlayerStats();
+  setVisibility(elements.introStats, true);
+  elements.introTotalStarts.textContent = formatAnalyticsValue(stats.totalRuns);
+  elements.introTotalClears.textContent = formatAnalyticsValue(stats.totalClears);
+  elements.introTotalBurnouts.textContent = formatAnalyticsValue(stats.totalBurnouts);
 };
 
 const handleActionChoice = (actionId) => {
@@ -1523,6 +1570,7 @@ const renderEndingDialog = () => {
 
   if (!uiState.endingShown) {
     uiState.endingShown = true;
+    updatePlayerStats();
     stopBgm();
     playEndingSfx();
   }
@@ -1761,6 +1809,9 @@ const resetGame = () => {
       day: state.day,
       endingId: state.ending?.id ?? "",
     });
+    const stats = loadPlayerStats();
+    stats.totalRuns += 1;
+    savePlayerStats(stats);
   }
   stopBgm();
   state = createInitialState();
@@ -1914,6 +1965,10 @@ assertRequiredElements(
   "endDayButton",
   "resetButton",
   "introDialog",
+  "introStats",
+  "introTotalStarts",
+  "introTotalClears",
+  "introTotalBurnouts",
   "startButton",
   "soundToggle",
   "attendanceDialog",

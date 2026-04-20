@@ -1071,6 +1071,35 @@ h3 {
   color: var(--ink-soft);
 }
 
+.intro-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  padding: 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: #fffdf2;
+}
+
+.intro-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.intro-stat-item span {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.intro-stat-item strong {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: var(--ink);
+}
+
 .intro-points {
   display: grid;
   gap: 0.45rem;
