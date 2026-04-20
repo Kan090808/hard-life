@@ -8,6 +8,7 @@ import {
   playEndingSfx,
   playResultSfx,
   playSelectSfx,
+  resumeAudio,
   setAudioEnabled,
   startBgm,
   stopBgm,
@@ -232,6 +233,19 @@ const setMode = (mode) => {
 };
 
 const cloneSerializable = (value) => JSON.parse(JSON.stringify(value));
+
+const syncGameplayBgm = async () => {
+  if (!uiState.audioEnabled || !uiState.hasStarted || isMode("intro") || state.ending || !isAudioSupported()) {
+    return;
+  }
+
+  await resumeAudio();
+  await startBgm(0.18);
+};
+
+const primeGameplayBgm = () => {
+  void syncGameplayBgm();
+};
 
 const isRenderableState = (candidate) => {
   if (!candidate || typeof candidate !== "object") {
@@ -1842,10 +1856,13 @@ bindClick(elements.startButton, async () => {
   if (!uiState.hasStarted) {
     uiState.hasStarted = true;
   }
+  if (isAudioSupported()) {
+    await resumeAudio();
+  }
   playClickSfx();
   setMode("idle");
   if (isAudioSupported()) {
-    await startBgm(0.15);
+    await startBgm(0.18);
   }
   render();
 });
@@ -1903,6 +1920,7 @@ bindClick(elements.soundToggle, () => {
   } catch {}
   if (uiState.audioEnabled) {
     playClickSfx();
+    primeGameplayBgm();
   }
   render();
 });
@@ -1914,7 +1932,20 @@ bindClick(elements.detailsToggle, () => {
 });
 
 window.addEventListener("pageshow", () => {
+  primeGameplayBgm();
   render();
+});
+
+window.addEventListener(
+  "pointerdown",
+  () => {
+    primeGameplayBgm();
+  },
+  { passive: true }
+);
+
+window.addEventListener("keydown", () => {
+  primeGameplayBgm();
 });
 
 render();

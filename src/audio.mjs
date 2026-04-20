@@ -1,232 +1,374 @@
 // Web Audio API-based audio system for hard-life game
-// Generates minimalist sounds procedurally
+// Uses a small output graph plus ahead-of-time scheduling for more stable mobile playback.
+
+const BGM_LOOKAHEAD_MS = 250;
+const BGM_SCHEDULE_AHEAD_SECONDS = 1.2;
+const BGM_BEAT_DURATION = 0.5;
+const BGM_BAR_BEATS = 8;
+const BGM_BAR_DURATION = BGM_BEAT_DURATION * BGM_BAR_BEATS;
+const IS_ANDROID = /Android/i.test(globalThis.navigator?.userAgent ?? "");
 
 let audioContext = null;
-let currentBgmOscillators = [];
+let masterGainNode = null;
+let compressorNode = null;
+let sfxGainNode = null;
 let bgmGainNode = null;
-let bgmTimeoutId = null;
+let bgmSchedulerId = null;
+let bgmNextBarTime = 0;
+let bgmOscillators = [];
 let audioEnabled = true;
+let bgmWanted = false;
+let bgmTargetVolume = 0.18;
+let visibilityHookBound = false;
 
-export const setAudioEnabled = (enabled) => {
-  audioEnabled = enabled;
-  if (!enabled) {
-    stopBgm();
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const getAudioContext = () => audioContext;
+
+const getOutputDestination = (ctx) => {
+  if (!masterGainNode || masterGainNode.context !== ctx) {
+    compressorNode = ctx.createDynamicsCompressor();
+    compressorNode.threshold.value = -16;
+    compressorNode.knee.value = 10;
+    compressorNode.ratio.value = 3;
+    compressorNode.attack.value = 0.01;
+    compressorNode.release.value = 0.28;
+
+    masterGainNode = ctx.createGain();
+    masterGainNode.gain.value = IS_ANDROID ? 1.18 : 1;
+
+    sfxGainNode = ctx.createGain();
+    sfxGainNode.gain.value = IS_ANDROID ? 1.12 : 1;
+
+    compressorNode.connect(masterGainNode);
+    masterGainNode.connect(ctx.destination);
+    sfxGainNode.connect(compressorNode);
   }
+
+  return {
+    compressorNode,
+    masterGainNode,
+    sfxGainNode,
+  };
+};
+
+const clearFinishedOscillators = () => {
+  bgmOscillators = bgmOscillators.filter((osc) => {
+    const ended = osc.__ended === true;
+    if (ended) {
+      try {
+        osc.disconnect();
+      } catch {}
+    }
+    return !ended;
+  });
+};
+
+const stopTrackedOscillator = (oscillator) => {
+  if (!oscillator) {
+    return;
+  }
+  try {
+    oscillator.stop();
+  } catch {}
+  oscillator.__ended = true;
+};
+
+const ensureVisibilityHooks = () => {
+  if (visibilityHookBound || typeof document === "undefined") {
+    return;
+  }
+
+  visibilityHookBound = true;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !bgmWanted || !audioEnabled) {
+      return;
+    }
+    resumeAudio().then(() => {
+      if (!bgmSchedulerId) {
+        scheduleBgmLoop();
+      }
+    });
+  });
 };
 
 const ensureAudioContext = async () => {
   if (!audioContext) {
     try {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) {
-      console.warn("Web Audio API not supported:", e);
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({
+        latencyHint: "interactive",
+      });
+    } catch (error) {
+      console.warn("Web Audio API not supported:", error);
       return null;
     }
   }
 
-  // Resume context if suspended (required by some browsers)
   if (audioContext.state === "suspended") {
     try {
       await audioContext.resume();
-    } catch (e) {
-      console.warn("Could not resume audio context:", e);
+    } catch (error) {
+      console.warn("Could not resume audio context:", error);
     }
   }
 
+  getOutputDestination(audioContext);
+  ensureVisibilityHooks();
   return audioContext;
 };
 
-const getAudioContext = () => {
-  return audioContext;
+const getMobileBgmVolume = (volume) => {
+  if (!IS_ANDROID) {
+    return volume;
+  }
+  return Math.max(volume * 1.55, 0.28);
 };
 
-// Play a simple sine wave beep
-const playBeep = (frequency = 800, duration = 100, volume = 0.3) => {
+const getMobileSfxVolume = (volume) => {
+  if (!IS_ANDROID) {
+    return volume;
+  }
+  return Math.max(volume * 1.2, volume + 0.08);
+};
+
+const playBeep = (frequency = 800, duration = 100, volume = 0.3, type = "sine") => {
   if (!audioEnabled) return;
   const ctx = getAudioContext();
-  if (!ctx) return;
+  if (!ctx || ctx.state !== "running") return;
 
+  const { sfxGainNode } = getOutputDestination(ctx);
   const now = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
   osc.frequency.value = frequency;
-  osc.type = "sine";
+  osc.type = type;
 
-  gain.gain.setValueAtTime(volume, now);
+  const peak = clamp(getMobileSfxVolume(volume), 0.02, 0.9);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(peak, now + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.01, now + duration / 1000);
 
   osc.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(sfxGainNode);
 
   osc.start(now);
   osc.stop(now + duration / 1000);
 };
 
-// SFX: Button click (short high beep)
-export const playClickSfx = () => {
-  playBeep(1000, 80, 0.4);
+const scheduleTone = (ctx, frequency, startTime, duration, peakGain, type = "sine") => {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, startTime);
+
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.linearRampToValueAtTime(peakGain, startTime + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.02, startTime + duration);
+
+  osc.connect(gain);
+  gain.connect(bgmGainNode);
+  osc.__ended = false;
+  osc.onended = () => {
+    osc.__ended = true;
+  };
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+  bgmOscillators.push(osc);
 };
 
-// SFX: Action selection (medium beep)
-export const playSelectSfx = () => {
-  playBeep(700, 120, 0.5);
-};
+const scheduleBgmBar = (ctx, startTime) => {
+  const melody = [262, 330, 392, 440, 392, 330, 294, 262];
+  const androidBoost = IS_ANDROID ? 1.12 : 1;
 
-// SFX: Result display (two-tone)
-export const playResultSfx = () => {
-  playBeep(600, 100, 0.4);
-  setTimeout(() => playBeep(750, 100, 0.4), 120);
-};
-
-// SFX: Achievement unlock (rising tone)
-export const playAchievementSfx = () => {
-  if (!audioEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 300 / 1000;
-
-  for (let i = 0; i < 3; i++) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    const baseFreq = 600 + i * 150;
-    osc.frequency.setValueAtTime(baseFreq, now + i * 0.08);
-    osc.type = "sine";
-
-    gain.gain.setValueAtTime(0.5, now + i * 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.02, now + i * 0.08 + 0.15);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now + i * 0.08);
-    osc.stop(now + i * 0.08 + 0.15);
-  }
-};
-
-// SFX: Game ending (descending tone)
-export const playEndingSfx = () => {
-  if (!audioEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const frequencies = [800, 700, 600, 500];
-
-  frequencies.forEach((freq, i) => {
-    const beatTime = now + i * 0.16;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.frequency.value = freq;
-    osc.type = "sine";
-
-    gain.gain.setValueAtTime(0.5, beatTime);
-    gain.gain.exponentialRampToValueAtTime(0.02, beatTime + 0.15);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(beatTime);
-    osc.stop(beatTime + 0.15);
+  melody.forEach((frequency, index) => {
+    const beatTime = startTime + index * BGM_BEAT_DURATION;
+    scheduleTone(ctx, frequency, beatTime, BGM_BEAT_DURATION * 0.9, 0.12 * androidBoost, "sine");
   });
 };
 
-// Generate minimalist looping BGM
-export const startBgm = async (volume = 0.15) => {
-  if (!audioEnabled) return;
+const clearBgmScheduler = () => {
+  if (bgmSchedulerId) {
+    clearTimeout(bgmSchedulerId);
+    bgmSchedulerId = null;
+  }
+};
 
-  // Stop existing BGM first
-  stopBgm();
+const scheduleBgmLoop = () => {
+  const ctx = getAudioContext();
+  if (!ctx || ctx.state !== "running" || !audioEnabled || !bgmWanted || !bgmGainNode) {
+    clearBgmScheduler();
+    return;
+  }
 
+  clearFinishedOscillators();
+
+  while (bgmNextBarTime < ctx.currentTime + BGM_SCHEDULE_AHEAD_SECONDS) {
+    scheduleBgmBar(ctx, bgmNextBarTime);
+    bgmNextBarTime += BGM_BAR_DURATION;
+  }
+
+  bgmSchedulerId = window.setTimeout(scheduleBgmLoop, BGM_LOOKAHEAD_MS);
+};
+
+export const setAudioEnabled = (enabled) => {
+  audioEnabled = enabled;
+  if (!enabled) {
+    stopBgm();
+    return;
+  }
+
+  if (bgmWanted) {
+    resumeAudio().then(() => {
+      if (!bgmSchedulerId) {
+        scheduleBgmLoop();
+      }
+    });
+  }
+};
+
+export const resumeAudio = async () => {
   const ctx = await ensureAudioContext();
   if (!ctx) {
+    return null;
+  }
+
+  if (ctx.state !== "running") {
+    return ctx;
+  }
+
+  const silent = ctx.createGain();
+  silent.gain.value = 0.0001;
+  silent.connect(getOutputDestination(ctx).sfxGainNode);
+  const osc = ctx.createOscillator();
+  osc.frequency.value = 440;
+  osc.connect(silent);
+  const now = ctx.currentTime;
+  osc.start(now);
+  osc.stop(now + 0.01);
+  return ctx;
+};
+
+export const playClickSfx = () => {
+  playBeep(1040, 85, 0.46, "triangle");
+};
+
+export const playSelectSfx = () => {
+  playBeep(720, 130, 0.56, "triangle");
+};
+
+export const playResultSfx = () => {
+  playBeep(620, 110, 0.44, "triangle");
+  setTimeout(() => playBeep(780, 120, 0.46, "triangle"), 120);
+};
+
+export const playAchievementSfx = () => {
+  if (!audioEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx || ctx.state !== "running") return;
+
+  const { sfxGainNode } = getOutputDestination(ctx);
+  const now = ctx.currentTime;
+
+  for (let i = 0; i < 3; i += 1) {
+    const beatTime = now + i * 0.08;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(620 + i * 150, beatTime);
+    gain.gain.setValueAtTime(0.0001, beatTime);
+    gain.gain.linearRampToValueAtTime(getMobileSfxVolume(0.5), beatTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.02, beatTime + 0.16);
+    osc.connect(gain);
+    gain.connect(sfxGainNode);
+    osc.start(beatTime);
+    osc.stop(beatTime + 0.16);
+  }
+};
+
+export const playEndingSfx = () => {
+  if (!audioEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx || ctx.state !== "running") return;
+
+  const { sfxGainNode } = getOutputDestination(ctx);
+  const now = ctx.currentTime;
+  [820, 700, 580, 470].forEach((frequency, index) => {
+    const beatTime = now + index * 0.16;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, beatTime);
+    gain.gain.linearRampToValueAtTime(getMobileSfxVolume(0.48), beatTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.02, beatTime + 0.16);
+    osc.connect(gain);
+    gain.connect(sfxGainNode);
+    osc.start(beatTime);
+    osc.stop(beatTime + 0.16);
+  });
+};
+
+export const startBgm = async (volume = 0.18) => {
+  if (!audioEnabled) return;
+
+  bgmWanted = true;
+  bgmTargetVolume = clamp(getMobileBgmVolume(volume), 0.08, 0.65);
+
+  const ctx = await resumeAudio();
+  if (!ctx || ctx.state !== "running") {
     console.warn("Could not initialize audio context for BGM");
     return;
   }
 
-  const beatDuration = 0.5; // 500ms per beat
-  const barLength = beatDuration * 8; // 8 beats per bar
+  if (bgmSchedulerId && bgmGainNode && bgmGainNode.context === ctx) {
+    bgmGainNode.gain.cancelScheduledValues(ctx.currentTime);
+    bgmGainNode.gain.setValueAtTime(Math.max(bgmGainNode.gain.value || 0.0001, 0.0001), ctx.currentTime);
+    bgmGainNode.gain.exponentialRampToValueAtTime(bgmTargetVolume, ctx.currentTime + 0.12);
+    return;
+  }
 
-  // Create master gain for BGM
-  bgmGainNode = ctx.createGain();
-  bgmGainNode.gain.value = volume;
-  bgmGainNode.connect(ctx.destination);
+  clearBgmScheduler();
+  clearFinishedOscillators();
 
-  // Simple pentatonic scale: C, D, E, G, A (minimalist feel)
-  const scale = [262, 294, 330, 392, 440]; // C4, D4, E4, G4, A4
+  if (!bgmGainNode || bgmGainNode.context !== ctx) {
+    bgmGainNode = ctx.createGain();
+    bgmGainNode.connect(getOutputDestination(ctx).compressorNode);
+  }
 
-  // Create repeating pattern
-  const playBgmPattern = () => {
-    if (!audioEnabled || !bgmGainNode) return;
+  const now = ctx.currentTime;
+  bgmGainNode.gain.cancelScheduledValues(now);
+  bgmGainNode.gain.setValueAtTime(Math.max(bgmGainNode.gain.value || 0.0001, 0.0001), now);
+  bgmGainNode.gain.exponentialRampToValueAtTime(bgmTargetVolume, now + 0.18);
 
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-    const startTime = now + 0.1; // Start slightly in future to ensure stability
-
-    // Pattern: C - E - G - A - G - E - D - C (one octave down for bass)
-    const pattern = [0, 2, 3, 4, 3, 2, 1, 0]; // indices to scale
-    const octaves = [1, 1, 1, 1, 1, 1, 1, 0.5]; // bass note in last position
-
-    pattern.forEach((scaleIdx, beatIdx) => {
-      const freq = scale[scaleIdx] * octaves[beatIdx];
-      const beatTime = startTime + beatIdx * beatDuration;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.frequency.value = freq;
-      osc.type = "sine";
-
-      gain.gain.setValueAtTime(0, beatTime);
-      gain.gain.linearRampToValueAtTime(0.25, beatTime + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.05, beatTime + beatDuration - 0.05);
-
-      osc.connect(gain);
-      gain.connect(bgmGainNode);
-
-      osc.start(beatTime);
-      osc.stop(beatTime + beatDuration);
-
-      currentBgmOscillators.push(osc);
-    });
-
-    // Schedule next pattern
-    if (audioEnabled && bgmGainNode) {
-      bgmTimeoutId = setTimeout(playBgmPattern, barLength * 1000);
-    }
-  };
-
-  // Start the pattern immediately
-  playBgmPattern();
+  bgmNextBarTime = now + 0.08;
+  scheduleBgmLoop();
 };
 
 export const stopBgm = () => {
-  if (bgmTimeoutId) {
-    clearTimeout(bgmTimeoutId);
-    bgmTimeoutId = null;
-  }
-  currentBgmOscillators.forEach((osc) => {
+  bgmWanted = false;
+  clearBgmScheduler();
+
+  const ctx = getAudioContext();
+  if (bgmGainNode && ctx) {
+    const now = ctx.currentTime;
     try {
-      osc.stop();
-    } catch (e) {
-      // Already stopped
-    }
-  });
-  currentBgmOscillators = [];
+      bgmGainNode.gain.cancelScheduledValues(now);
+      bgmGainNode.gain.setValueAtTime(Math.max(bgmGainNode.gain.value || 0.0001, 0.0001), now);
+      bgmGainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    } catch {}
+  }
+
+  bgmOscillators.forEach(stopTrackedOscillator);
+  bgmOscillators = [];
 };
 
 export const setAudioVolume = (volume) => {
-  if (bgmGainNode) {
-    bgmGainNode.gain.value = Math.max(0, Math.min(1, volume));
+  bgmTargetVolume = clamp(getMobileBgmVolume(volume), 0.08, 0.65);
+  if (bgmGainNode && getAudioContext()) {
+    bgmGainNode.gain.setValueAtTime(bgmTargetVolume, getAudioContext().currentTime);
   }
 };
 
-export const isAudioSupported = () => {
-  return !!(window.AudioContext || window.webkitAudioContext);
-};
+export const isAudioSupported = () => !!(window.AudioContext || window.webkitAudioContext);
