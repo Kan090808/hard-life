@@ -13,8 +13,15 @@ import {
   startBgm,
   stopBgm,
 } from "./audio.mjs";
+import {
+  fetchAnalyticsSummary,
+  generateRunId,
+  initAnalytics,
+  trackGameOver,
+  trackGameReset,
+  trackGameStart,
+} from "./analytics.mjs";
 import { SHARE_TITLE, buildShareText, detectShareCapabilities, getShareButtonLabels, renderShareImage, shareImage, shareText } from "./share.mjs";
-
 const SAVE_KEY = "hard-life-save-v1";
 const SAVE_VERSION = 1;
 
@@ -22,6 +29,8 @@ let state = createInitialState();
 const uiState = {
   mode: "intro",
   hasStarted: false,
+  runId: generateRunId(),
+  trackedEndingSignature: "",
   achievementToastVisible: false,
   achievementSignature: "",
   achievementTimer: null,
@@ -40,6 +49,9 @@ const uiState = {
   shareImageUrl: "",
   shareImageHint: "",
   shareImageAlt: "",
+  analyticsSummary: null,
+  analyticsSummaryStatus: "同步中",
+  analyticsDialogVisible: false,
 };
 let renderSnapshot = null;
 let renderQueued = false;
@@ -56,6 +68,12 @@ setAudioEnabled(uiState.audioEnabled);
 
 const elements = {
   overlay: document.querySelector("#overlay"),
+  analyticsPanel: document.querySelector("#analytics-panel"),
+  analyticsTotalStarts: document.querySelector("#analytics-total-starts"),
+  analyticsDialog: document.querySelector("#analytics-dialog"),
+  analyticsDialogStatus: document.querySelector("#analytics-dialog-status"),
+  analyticsDialogGrid: document.querySelector("#analytics-dialog-grid"),
+  analyticsDialogCloseButton: document.querySelector("#analytics-dialog-close-button"),
   versionBadge: document.querySelector("#version-badge"),
   achievementToast: document.querySelector("#achievement-toast"),
   statusPanel: document.querySelector(".status-panel"),
@@ -336,6 +354,8 @@ const loadSavedSession = () => {
 
     state = nextState;
     uiState.hasStarted = parsed.ui?.hasStarted === true;
+    uiState.runId = typeof parsed.ui?.runId === "string" ? parsed.ui.runId : generateRunId();
+    uiState.trackedEndingSignature = typeof parsed.ui?.trackedEndingSignature === "string" ? parsed.ui.trackedEndingSignature : "";
     uiState.mode = resolveSavedMode(parsed.ui?.mode, uiState.hasStarted, nextState);
     uiState.detailsExpanded = parsed.ui?.detailsExpanded === true;
     uiState.expandedActionInfoId = typeof parsed.ui?.expandedActionInfoId === "string" ? parsed.ui.expandedActionInfoId : null;
@@ -353,6 +373,8 @@ const saveSession = () => {
       state,
       ui: {
         hasStarted: uiState.hasStarted,
+        runId: uiState.runId,
+        trackedEndingSignature: uiState.trackedEndingSignature,
         mode: uiState.mode,
         detailsExpanded: uiState.detailsExpanded,
         expandedActionInfoId: uiState.expandedActionInfoId,
@@ -376,6 +398,8 @@ const ensureRenderableState = (reason) => {
   });
   state = createInitialState();
   uiState.hasStarted = false;
+  uiState.runId = generateRunId();
+  uiState.trackedEndingSignature = "";
   setMode("intro");
 };
 
@@ -458,6 +482,7 @@ const logShareWarnings = (channel, warnings) => {
 };
 
 const getActiveDialog = () => {
+  if (uiState.analyticsDialogVisible) return "analytics";
   if (isMode("share-image")) return "share-image";
   if (isMode("share-text")) return "share-text";
   if (isMode("intro")) return "intro";
@@ -482,6 +507,9 @@ const setBodyOverlayState = () => {
 
 const focusDialogAction = () => {
   switch (getActiveDialog()) {
+    case "analytics":
+    elements.analyticsDialogCloseButton.focus();
+    return;
     case "share-image":
     elements.shareImageCloseButton.focus();
     return;
@@ -573,6 +601,58 @@ const getWalletCaption = () => {
     return "還撐得住，但任何意外都可能把你打回原形。";
   }
   return "手上終於有點空氣了，但月底還沒真的放過你。";
+};
+
+const formatAnalyticsValue = (value) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "--";
+  }
+  return value.toLocaleString();
+};
+
+const getAnalyticsStatusText = () => {
+  const summary = uiState.analyticsSummary;
+  if (!summary?.generatedAt) {
+    return "待同步";
+  }
+  try {
+    const date = new Date(summary.generatedAt);
+    const hour = String(date.getHours()).padStart(2, "0");
+    const minute = String(date.getMinutes()).padStart(2, "0");
+    return `最後更新時間 ${hour}:${minute}`;
+  } catch {
+    return "已同步";
+  }
+};
+
+const renderAnalyticsPanel = () => {
+  const summary = uiState.analyticsSummary;
+  elements.analyticsTotalStarts.textContent = formatAnalyticsValue(summary?.totalStarts);
+};
+
+const renderAnalyticsDialog = () => {
+  setVisibility(elements.analyticsDialog, uiState.analyticsDialogVisible);
+  if (!uiState.analyticsDialogVisible) {
+    return;
+  }
+
+  const summary = uiState.analyticsSummary;
+  elements.analyticsDialogStatus.textContent = getAnalyticsStatusText();
+
+  const stats = [
+    { label: "累計玩家", value: summary?.totalPlayers },
+    { label: "累計人生", value: summary?.totalStarts },
+    { label: "今日人生", value: summary?.startsToday },
+    { label: "累計過勞", value: summary?.totalBurnouts },
+    { label: "今日過勞", value: summary?.burnoutsToday },
+  ];
+
+  elements.analyticsDialogGrid.innerHTML = stats
+    .map(
+      (stat) =>
+        `<article class="analytics-card"><span class="analytics-label">${stat.label}</span><strong class="analytics-value">${formatAnalyticsValue(stat.value)}</strong></article>`
+    )
+    .join("");
 };
 
 const getRentCaption = () => {
@@ -1434,6 +1514,19 @@ const renderEndingDialog = () => {
     return;
   }
 
+  const endingSignature = `${uiState.runId}:${state.ending.type}:${state.ending.id ?? "unknown"}`;
+  if (uiState.trackedEndingSignature !== endingSignature) {
+    uiState.trackedEndingSignature = endingSignature;
+    trackGameOver({
+      runId: uiState.runId,
+      endingId: state.ending.id ?? "",
+      endingType: state.ending.type ?? "",
+      day: state.day,
+      money: state.money,
+      stress: state.stress,
+    });
+  }
+
   if (!uiState.endingShown) {
     uiState.endingShown = true;
     stopBgm();
@@ -1668,9 +1761,18 @@ const handleShare = async () => {
 };
 
 const resetGame = () => {
+  if (uiState.hasStarted) {
+    trackGameReset({
+      runId: uiState.runId,
+      day: state.day,
+      endingId: state.ending?.id ?? "",
+    });
+  }
   stopBgm();
   state = createInitialState();
   uiState.hasStarted = false;
+  uiState.runId = generateRunId();
+  uiState.trackedEndingSignature = "";
   setMode("intro");
   uiState.detailsExpanded = false;
   uiState.expandedActionInfoId = null;
@@ -1700,6 +1802,8 @@ const performRender = () => {
     scheduleAchievementToast();
   }
 
+  renderAnalyticsPanel();
+  renderAnalyticsDialog();
   renderWeekProgress();
   renderCurrentStats(diff.changedStats);
   renderMeta(diff);
@@ -1768,8 +1872,29 @@ const render = () => {
   });
 };
 
+const bootstrapAnalytics = async () => {
+  const enabled = await initAnalytics({ version: APP_VERSION });
+  uiState.analyticsSummaryStatus = enabled ? "同步中" : "未啟用";
+
+  const summary = await fetchAnalyticsSummary();
+  if (summary) {
+    uiState.analyticsSummary = summary;
+    uiState.analyticsSummaryStatus = summary.status ?? (summary.generatedAt ? "已同步" : "待同步");
+  } else if (enabled) {
+    uiState.analyticsSummaryStatus = "待同步";
+  }
+
+  render();
+};
+
 assertRequiredElements(
   "overlay",
+  "analyticsPanel",
+  "analyticsTotalStarts",
+  "analyticsDialog",
+  "analyticsDialogStatus",
+  "analyticsDialogGrid",
+  "analyticsDialogCloseButton",
   "statusPanel",
   "detailsToggle",
   "weekLabel",
@@ -1842,6 +1967,7 @@ assertRequiredElements(
 );
 
 loadSavedSession();
+void bootstrapAnalytics();
 
 bindClick(elements.actionDialog, handleActionDialogClick);
 bindClick(elements.choiceOptions, handleChoiceDialogClick);
@@ -1853,6 +1979,7 @@ bindClick(elements.stockActions, handleStockDialogClick);
 elements.stockBody.addEventListener("change", handleStockQtyChange);
 
 bindClick(elements.startButton, async () => {
+  const isFreshStart = !uiState.hasStarted;
   if (!uiState.hasStarted) {
     uiState.hasStarted = true;
   }
@@ -1863,6 +1990,13 @@ bindClick(elements.startButton, async () => {
   setMode("idle");
   if (isAudioSupported()) {
     await startBgm(0.18);
+  }
+  if (isFreshStart) {
+    trackGameStart({
+      runId: uiState.runId,
+      resumed: false,
+      day: state.day,
+    });
   }
   render();
 });
@@ -1928,6 +2062,18 @@ bindClick(elements.soundToggle, () => {
 bindClick(elements.detailsToggle, () => {
   playClickSfx();
   uiState.detailsExpanded = !uiState.detailsExpanded;
+  render();
+});
+
+bindClick(elements.analyticsPanel, () => {
+  playClickSfx();
+  uiState.analyticsDialogVisible = true;
+  render();
+});
+
+bindClick(elements.analyticsDialogCloseButton, () => {
+  playClickSfx();
+  uiState.analyticsDialogVisible = false;
   render();
 });
 

@@ -15,6 +15,10 @@
   <body class="dialog-open" data-app-boot="booting">
     <div class="backdrop backdrop-a"></div>
     <div class="backdrop backdrop-b"></div>
+    <button class="analytics-panel" id="analytics-panel" type="button">
+      <span class="analytics-label">累計人生</span>
+      <strong class="analytics-value" id="analytics-total-starts">--</strong>
+    </button>
     <div class="version-badge" id="version-badge" aria-label="目前版本">v1.0</div>
 
     <main class="app-shell">
@@ -401,6 +405,28 @@
         <p class="share-preview-hint" id="share-preview-hint">長按或右鍵儲存圖片，再分享到其他地方。</p>
         <div class="dialog-actions">
           <button class="primary-button" id="share-image-close-button" type="button">知道了</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="dialog hidden"
+      id="analytics-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="analytics-dialog-title"
+    >
+      <div class="dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">站上統計</p>
+            <h3 id="analytics-dialog-title">遊戲統計</h3>
+          </div>
+        </div>
+        <div class="analytics-dialog-status" id="analytics-dialog-status"></div>
+        <div class="analytics-dialog-grid" id="analytics-dialog-grid"></div>
+        <div class="dialog-actions">
+          <button class="primary-button" id="analytics-dialog-close-button" type="button">知道了</button>
         </div>
       </div>
     </section>
