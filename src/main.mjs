@@ -1,5 +1,6 @@
 import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, dispatchStartupDecision, dispatchStockTrade, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
 import { CHARACTER_STAT_DISPLAY, CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
+import { APP_VERSION } from "./version.mjs";
 import {
   isAudioSupported,
   playAchievementSfx,
@@ -52,6 +53,7 @@ setAudioEnabled(uiState.audioEnabled);
 
 const elements = {
   overlay: document.querySelector("#overlay"),
+  versionBadge: document.querySelector("#version-badge"),
   achievementToast: document.querySelector("#achievement-toast"),
   statusPanel: document.querySelector(".status-panel"),
   detailsToggle: document.querySelector("#details-toggle"),
@@ -123,6 +125,12 @@ const elements = {
   sharePreviewHint: document.querySelector("#share-preview-hint"),
   shareImageCloseButton: document.querySelector("#share-image-close-button"),
 };
+
+if (elements.versionBadge) {
+  elements.versionBadge.textContent = APP_VERSION;
+  elements.versionBadge.setAttribute("aria-label", `目前版本 ${APP_VERSION}`);
+  elements.versionBadge.title = APP_VERSION;
+}
 
 const ACTION_FLAVOR = {
   work: { subtitle: "半天穩定進帳", risk: "1 格・中", tone: "steady" },

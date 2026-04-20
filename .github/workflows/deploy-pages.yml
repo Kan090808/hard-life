@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  VERSION_BASE_RUN_NUMBER: "22"
+
 permissions:
   contents: read
   pages: write
