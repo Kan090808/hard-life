@@ -1127,7 +1127,7 @@ const maybeTriggerEventOrContinue = (state, rng) => {
   if (state.dailyFreelanceOffer) {
     const offer = state.dailyFreelanceOffer;
     state.dailyFreelanceOffer = null;
-    if (!state.activeCaseProject) {
+    if (state.day > 1 && !state.activeCaseProject) {
       beginTurnLogIfNeeded(state);
       const incomeHint = offer.income1 >= 1200 ? "這筆出價還不錯" : offer.income1 >= 700 ? "普通行情" : "出價偏低";
       const e1 = Math.round(offer.energyCostPerDay * 1.5);
@@ -1151,7 +1151,7 @@ const maybeTriggerEventOrContinue = (state, rng) => {
     }
   }
 
-  if (rng() < EVENT_TRIGGER_RATE) {
+  if (state.day > 1 && rng() < EVENT_TRIGGER_RATE) {
     const event = selectEvent(state, rng);
     if (event) {
       beginTurnLogIfNeeded(state);
