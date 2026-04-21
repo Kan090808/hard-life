@@ -53,6 +53,7 @@ const uiState = {
   analyticsSummary: null,
   analyticsSummaryStatus: "同步中",
   analyticsDialogVisible: false,
+  confirmDialog: null,
 };
 let renderSnapshot = null;
 let renderQueued = false;
@@ -71,6 +72,11 @@ const elements = {
   overlay: document.querySelector("#overlay"),
   analyticsPanel: document.querySelector("#analytics-panel"),
   analyticsTotalStarts: document.querySelector("#analytics-total-starts"),
+  confirmDialog: document.querySelector("#confirm-dialog"),
+  confirmDialogTitle: document.querySelector("#confirm-dialog-title"),
+  confirmDialogCopy: document.querySelector("#confirm-dialog-copy"),
+  confirmDialogConfirmButton: document.querySelector("#confirm-dialog-confirm-button"),
+  confirmDialogCancelButton: document.querySelector("#confirm-dialog-cancel-button"),
   analyticsDialog: document.querySelector("#analytics-dialog"),
   analyticsDialogStatus: document.querySelector("#analytics-dialog-status"),
   analyticsDialogGrid: document.querySelector("#analytics-dialog-grid"),
@@ -533,6 +539,7 @@ const logShareWarnings = (channel, warnings) => {
 };
 
 const getActiveDialog = () => {
+  if (uiState.confirmDialog) return "confirm";
   if (uiState.analyticsDialogVisible) return "analytics";
   if (isMode("share-image")) return "share-image";
   if (isMode("share-text")) return "share-text";
@@ -558,6 +565,9 @@ const setBodyOverlayState = () => {
 
 const focusDialogAction = () => {
   switch (getActiveDialog()) {
+    case "confirm":
+    elements.confirmDialogCancelButton.focus();
+    return;
     case "analytics":
     elements.analyticsDialogCloseButton.focus();
     return;
@@ -679,6 +689,15 @@ const getAnalyticsStatusText = () => {
 const renderAnalyticsPanel = () => {
   const summary = uiState.analyticsSummary;
   elements.analyticsTotalStarts.textContent = formatAnalyticsValue(summary?.totalStarts);
+};
+
+const renderConfirmDialog = () => {
+  const active = uiState.confirmDialog !== null;
+  setVisibility(elements.confirmDialog, active);
+  if (!active) return;
+  elements.confirmDialogTitle.textContent = uiState.confirmDialog.title;
+  elements.confirmDialogCopy.textContent = uiState.confirmDialog.copy;
+  elements.confirmDialogConfirmButton.textContent = uiState.confirmDialog.confirmLabel ?? "確定";
 };
 
 const renderAnalyticsDialog = () => {
@@ -1039,7 +1058,15 @@ const handleActionDialogClick = (event) => {
   }
 
   if (role === "sleep") {
-    handleActionChoice("sleep");
+    playClickSfx();
+    setMode("idle");
+    uiState.confirmDialog = {
+      title: "準備睡覺了？",
+      copy: "睡下去就結算今天，明天繼續。",
+      confirmLabel: "睡覺",
+      onConfirm: () => handleActionChoice("sleep"),
+    };
+    render();
     return;
   }
 
@@ -1852,6 +1879,7 @@ const performRender = () => {
 
   renderAnalyticsPanel();
   renderAnalyticsDialog();
+  renderConfirmDialog();
   renderWeekProgress();
   renderCurrentStats(diff.changedStats);
   renderMeta(diff);
@@ -1937,6 +1965,11 @@ const bootstrapAnalytics = async () => {
 
 assertRequiredElements(
   "overlay",
+  "confirmDialog",
+  "confirmDialogTitle",
+  "confirmDialogCopy",
+  "confirmDialogConfirmButton",
+  "confirmDialogCancelButton",
   "analyticsPanel",
   "analyticsTotalStarts",
   "analyticsDialog",
@@ -2063,12 +2096,38 @@ bindClick(elements.takeActionButton, () => {
 
 bindClick(elements.sleepButton, () => {
   playClickSfx();
-  handleActionChoice("sleep");
+  uiState.confirmDialog = {
+    title: "準備睡覺了？",
+    copy: "睡下去就結算今天，明天繼續。",
+    confirmLabel: "睡覺",
+    onConfirm: () => handleActionChoice("sleep"),
+  };
+  render();
 });
 
 bindClick(elements.resetButton, () => {
   playClickSfx();
-  resetGame();
+  uiState.confirmDialog = {
+    title: "放棄這局？",
+    copy: "這把就這樣了，下次可以重新來過。",
+    confirmLabel: "放棄",
+    onConfirm: () => resetGame(),
+  };
+  render();
+});
+
+bindClick(elements.confirmDialogConfirmButton, () => {
+  playClickSfx();
+  const onConfirm = uiState.confirmDialog?.onConfirm;
+  uiState.confirmDialog = null;
+  onConfirm?.();
+  render();
+});
+
+bindClick(elements.confirmDialogCancelButton, () => {
+  playClickSfx();
+  uiState.confirmDialog = null;
+  render();
 });
 
 bindClick(elements.restartButton, () => {

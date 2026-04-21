@@ -428,6 +428,27 @@
 
     <section
       class="dialog hidden"
+      id="confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+    >
+      <div class="dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <h3 id="confirm-dialog-title">確定嗎？</h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="confirm-dialog-copy"></p>
+        <div class="dialog-actions">
+          <button class="primary-button" id="confirm-dialog-confirm-button" type="button">確定</button>
+          <button class="dialog-close" id="confirm-dialog-cancel-button" type="button">取消</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="dialog hidden"
       id="analytics-dialog"
       role="dialog"
       aria-modal="true"
