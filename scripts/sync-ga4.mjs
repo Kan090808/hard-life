@@ -85,7 +85,15 @@ const main = async () => {
   const ALL_TIME = [{ startDate: "2020-01-01", endDate: "today" }];
   const TODAY = [{ startDate: "today", endDate: "today" }];
 
-  const [totalPlayersReport, totalStartsReport, startsTodayReport, totalBurnoutsReport, burnoutsTodayReport] =
+  const [
+    totalPlayersReport,
+    totalStartsReport,
+    startsTodayReport,
+    totalBurnoutsReport,
+    burnoutsTodayReport,
+    totalClearsReport,
+    clearsTodayReport,
+  ] =
     await Promise.all([
       runReport(token, { dateRanges: ALL_TIME, metrics: [{ name: "totalUsers" }] }),
       runReport(token, {
@@ -108,6 +116,16 @@ const main = async () => {
         metrics: [{ name: "eventCount" }],
         dimensionFilter: eventFilter("burnout_game_over"),
       }),
+      runReport(token, {
+        dateRanges: ALL_TIME,
+        metrics: [{ name: "eventCount" }],
+        dimensionFilter: eventFilter("clear_game_over"),
+      }),
+      runReport(token, {
+        dateRanges: TODAY,
+        metrics: [{ name: "eventCount" }],
+        dimensionFilter: eventFilter("clear_game_over"),
+      }),
     ]);
 
   const summary = {
@@ -118,6 +136,8 @@ const main = async () => {
     startsToday: firstRowValue(startsTodayReport),
     totalBurnouts: firstRowValue(totalBurnoutsReport),
     burnoutsToday: firstRowValue(burnoutsTodayReport),
+    totalClears: firstRowValue(totalClearsReport),
+    clearsToday: firstRowValue(clearsTodayReport),
   };
 
   const outPath = resolve(__dirname, "../analytics-summary.json");

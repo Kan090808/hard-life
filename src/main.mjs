@@ -362,6 +362,7 @@ const loadSavedSession = () => {
     uiState.hasStarted = parsed.ui?.hasStarted === true;
     uiState.runId = typeof parsed.ui?.runId === "string" ? parsed.ui.runId : generateRunId();
     uiState.trackedEndingSignature = typeof parsed.ui?.trackedEndingSignature === "string" ? parsed.ui.trackedEndingSignature : "";
+    uiState.endingShown = parsed.ui?.endingShown === true;
     uiState.mode = resolveSavedMode(parsed.ui?.mode, uiState.hasStarted, nextState);
     uiState.detailsExpanded = parsed.ui?.detailsExpanded === true;
     uiState.expandedActionInfoId = typeof parsed.ui?.expandedActionInfoId === "string" ? parsed.ui.expandedActionInfoId : null;
@@ -418,6 +419,7 @@ const saveSession = () => {
         hasStarted: uiState.hasStarted,
         runId: uiState.runId,
         trackedEndingSignature: uiState.trackedEndingSignature,
+        endingShown: uiState.endingShown,
         mode: uiState.mode,
         detailsExpanded: uiState.detailsExpanded,
         expandedActionInfoId: uiState.expandedActionInfoId,
@@ -686,6 +688,8 @@ const renderAnalyticsDialog = () => {
     { label: "累計玩家", value: summary?.totalPlayers },
     { label: "累計人生", value: summary?.totalStarts },
     { label: "今日人生", value: summary?.startsToday },
+    { label: "累計通關", value: summary?.totalClears },
+    { label: "今日通關", value: summary?.clearsToday },
     { label: "累計過勞", value: summary?.totalBurnouts },
     { label: "今日過勞", value: summary?.burnoutsToday },
   ];

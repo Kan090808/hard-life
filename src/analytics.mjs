@@ -198,6 +198,17 @@ export const trackGameOver = ({ runId, endingId = "", endingType = "", day = 1, 
       stress,
     });
   }
+
+  if (endingType !== "failure") {
+    emitEvent("clear_game_over", {
+      run_id: runId,
+      ending_id: endingId,
+      ending_type: endingType,
+      day,
+      money,
+      stress,
+    });
+  }
 };
 
 export const fetchAnalyticsSummary = async () => {
