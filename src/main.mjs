@@ -51,8 +51,6 @@ const uiState = {
   shareImageHint: "",
   shareImageAlt: "",
   analyticsSummary: null,
-  analyticsSummaryStatus: "同步中",
-  analyticsDialogVisible: false,
 };
 let renderSnapshot = null;
 let renderQueued = false;
@@ -71,10 +69,7 @@ const elements = {
   overlay: document.querySelector("#overlay"),
   analyticsPanel: document.querySelector("#analytics-panel"),
   analyticsTotalStarts: document.querySelector("#analytics-total-starts"),
-  analyticsDialog: document.querySelector("#analytics-dialog"),
-  analyticsDialogStatus: document.querySelector("#analytics-dialog-status"),
-  analyticsDialogGrid: document.querySelector("#analytics-dialog-grid"),
-  analyticsDialogCloseButton: document.querySelector("#analytics-dialog-close-button"),
+  analyticsTotalBurnouts: document.querySelector("#analytics-total-burnouts"),
   versionBadge: document.querySelector("#version-badge"),
   achievementToast: document.querySelector("#achievement-toast"),
   statusPanel: document.querySelector(".status-panel"),
@@ -525,7 +520,6 @@ const logShareWarnings = (channel, warnings) => {
 };
 
 const getActiveDialog = () => {
-  if (uiState.analyticsDialogVisible) return "analytics";
   if (isMode("share-image")) return "share-image";
   if (isMode("share-text")) return "share-text";
   if (isMode("intro")) return "intro";
@@ -550,9 +544,6 @@ const setBodyOverlayState = () => {
 
 const focusDialogAction = () => {
   switch (getActiveDialog()) {
-    case "analytics":
-    elements.analyticsDialogCloseButton.focus();
-    return;
     case "share-image":
     elements.shareImageCloseButton.focus();
     return;
@@ -653,46 +644,10 @@ const formatAnalyticsValue = (value) => {
   return value.toLocaleString();
 };
 
-const getAnalyticsStatusText = () => {
-  const summary = uiState.analyticsSummary;
-  if (!summary?.generatedAt) {
-    return "待同步";
-  }
-  try {
-    const date = new Date(summary.generatedAt);
-    const hour = String(date.getHours()).padStart(2, "0");
-    const minute = String(date.getMinutes()).padStart(2, "0");
-    return `最後更新時間 ${hour}:${minute}`;
-  } catch {
-    return "已同步";
-  }
-};
-
 const renderAnalyticsPanel = () => {
   const summary = uiState.analyticsSummary;
   elements.analyticsTotalStarts.textContent = formatAnalyticsValue(summary?.startsToday);
-};
-
-const renderAnalyticsDialog = () => {
-  setVisibility(elements.analyticsDialog, uiState.analyticsDialogVisible);
-  if (!uiState.analyticsDialogVisible) {
-    return;
-  }
-
-  const summary = uiState.analyticsSummary;
-  elements.analyticsDialogStatus.textContent = getAnalyticsStatusText();
-
-  const stats = [
-    { label: "今日人生", value: summary?.startsToday },
-    { label: "今日過勞", value: summary?.burnoutsToday },
-  ];
-
-  elements.analyticsDialogGrid.innerHTML = stats
-    .map(
-      (stat) =>
-        `<article class="analytics-card"><span class="analytics-label">${stat.label}</span><strong class="analytics-value">${formatAnalyticsValue(stat.value)}</strong></article>`
-    )
-    .join("");
+  elements.analyticsTotalBurnouts.textContent = formatAnalyticsValue(summary?.burnoutsToday);
 };
 
 const getRentCaption = () => {
@@ -1845,7 +1800,6 @@ const performRender = () => {
   }
 
   renderAnalyticsPanel();
-  renderAnalyticsDialog();
   renderWeekProgress();
   renderCurrentStats(diff.changedStats);
   renderMeta(diff);
@@ -1916,14 +1870,10 @@ const render = () => {
 
 const bootstrapAnalytics = async () => {
   const enabled = await initAnalytics({ version: APP_VERSION });
-  uiState.analyticsSummaryStatus = enabled ? "同步中" : "未啟用";
 
   const summary = await fetchAnalyticsSummary();
   if (summary) {
     uiState.analyticsSummary = summary;
-    uiState.analyticsSummaryStatus = summary.status ?? (summary.generatedAt ? "已同步" : "待同步");
-  } else if (enabled) {
-    uiState.analyticsSummaryStatus = "待同步";
   }
 
   render();
@@ -1933,10 +1883,7 @@ assertRequiredElements(
   "overlay",
   "analyticsPanel",
   "analyticsTotalStarts",
-  "analyticsDialog",
-  "analyticsDialogStatus",
-  "analyticsDialogGrid",
-  "analyticsDialogCloseButton",
+  "analyticsTotalBurnouts",
   "statusPanel",
   "detailsToggle",
   "weekLabel",
@@ -2114,18 +2061,6 @@ bindClick(elements.soundToggle, () => {
 bindClick(elements.detailsToggle, () => {
   playClickSfx();
   uiState.detailsExpanded = !uiState.detailsExpanded;
-  render();
-});
-
-bindClick(elements.analyticsPanel, () => {
-  playClickSfx();
-  uiState.analyticsDialogVisible = true;
-  render();
-});
-
-bindClick(elements.analyticsDialogCloseButton, () => {
-  playClickSfx();
-  uiState.analyticsDialogVisible = false;
   render();
 });
 
