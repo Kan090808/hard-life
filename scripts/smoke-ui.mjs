@@ -178,9 +178,13 @@ const runPersistenceReloadSmoke = async (page, origin) => {
 
 const runResetSmoke = async (page) => {
   const resetButton = page.locator("#reset-button");
+  const confirmDialog = page.locator("#confirm-dialog");
+  const confirmDialogConfirmButton = page.locator("#confirm-dialog-confirm-button");
   const introDialog = page.locator("#intro-dialog");
 
-  await clickAndWait(page, resetButton, "reset button responds");
+  await clickAndWait(page, resetButton, "reset button opens confirm dialog");
+  await assertVisible(confirmDialog, "confirm dialog is visible after clicking reset");
+  await clickAndWait(page, confirmDialogConfirmButton, "confirm dialog confirm button responds");
   await assertVisible(introDialog, "reset returns the app to intro state");
 };
 
