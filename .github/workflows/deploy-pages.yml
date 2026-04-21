@@ -39,11 +39,6 @@ jobs:
       - name: Run smoke UI tests
         run: node scripts/smoke-ui.mjs
 
-      - name: Fetch analytics summary
-        run: |
-          git fetch origin analytics-data 2>/dev/null || true
-          git show origin/analytics-data:analytics-summary.json > analytics-summary.json 2>/dev/null || true
-
       - name: Build static site bundle
         run: node scripts/build-pages.mjs
 
