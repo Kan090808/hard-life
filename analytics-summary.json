@@ -1,9 +1,9 @@
 {
-  "status": "待同步",
-  "generatedAt": null,
-  "totalPlayers": null,
-  "totalStarts": null,
-  "startsToday": null,
-  "totalBurnouts": null,
-  "burnoutsToday": null
+  "status": "ok",
+  "generatedAt": "2026-04-21T01:05:11.547Z",
+  "totalPlayers": 1,
+  "totalStarts": 1,
+  "startsToday": 1,
+  "totalBurnouts": 0,
+  "burnoutsToday": 0
 }
