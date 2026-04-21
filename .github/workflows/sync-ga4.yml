@@ -34,6 +34,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: sync GA4 analytics summary [skip ci]"
+            git commit -m "chore: sync GA4 analytics summary"
             git push
           fi
