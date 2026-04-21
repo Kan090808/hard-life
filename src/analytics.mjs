@@ -58,7 +58,8 @@ const isProductionEnvironment = () => {
 const getPlayerId = () => getOrCreateStoredId(PLAYER_ID_KEY, "player", "local");
 const getSessionId = () => getOrCreateStoredId(SESSION_ID_KEY, "session", "session");
 
-const getSummaryUrl = () => new URL("./analytics-summary.json", window.location.href).toString();
+const getSummaryUrl = () =>
+  "https://raw.githubusercontent.com/kan090808/hard-life/analytics-data/analytics-summary.json";
 
 const getGtag = () => getGlobal().gtag;
 

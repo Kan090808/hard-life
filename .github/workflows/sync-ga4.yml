@@ -26,14 +26,12 @@ jobs:
           GA4_SERVICE_ACCOUNT_KEY: ${{ secrets.GA4_SERVICE_ACCOUNT_KEY }}
         run: node scripts/sync-ga4.mjs
 
-      - name: Commit updated summary
+      - name: Push to analytics-data branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan analytics-data
+          git rm -rf --cached . --quiet
           git add analytics-summary.json
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: sync GA4 analytics summary [skip ci]"
-            git push
-          fi
+          git commit -m "sync: GA4 analytics summary"
+          git push origin HEAD:analytics-data --force
