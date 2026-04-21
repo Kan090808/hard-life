@@ -670,7 +670,7 @@ const getAnalyticsStatusText = () => {
 
 const renderAnalyticsPanel = () => {
   const summary = uiState.analyticsSummary;
-  elements.analyticsTotalStarts.textContent = formatAnalyticsValue(summary?.totalStarts);
+  elements.analyticsTotalStarts.textContent = formatAnalyticsValue(summary?.startsToday);
 };
 
 const renderAnalyticsDialog = () => {
@@ -683,10 +683,7 @@ const renderAnalyticsDialog = () => {
   elements.analyticsDialogStatus.textContent = getAnalyticsStatusText();
 
   const stats = [
-    { label: "累計玩家", value: summary?.totalPlayers },
-    { label: "累計人生", value: summary?.totalStarts },
     { label: "今日人生", value: summary?.startsToday },
-    { label: "累計過勞", value: summary?.totalBurnouts },
     { label: "今日過勞", value: summary?.burnoutsToday },
   ];
 

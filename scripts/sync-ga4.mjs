@@ -64,6 +64,23 @@ const runReport = async (token, body) => {
   return response.json();
 };
 
+const runRealtimeReport = async (token, body) => {
+  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runRealtimeReport`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GA4 Realtime API ${response.status}: ${text}`);
+  }
+  return response.json();
+};
+
 const firstRowValue = (report) => {
   const row = report.rows?.[0];
   return row ? parseInt(row.metricValues[0].value, 10) || 0 : 0;
@@ -83,9 +100,8 @@ const main = async () => {
   const token = await getAccessToken(SERVICE_ACCOUNT_KEY);
 
   const ALL_TIME = [{ startDate: "2020-01-01", endDate: "today" }];
-  const TODAY = [{ startDate: "today", endDate: "today" }];
 
-  const [totalPlayersReport, totalStartsReport, startsTodayReport, totalBurnoutsReport, burnoutsTodayReport] =
+  const [totalPlayersReport, totalStartsReport, totalBurnoutsReport, startsTodayReport, burnoutsTodayReport] =
     await Promise.all([
       runReport(token, { dateRanges: ALL_TIME, metrics: [{ name: "totalUsers" }] }),
       runReport(token, {
@@ -94,17 +110,15 @@ const main = async () => {
         dimensionFilter: eventFilter("game_start"),
       }),
       runReport(token, {
-        dateRanges: TODAY,
-        metrics: [{ name: "eventCount" }],
-        dimensionFilter: eventFilter("game_start"),
-      }),
-      runReport(token, {
         dateRanges: ALL_TIME,
         metrics: [{ name: "eventCount" }],
         dimensionFilter: eventFilter("burnout_game_over"),
       }),
-      runReport(token, {
-        dateRanges: TODAY,
+      runRealtimeReport(token, {
+        metrics: [{ name: "eventCount" }],
+        dimensionFilter: eventFilter("game_start"),
+      }),
+      runRealtimeReport(token, {
         metrics: [{ name: "eventCount" }],
         dimensionFilter: eventFilter("burnout_game_over"),
       }),
