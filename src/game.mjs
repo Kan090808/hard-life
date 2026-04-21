@@ -2,11 +2,9 @@ import {
   ACTIONS,
   CONDITION_CONFIG,
   DAILY_LIVING_COST,
-  DAY_SLOT_RULES,
   DEFAULT_CONDITIONS,
   DEFAULT_HISTORY,
   DEFAULT_PLAYER_STATE,
-  EVENT_TRIGGER_RATE,
   FAILURE_ENDINGS,
   JOBS,
   MAX_LOG_ENTRIES,
@@ -24,6 +22,20 @@ import {
 import { EVENTS } from "./data/events.mjs";
 
 const cloneState = (state) => JSON.parse(JSON.stringify(state));
+
+const SLEEP_RECOVERY_BASE = 14;
+const SLEEP_RECOVERY_PER_PHYSIQUE = 4;
+const SLEEP_STRESS_RELIEF_BASE = 4;
+const SLEEP_STRESS_RELIEF_PER_PHYSIQUE = 1;
+
+const REPEAT_ENERGY_COST = 6;
+const REPEAT_MONEY_DROP = 0.2;
+const REPEAT_WELLBEING_DROP = 0.15;
+const REPEAT_EVENT_RISK = 0.12;
+const BASE_EVENT_TRIGGER_RATE = 0.18;
+const MAX_EVENT_TRIGGER_RATE = 0.66;
+
+const cloneEffects = (effects = {}) => ({ ...effects });
 
 const clampStat = (key, value) => {
   const bounds = STAT_BOUNDS[key];
@@ -184,20 +196,15 @@ const unlockMilestones = (state) => {
   state.latestAchievements = latest;
 };
 
-const getSlotRule = (energy) => DAY_SLOT_RULES.find((rule) => energy >= rule.minEnergy) ?? DAY_SLOT_RULES.at(-1);
-
-const createDayPlan = (state) => {
-  const rule = getSlotRule(state.energy);
-  return {
-    band: rule.id,
-    totalSlots: rule.totalSlots,
-    remainingSlots: rule.totalSlots,
-    maxHeavyActions: rule.maxHeavyActions,
-    heavyActionsUsed: 0,
-    actionsTaken: [],
-    startingEnergy: state.energy,
-  };
-};
+const createDayPlan = (state) => ({
+  startingEnergy: state.energy,
+  actionsTaken: [],
+  actionCounts: {},
+  totalActions: 0,
+  lastRepeatActionId: null,
+  lastRepeatIndex: 0,
+  lastRepeatPenalty: null,
+});
 
 const initializeDayPlan = (state) => {
   state.dayPlan = createDayPlan(state);
@@ -207,11 +214,35 @@ const noteRecentAction = (state, actionId) => {
   state.history.recentActions = [...state.history.recentActions, actionId].slice(-6);
 };
 
-const updateHistoryAtEndOfDay = (state) => {
-  const tookRest = state.dayPlan.actionsTaken.includes("rest");
-  const heavyToday = state.dayPlan.heavyActionsUsed > 0;
+const beginTurnLogIfNeeded = (state) => {
+  if (!state.turnLog) {
+    state.turnLog = createTurnLog(state.day);
+  }
+};
 
-  state.history.daysSinceRest = tookRest ? 0 : state.history.daysSinceRest + 1;
+const getSleepRecovery = (state) => {
+  const physique = state.character.physique;
+  return {
+    energy: SLEEP_RECOVERY_BASE + SLEEP_RECOVERY_PER_PHYSIQUE * physique,
+    stress: -(SLEEP_STRESS_RELIEF_BASE + SLEEP_STRESS_RELIEF_PER_PHYSIQUE * physique),
+  };
+};
+
+const applySleepRecovery = (state) => {
+  beginTurnLogIfNeeded(state);
+  const recovery = getSleepRecovery(state);
+  applyEffects(state, recovery).forEach((line) => pushLine(state, line));
+  pushLine(state, "你睡醒了，身體回來一點，至少今天不是昨天那個殘血版本。");
+
+  if (state.stress <= 60 && state.conditions.burnoutRisk) {
+    applyConditionChanges(state, { burnoutRisk: false }).forEach((line) => pushLine(state, line));
+  }
+};
+
+const updateHistoryAtEndOfDay = (state) => {
+  const heavyToday = state.dayPlan.actionsTaken.some((actionId) => ACTIONS[actionId]?.intensity === "heavy");
+
+  state.history.daysSinceFullSleep = 0;
   state.history.consecutiveHeavyDays = heavyToday ? state.history.consecutiveHeavyDays + 1 : 0;
   state.history.lastDayActions = [...state.dayPlan.actionsTaken];
 
@@ -222,35 +253,6 @@ const updateHistoryAtEndOfDay = (state) => {
   if (state.history.consecutiveHeavyDays >= 2 || state.stress >= 72) {
     state.conditions.burnoutRisk = true;
   }
-
-  if (tookRest && state.stress <= 60) {
-    state.conditions.burnoutRisk = false;
-  }
-};
-
-const finalizeDay = (state, rng) => {
-  const failure = detectFailure(state);
-  if (failure) {
-    state.latestAchievements = [];
-    setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
-    commitTurnLog(state);
-    return state;
-  }
-
-  if (state.day >= state.totalDays) {
-    unlockMilestones(state);
-    setEnding(state, evaluateEnding(state), PHASES.COMPLETED);
-    commitTurnLog(state);
-    return state;
-  }
-
-  state.day += 1;
-  initializeDayPlan(state);
-  refreshDailyBoards(state, rng);
-  unlockMilestones(state);
-  commitTurnLog(state);
-  state.turnLog = null;
-  return maybeApplyDailyAttendance(state, rng);
 };
 
 const pickRandom = (items, rng) => items[Math.floor(rng() * items.length)];
@@ -315,7 +317,6 @@ const pickDistinct = (items, count, rng) => {
 const createDailyWorkOptions = (state, rng) =>
   pickDistinct(WORK_GIGS, 3, rng).map((gig) => {
     const { intelligence, physique, luck, wealth } = state.character;
-    // 財力高的人心態比較鬆，工作壓力相對小
     const wealthStressReduction = (wealth - 1) * 2;
     let moneyBonus = 0;
     let energyBonus = 0;
@@ -323,20 +324,16 @@ const createDailyWorkOptions = (state, rng) =>
     let moodBonus = 0;
 
     if (gig.type === "physical") {
-      // 體力型（發傳單、洗碗、倉庫）：體能決定報酬與耐力
       moneyBonus = (physique - 1) * 60 + (luck - 1) * 20;
       energyBonus = (physique - 1) * 2;
     } else if (gig.type === "mental") {
-      // 智力型（家教）：智力大幅提升收入與教學滿足感；技能代表教學實力
       moneyBonus = (intelligence - 1) * 100 + (luck - 1) * 20 + Math.floor(state.skill * 4);
       moodBonus = (intelligence - 1) * 3;
       stressBonus -= (intelligence - 1) * 2;
     } else if (gig.type === "mixed") {
-      // 綜合型（外送）：體能＋運氣共同影響
       moneyBonus = (physique - 1) * 40 + (luck - 1) * 40;
       energyBonus = (physique - 1) * 2;
     } else if (gig.type === "social") {
-      // 社交型（活動工讀）：運氣左右客戶互動與小費
       moneyBonus = (luck - 1) * 60 + (intelligence - 1) * 20;
       moodBonus = (luck - 1) * 3;
     }
@@ -457,7 +454,8 @@ const generateDailyFreelanceOffer = (state, rng) => {
 
   if (rng() > rate) return null;
 
-  const baseIncome = 290 + Math.round(state.skill * 5) + state.character.intelligence * 48 + (hasContact ? 72 : 0) + (hasLead ? 108 : 0);
+  const baseIncome =
+    290 + Math.round(state.skill * 5) + state.character.intelligence * 48 + (hasContact ? 72 : 0) + (hasLead ? 108 : 0);
   const income1 = Math.round(baseIncome * (0.75 + rng() * 0.5));
   const energyCostPerDay = 8 + Math.floor(rng() * 15);
 
@@ -487,15 +485,123 @@ const getActionLogLabel = (state, action) => {
   return action.label;
 };
 
-const getActionLogId = (state, action) => {
-  return action.id;
+const getActionLogId = (_state, action) => action.id;
+
+const getRepeatIndex = (state, actionId) => (state.dayPlan.actionCounts[actionId] ?? 0) + 1;
+
+const getRepeatPenalty = (repeatIndex) => {
+  if (repeatIndex <= 1) {
+    return {
+      repeatIndex,
+      extraEnergyCost: 0,
+      moneyMultiplier: 1,
+      wellbeingMultiplier: 1,
+      eventRiskBonus: 0,
+    };
+  }
+
+  return {
+    repeatIndex,
+    extraEnergyCost: REPEAT_ENERGY_COST * (repeatIndex - 1),
+    moneyMultiplier: Math.max(0.4, 1 - REPEAT_MONEY_DROP * (repeatIndex - 1)),
+    wellbeingMultiplier: Math.max(0.5, 1 - REPEAT_WELLBEING_DROP * (repeatIndex - 1)),
+    eventRiskBonus: REPEAT_EVENT_RISK * (repeatIndex - 1),
+  };
 };
 
-const spendScheduledSlot = (state, token) => {
-  state.dayPlan.remainingSlots = Math.max(0, state.dayPlan.remainingSlots - 1);
-  state.dayPlan.actionsTaken.push(token);
-  noteRecentAction(state, token);
+const getRepeatPenaltyText = (penalty) =>
+  penalty.repeatIndex <= 1
+    ? "第 1 次，不加重。"
+    : `第 ${penalty.repeatIndex} 次：額外耗體 ${penalty.extraEnergyCost}、收益打折、事件風險 +${Math.round(
+        penalty.eventRiskBonus * 100
+      )}%。`;
+
+const applyRepeatPenaltyToEffects = (effects = {}, penalty) => {
+  const adjusted = cloneEffects(effects);
+
+  if (penalty.extraEnergyCost > 0) {
+    adjusted.energy = (adjusted.energy ?? 0) - penalty.extraEnergyCost;
+  }
+
+  if ((adjusted.money ?? 0) > 0) {
+    adjusted.money = Math.max(0, Math.round(adjusted.money * penalty.moneyMultiplier));
+  }
+
+  if ((adjusted.mood ?? 0) > 0) {
+    adjusted.mood = Math.max(0, Math.round(adjusted.mood * penalty.wellbeingMultiplier));
+  }
+
+  if ((adjusted.skill ?? 0) > 0) {
+    adjusted.skill = Math.max(0, Math.round(adjusted.skill * penalty.wellbeingMultiplier));
+  }
+
+  return adjusted;
 };
+
+const setLastRepeat = (state, actionId, penalty) => {
+  state.dayPlan.lastRepeatActionId = actionId;
+  state.dayPlan.lastRepeatIndex = penalty.repeatIndex;
+  state.dayPlan.lastRepeatPenalty = penalty;
+};
+
+const recordPassiveAction = (state, actionId) => {
+  state.dayPlan.actionsTaken.push(actionId);
+  noteRecentAction(state, actionId);
+};
+
+const recordUserAction = (state, actionId, penalty) => {
+  state.dayPlan.actionsTaken.push(actionId);
+  state.dayPlan.actionCounts[actionId] = (state.dayPlan.actionCounts[actionId] ?? 0) + 1;
+  state.dayPlan.totalActions += 1;
+  setLastRepeat(state, actionId, penalty);
+  noteRecentAction(state, actionId);
+};
+
+const getProjectedActionEffects = (state, action) => {
+  const job = getJob(state);
+
+  switch (action.special) {
+    case "study":
+      return {
+        money: -getStudyCost(state.skill),
+        energy: -14,
+        mood: -4,
+        stress: 5,
+        skill: 10,
+      };
+    case "jobSearch":
+      return {
+        energy: -14,
+        mood: -12,
+        stress: 10,
+      };
+    case "lifeAdmin":
+      if (state.conditions.burnoutRisk) {
+        return { money: -150, energy: 10, stress: -10 };
+      }
+      return {};
+    case "network":
+      return { money: -180, mood: 12, stress: -6 };
+    case "venture":
+      return state.businessLevel > 0 ? { money: 500 + state.businessIncome, mood: 6, stress: -8 } : { money: -6000, energy: -14, mood: 12, stress: 14 };
+    case "resign":
+      return { mood: state.jobLevel === 3 ? 8 : 4, stress: state.jobLevel === 3 ? -10 : -6, money: state.jobLevel === 3 ? -600 : -250 };
+    default: {
+      const effects = cloneEffects(action.effects);
+      if (action.incomeKey) {
+        effects.money = (effects.money ?? 0) + job[action.incomeKey];
+      }
+      return effects;
+    }
+  }
+};
+
+const getRepeatAdjustedProjectedEffects = (state, action) => {
+  const effects = getProjectedActionEffects(state, action);
+  return applyRepeatPenaltyToEffects(effects, getRepeatPenalty(getRepeatIndex(state, action.id)));
+};
+
+const canSurviveEffects = (state, effects = {}) => state.energy + (effects.energy ?? 0) > 0;
 
 const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {}) => {
   if (!ignoreFlowGuards && state.phase !== PHASES.READY) {
@@ -523,19 +629,16 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
   }
 
   if (action.id === "venture" && state.businessLevel === 0 && state.money < 6000) {
-    return { available: false, reason: "創業至少要先準備 6000。"};
+    return { available: false, reason: "創業至少要先準備 6000。" };
   }
 
-  if (action.id !== "stockTrade" && state.dayPlan.actionsTaken.includes(action.id)) {
-    return { available: false, reason: "同一天不能把同一件事刷兩次。" };
+  if (["workChoice", "rewardChoice", "stockTrade"].includes(action.special)) {
+    return { available: true, reason: "" };
   }
 
-  if (action.slotCost > state.dayPlan.remainingSlots) {
-    return { available: false, reason: "今天剩下的時段不夠放這個行動。" };
-  }
-
-  if (action.intensity === "heavy" && state.dayPlan.heavyActionsUsed >= state.dayPlan.maxHeavyActions) {
-    return { available: false, reason: "今天已經扛過一次重行動了。" };
+  const projected = getRepeatAdjustedProjectedEffects(state, action);
+  if (!canSurviveEffects(state, projected)) {
+    return { available: false, reason: "現在體力不夠，再做會直接倒下。" };
   }
 
   return { available: true, reason: "" };
@@ -579,7 +682,10 @@ const getBurnoutPenalty = (state, action) => {
 };
 
 const resolveJobSearch = (state, rng) => {
-  const successRate = Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0));
+  const successRate = Math.min(
+    1,
+    0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)
+  );
   const success = rng() < successRate;
 
   if (!success) {
@@ -622,7 +728,6 @@ const resolveJobSearch = (state, rng) => {
   };
 };
 
-
 const getStudyCost = (skill) => 400 + Math.floor(skill / 10) * 80;
 
 const resolveStudy = (state) => ({
@@ -633,21 +738,6 @@ const resolveStudy = (state) => ({
     stress: 5,
     skill: 10,
   },
-});
-
-const getRestRecoveryEffects = (state) => {
-  const physique = state.character.physique;
-  return {
-    money: -150,
-    energy: 18 + physique * 2,
-    mood: 10,
-    stress: -(12 + physique),
-  };
-};
-
-const resolveRest = (state) => ({
-  effects: getRestRecoveryEffects(state),
-  log: state.character.physique >= 4 ? "你休息得很有感，身體回得比一般人快一點。" : state.character.physique <= 2 ? "你有休息到，但身體回得沒有那麼快。" : "你先把自己拉回來一點，至少明天不像今天這麼硬。",
 });
 
 const resolveLifeAdmin = (state) => {
@@ -758,8 +848,7 @@ const applyBusinessCycle = (state, rng) => {
     0.82
   );
 
-  const positiveEvent = rng() < positiveWeight;
-  if (positiveEvent) {
+  if (rng() < positiveWeight) {
     const incomeLift = 60 + state.character.intelligence * 18 + (state.conditions.hasFreelanceContact ? 80 : 0);
     const burst = 120 + state.character.wealth * 40;
     appendResolution(state, {
@@ -795,7 +884,7 @@ const resolveResignation = (state) => ({
     stress: state.jobLevel === 3 ? -10 : -6,
     money: state.jobLevel === 3 ? -600 : -250,
   },
-  log: state.jobLevel === 3 ? "你把正職辭掉了，壓力先降了一點，但現金流也少了遮羞布。" : "你把兼職停掉了，時間回來了，但收入也一起斷掉。",
+  log: state.jobLevel === 3 ? "你把正職辭掉了，壓力先降了一點，但現金流也少了遮羞布。" : "你把兼職停掉了，至少明天睡醒不用先想著要不要去上班。",
 });
 
 const resolveVenture = (state, rng) => {
@@ -812,46 +901,45 @@ const resolveVenture = (state, rng) => {
     };
   }
 
-  if (state.businessLevel === 0) {
-    const startupChance = clampNumber(
-      0.22 + state.character.intelligence * 0.05 + state.character.wealth * 0.04 + (state.conditions.hasFreelanceContact ? 0.1 : 0) + state.skill * 0.003,
-      0.2,
-      0.82
-    );
-    const success = rng() < startupChance;
+  const startupChance = clampNumber(
+    0.22 + state.character.intelligence * 0.05 + state.character.wealth * 0.04 + (state.conditions.hasFreelanceContact ? 0.1 : 0) + state.skill * 0.003,
+    0.2,
+    0.82
+  );
+  const success = rng() < startupChance;
 
-    return success
-      ? {
-          effects: {
-            money: -6000,
-            energy: -14,
-            mood: 12,
-            stress: 14,
-            businessLevel: 1,
-            businessIncome: 400 + state.character.intelligence * 30 + state.character.wealth * 20 + (state.conditions.hasFreelanceContact ? 80 : 0),
-          },
-          log: "你真的把第一筆資金砸進去了，事業剛起步，壓力也跟著一起長出來。",
-        }
-      : {
-          effects: {
-            money: -3500,
-            energy: -10,
-            mood: -8,
-            stress: 16,
-          },
-          log: "你試著把點子推成生意，但今天只換到燒錢和更多不確定感。",
-        };
-  }
-
-  return null;
+  return success
+    ? {
+        effects: {
+          money: -6000,
+          energy: -14,
+          mood: 12,
+          stress: 14,
+          businessLevel: 1,
+          businessIncome: 400 + state.character.intelligence * 30 + state.character.wealth * 20 + (state.conditions.hasFreelanceContact ? 80 : 0),
+        },
+        log: "你真的把第一筆資金砸進去了，事業剛起步，壓力也跟著一起長出來。",
+      }
+    : {
+        effects: {
+          money: -3500,
+          energy: -10,
+          mood: -8,
+          stress: 16,
+        },
+        log: "你試著把點子推成生意，但今天只換到燒錢和更多不確定感。",
+      };
 };
+
+const getDynamicEventRate = (penalty) =>
+  clampNumber(BASE_EVENT_TRIGGER_RATE + (penalty?.eventRiskBonus ?? 0), BASE_EVENT_TRIGGER_RATE, MAX_EVENT_TRIGGER_RATE);
 
 const applyAttendanceOutcome = (state, choice) => {
   const job = getJob(state);
   const working = choice === "work";
   beginTurnLogIfNeeded(state);
   state.turnLog.actionId = working ? "attendanceWork" : "attendanceLeave";
-  spendScheduledSlot(state, working ? "attendanceWork" : "attendanceLeave");
+  recordPassiveAction(state, working ? "attendanceWork" : "attendanceLeave");
 
   appendResolution(state, {
     effects: working ? job.attendanceEffects : job.leaveEffects,
@@ -859,20 +947,22 @@ const applyAttendanceOutcome = (state, choice) => {
   pushLine(
     state,
     working
-      ? `你今天還是去上了 ${job.name}，固定班先吃掉一格時間。`
+      ? `你今天還是去上了 ${job.name}，先把固定班扛完。`
       : `你今天向 ${job.name} 請假了，保住一點體力，但代價也留下來了。`
   );
 };
 
-const applyActiveCaseWork = (state, rng) => {
+const applyActiveCaseWork = (state) => {
   const project = state.activeCaseProject;
   project.daysLeft -= 1;
   const isDone = project.daysLeft === 0;
 
-  state.dayPlan.remainingSlots = Math.max(0, state.dayPlan.remainingSlots - 1);
-  noteRecentAction(state, "caseWork");
-
   beginTurnLogIfNeeded(state);
+  if (!state.turnLog.actionId) {
+    state.turnLog.actionId = "caseWork";
+  }
+  recordPassiveAction(state, "caseWork");
+
   appendResolution(state, {
     effects: {
       energy: -project.energyCostPerDay,
@@ -885,7 +975,7 @@ const applyActiveCaseWork = (state, rng) => {
     pushLine(state, `案子跑完了，收到款項 $${project.totalIncome}。`);
     state.activeCaseProject = null;
   } else {
-    pushLine(state, `今天繼續推進案子（還剩 ${project.daysLeft} 天），先吃掉一格時段。`);
+    pushLine(state, `今天先處理案子進度（還剩 ${project.daysLeft} 天），體力先被吃掉一段。`);
   }
 
   const failure = detectFailure(state);
@@ -895,41 +985,43 @@ const applyActiveCaseWork = (state, rng) => {
     return state;
   }
 
-  return maybeTriggerEventOrContinue(state, rng);
+  state.phase = PHASES.READY;
+  return state;
 };
 
-const continueAfterAttendance = (state, rng) => {
+const continueAfterAttendance = (state) => {
   if (state.activeCaseProject) {
-    return applyActiveCaseWork(state, rng);
+    return applyActiveCaseWork(state);
   }
-  return maybeTriggerEventOrContinue(state, rng);
+
+  state.phase = PHASES.READY;
+  return state;
 };
 
-const continueAfterStartupDecision = (state, rng) => {
+const continueAfterStartupDecision = (state) => {
   if (!getHasScheduledJob(state)) {
-    return continueAfterAttendance(state, rng);
+    return continueAfterAttendance(state);
   }
 
   const job = getJob(state);
-  if (state.energy < job.leaveThreshold) {
-    state.pendingAttendance = {
-      title: `${job.name} 今天要不要請假`,
-      description: `你目前體力只有 ${state.energy}，今天照常去上班，成本會直接落在自己身上。`,
-      options: [
-        { id: "work", text: "硬著頭皮去上班", caption: "保住收入，但今天會更硬。" },
-        { id: "leave", text: "今天請假", caption: "先保體力，但錢和壓力都會反噬。" },
-      ],
-    };
-    state.phase = PHASES.ATTENDANCE;
-    return state;
-  }
+  const lowEnergyCopy =
+    state.energy < job.leaveThreshold
+      ? `你目前體力只有 ${state.energy}，今天照常去上班，成本會直接落在自己身上。`
+      : `你今天睡醒後還得先決定要不要去上 ${job.name}。`;
 
-  applyAttendanceOutcome(state, "work");
-  state.pendingAttendance = null;
-  return continueAfterAttendance(state, rng);
+  state.pendingAttendance = {
+    title: `${job.name} 今天要不要去`,
+    description: lowEnergyCopy,
+    options: [
+      { id: "work", text: "去上班", caption: "先保住現金流，但今天會更硬。" },
+      { id: "leave", text: "今天請假", caption: "先保體力，但錢和壓力都會反噬。" },
+    ],
+  };
+  state.phase = PHASES.ATTENDANCE;
+  return state;
 };
 
-const maybeApplyDailyAttendance = (state, rng) => {
+const startDayFlow = (state, rng) => {
   applyBusinessCycle(state, rng);
 
   const failure = detectFailure(state);
@@ -956,20 +1048,28 @@ const maybeApplyDailyAttendance = (state, rng) => {
     return state;
   }
 
-  return continueAfterStartupDecision(state, rng);
+  return continueAfterStartupDecision(state);
 };
 
 const openActionChoice = (state, actionId) => {
+  const repeatPenalty = getRepeatPenalty(getRepeatIndex(state, actionId));
+
   if (actionId === "work") {
     state.pendingActionChoice = {
       actionId,
       title: "今天要接哪一份工",
-      description: "今天能挑的臨時工作不同，收入和體力成本也不同。",
-      options: state.dailyWorkOptions.map((option) => ({
-        id: option.id,
-        label: option.label,
-        caption: `+$${option.effects.money} / 體力 ${option.effects.energy}`,
-      })),
+      description:
+        repeatPenalty.repeatIndex > 1
+          ? "同樣類型的工作今天已經做過，這次會更累、賺更少，也更容易出事。"
+          : "今天能挑的臨時工作不同，收入和體力成本也不同。",
+      options: state.dailyWorkOptions.map((option) => {
+        const adjusted = applyRepeatPenaltyToEffects(option.effects, repeatPenalty);
+        return {
+          id: option.id,
+          label: option.label,
+          caption: `+$${adjusted.money ?? 0} / 體力 ${adjusted.energy ?? 0}`,
+        };
+      }),
     };
     state.phase = PHASES.CHOICE;
     return state;
@@ -979,12 +1079,18 @@ const openActionChoice = (state, actionId) => {
     state.pendingActionChoice = {
       actionId,
       title: "今天要怎麼犒賞自己",
-      description: "你可以花少一點止痛，也可以一次花大一點換比較明顯的回復。",
-      options: state.dailyRewardOptions.map((option) => ({
-        id: option.id,
-        label: option.label,
-        caption: `$${Math.abs(option.effects.money)} / 心情 ${option.effects.mood > 0 ? `+${option.effects.mood}` : option.effects.mood}`,
-      })),
+      description:
+        repeatPenalty.repeatIndex > 1
+          ? "同樣的止痛方式今天效果會打折，還會更拖體力。"
+          : "你可以花少一點止痛，也可以一次花大一點換比較明顯的回復。",
+      options: state.dailyRewardOptions.map((option) => {
+        const adjusted = applyRepeatPenaltyToEffects(option.effects, repeatPenalty);
+        return {
+          id: option.id,
+          label: option.label,
+          caption: `$${Math.abs(adjusted.money ?? option.effects.money)} / 心情 ${adjusted.mood > 0 ? `+${adjusted.mood}` : adjusted.mood ?? 0}`,
+        };
+      }),
     };
     state.phase = PHASES.CHOICE;
     return state;
@@ -993,7 +1099,7 @@ const openActionChoice = (state, actionId) => {
   return state;
 };
 
-const resolveBaseAction = (state, actionId, rng) => {
+const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
   const action = ACTIONS[actionId];
   const job = getJob(state);
   let resolution;
@@ -1001,9 +1107,6 @@ const resolveBaseAction = (state, actionId, rng) => {
   switch (action.special) {
     case "study":
       resolution = resolveStudy(state);
-      break;
-    case "rest":
-      resolution = resolveRest(state);
       break;
     case "jobSearch":
       resolution = resolveJobSearch(state, rng);
@@ -1021,7 +1124,7 @@ const resolveBaseAction = (state, actionId, rng) => {
       resolution = resolveResignation(state);
       break;
     default: {
-      const effects = { ...action.effects };
+      const effects = cloneEffects(action.effects);
       if (action.incomeKey) {
         effects.money = (effects.money ?? 0) + job[action.incomeKey];
       }
@@ -1029,11 +1132,20 @@ const resolveBaseAction = (state, actionId, rng) => {
     }
   }
 
+  resolution = {
+    ...resolution,
+    effects: applyRepeatPenaltyToEffects(resolution.effects, repeatPenalty),
+  };
+
   appendResolution(state, resolution);
 
   [getCommuterPenalty(state, action), getComputerPenalty(state, action), getBurnoutPenalty(state, action)]
     .filter(Boolean)
     .forEach((penalty) => appendResolution(state, penalty));
+
+  if (repeatPenalty.repeatIndex > 1) {
+    pushLine(state, `同樣的事做到第 ${repeatPenalty.repeatIndex} 次，身體開始抗議，收穫也不像第一次那麼乾脆。`);
+  }
 
   if (actionId === "overtime" && state.history.consecutiveHeavyDays >= 1 && !state.conditions.burnoutRisk) {
     appendResolution(state, {
@@ -1115,15 +1227,7 @@ const selectEvent = (state, rng) => {
   return pickWeightedRandom(eligible, (event) => getEventCategoryWeight(state, event.category), rng);
 };
 
-const canTakeAnotherAction = (state) => {
-  if (state.dayPlan.remainingSlots <= 0) {
-    return false;
-  }
-
-  return Object.values(ACTIONS).some((action) => getActionAvailability(state, action, { ignoreFlowGuards: true }).available);
-};
-
-const maybeTriggerEventOrContinue = (state, rng) => {
+const maybeTriggerEventOrContinue = (state, rng, repeatPenalty = null) => {
   if (state.dailyFreelanceOffer) {
     const offer = state.dailyFreelanceOffer;
     state.dailyFreelanceOffer = null;
@@ -1151,7 +1255,8 @@ const maybeTriggerEventOrContinue = (state, rng) => {
     }
   }
 
-  if (state.day > 1 && rng() < EVENT_TRIGGER_RATE) {
+  const eventRate = getDynamicEventRate(repeatPenalty);
+  if (state.day > 1 && rng() < eventRate) {
     const event = selectEvent(state, rng);
     if (event) {
       beginTurnLogIfNeeded(state);
@@ -1187,15 +1292,35 @@ const maybeTriggerEventOrContinue = (state, rng) => {
   return state;
 };
 
-const beginTurnLogIfNeeded = (state) => {
-  if (!state.turnLog) {
-    state.turnLog = createTurnLog(state.day);
+const finalizeDay = (state, rng) => {
+  const failure = detectFailure(state);
+  if (failure) {
+    state.latestAchievements = [];
+    setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
+    commitTurnLog(state);
+    return state;
   }
+
+  if (state.day >= state.totalDays) {
+    unlockMilestones(state);
+    setEnding(state, evaluateEnding(state), PHASES.COMPLETED);
+    commitTurnLog(state);
+    return state;
+  }
+
+  commitTurnLog(state);
+  state.day += 1;
+  initializeDayPlan(state);
+  refreshDailyBoards(state, rng);
+  applySleepRecovery(state);
+  unlockMilestones(state);
+  return startDayFlow(state, rng);
 };
 
-const resolveEndDay = (state, rng) => {
+const resolveSleep = (state, rng) => {
   beginTurnLogIfNeeded(state);
-  pushLine(state, "你決定今天先到這裡。");
+  state.turnLog.actionId = "sleep";
+  pushLine(state, "你決定今天該睡了，剩下的事留給明天的自己。");
   updateHistoryAtEndOfDay(state);
   applyRecurringCosts(state, rng);
   return finalizeDay(state, rng);
@@ -1208,8 +1333,8 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
-  if (actionId === "endDay") {
-    return resolveEndDay(nextState, rng);
+  if (actionId === "sleep") {
+    return resolveSleep(nextState, rng);
   }
 
   const action = ACTIONS[actionId];
@@ -1222,26 +1347,19 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
-  const opensChoice =
-    ["workChoice", "rewardChoice"].includes(action.special) &&
-    !(action.id === "work" && getHasScheduledJob(nextState));
-
+  const opensChoice = ["workChoice", "rewardChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(nextState));
   if (opensChoice) {
     return openActionChoice(nextState, action.id);
   }
 
+  const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, action.id));
+
   beginTurnLogIfNeeded(nextState);
   nextState.turnLog.actionId = getActionLogId(nextState, action);
   pushLine(nextState, `你今天安排了「${getActionLogLabel(nextState, action)}」。`);
+  recordUserAction(nextState, action.id, repeatPenalty);
 
-  nextState.dayPlan.remainingSlots -= action.slotCost;
-  nextState.dayPlan.actionsTaken.push(action.id);
-  if (action.intensity === "heavy") {
-    nextState.dayPlan.heavyActionsUsed += 1;
-  }
-  noteRecentAction(nextState, action.id);
-
-  resolveBaseAction(nextState, actionId, rng);
+  resolveBaseAction(nextState, actionId, rng, repeatPenalty);
 
   const failure = detectFailure(nextState);
   if (failure) {
@@ -1250,7 +1368,7 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
-  return maybeTriggerEventOrContinue(nextState, rng);
+  return maybeTriggerEventOrContinue(nextState, rng, repeatPenalty);
 };
 
 const resolveEvent = (state, optionId, rng) => {
@@ -1275,15 +1393,8 @@ const resolveEvent = (state, optionId, rng) => {
     return nextState;
   }
 
-  if (canTakeAnotherAction(nextState)) {
-    nextState.phase = PHASES.READY;
-    return nextState;
-  }
-
-  pushLine(nextState, "今天能安排的時段已經用完了。");
-  updateHistoryAtEndOfDay(nextState);
-  applyRecurringCosts(nextState, rng);
-  return finalizeDay(nextState, rng);
+  nextState.phase = PHASES.READY;
+  return nextState;
 };
 
 export const createInitialState = (rng = Math.random) => {
@@ -1309,10 +1420,11 @@ export const createInitialState = (rng = Math.random) => {
     dailyRewardOptions: [],
     dailyFreelanceOffer: null,
     activeCaseProject: null,
+    dayPlan: null,
   };
   initializeDayPlan(state);
   refreshDailyBoards(state, rng);
-  return maybeApplyDailyAttendance(state, rng);
+  return startDayFlow(state, rng);
 };
 
 export const getActionViewModels = (state) =>
@@ -1321,72 +1433,69 @@ export const getActionViewModels = (state) =>
     .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .map((action) => {
-    const availability = getActionAvailability(state, action);
-    const currentJob = getJob(state);
-    const income = action.incomeKey ? currentJob[action.incomeKey] : null;
-    const hasScheduledJob = getHasScheduledJob(state);
-    const dynamicLabel =
-      action.id === "venture" && state.businessLevel > 0
-        ? "結束創業"
-        : action.label;
-    const dynamicDescription =
-      action.id === "venture" && state.businessLevel > 0
-        ? "把現在的事業收掉，之後不再拿被動收入，也不再吃創業事件。"
-        : action.description;
-    let tag = action.tag;
+      const availability = getActionAvailability(state, action);
+      const currentJob = getJob(state);
+      const dynamicLabel = action.id === "venture" && state.businessLevel > 0 ? "結束創業" : action.label;
+      const dynamicDescription =
+        action.id === "venture" && state.businessLevel > 0
+          ? "把現在的事業收掉，之後不再拿被動收入，也不再吃創業事件。"
+          : action.description;
+      let tag = action.tag;
 
-    if (action.id === "jobSearch") {
-      tag = `${Math.round(Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)) * 100)}% 成功率`;
-    } else if (action.id === "study") {
-      tag = `課程費 $${getStudyCost(state.skill)}`;
-    } else if (action.id === "venture" && state.businessLevel > 0) {
-      tag = state.businessLevel > 1 ? "擴張中" : "剛起步";
-    } else if (action.id === "stockTrade") {
-      tag = "高波動";
-    } else if (income) {
-      tag = `今日收入 $${income}`;
-    }
+      if (action.id === "jobSearch") {
+        tag = `${Math.round(
+          Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)) *
+            100
+        )}% 成功率`;
+      } else if (action.id === "study") {
+        tag = `課程費 $${getStudyCost(state.skill)}`;
+      } else if (action.id === "venture" && state.businessLevel > 0) {
+        tag = state.businessLevel > 1 ? "擴張中" : "剛起步";
+      } else if (action.id === "stockTrade") {
+        tag = "高波動";
+      } else if (action.incomeKey) {
+        tag = `今日收入 $${currentJob[action.incomeKey]}`;
+      }
 
-    const dynamicEffects =
-      action.id === "study"
-        ? { ...action.effects, money: -getStudyCost(state.skill) }
-        : action.effects;
+      const repeatPenalty = getRepeatPenalty(getRepeatIndex(state, action.id));
+      const dynamicEffects = getRepeatAdjustedProjectedEffects(state, action);
+      const energyDelta = dynamicEffects.energy ?? 0;
+      const energyPreview = energyDelta === 0 ? "體力 0" : `體力 ${energyDelta > 0 ? `+${energyDelta}` : energyDelta}`;
 
-    return {
-      ...action,
-      effects: dynamicEffects,
-      label: dynamicLabel,
-      description: dynamicDescription,
-      tag,
-      slotLabel: `${action.slotCost} 格時段`,
-      disabled: !availability.available,
-      disabledReason: availability.reason,
-    };
+      return {
+        ...action,
+        effects: dynamicEffects,
+        label: dynamicLabel,
+        description: dynamicDescription,
+        tag,
+        energyPreview,
+        repeatPenaltyPreview: getRepeatPenaltyText(repeatPenalty),
+        disabled: !availability.available,
+        disabledReason: availability.reason,
+      };
     })
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["resign", "jobSearch", "overtime", "rest", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"]
-        : ["work", "jobSearch", "rest", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"];
+        ? ["resign", "jobSearch", "overtime", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"]
+        : ["work", "jobSearch", "overtime", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });
 
 export const getStatusMeta = (state) => {
   const nextRent = getNextRentDay(state.day);
-  const rentCountdown = nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${RENT_AMOUNT}` : `${nextRent - state.day} 天後・$${RENT_AMOUNT}`;
+  const rentCountdown =
+    nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${RENT_AMOUNT}` : `${nextRent - state.day} 天後・$${RENT_AMOUNT}`;
+  const recovery = getSleepRecovery(state);
   const phaseCopy = {
-    [PHASES.READY]:
-      state.dayPlan.remainingSlots === state.dayPlan.totalSlots
-        ? "準備安排今天"
-        : `今天還能再安排 ${state.dayPlan.remainingSlots} 格`,
-    [PHASES.ATTENDANCE]: "先決定今天要不要請假",
+    [PHASES.READY]: state.dayPlan.totalActions === 0 ? "準備安排今天" : "今天還能繼續做事，也可以直接睡覺",
+    [PHASES.ATTENDANCE]: "先決定今天要不要去上班",
     [PHASES.STARTUP_DECISION]: "先處理今天的創業決策",
     [PHASES.CHOICE]: "先選一個方案",
     [PHASES.EVENT]: "生活又臨時丟了一題給你",
     [PHASES.GAME_OVER]: "這個月先到這裡",
     [PHASES.COMPLETED]: "月底結算完成",
   };
-  const slotRule = getSlotRule(state.dayPlan.startingEnergy);
   const activeConditions = Object.entries(state.conditions)
     .filter(([, enabled]) => enabled)
     .map(([id]) => ({
@@ -1403,7 +1512,10 @@ export const getStatusMeta = (state) => {
       label: state.businessLevel > 1 ? "創業擴張中" : "創業起步中",
       compactLabel: "創業",
       icon: "briefcase",
-      description: state.businessLevel > 1 ? `你的生意已經開始擴張，今日被動收入 ${state.businessIncome}。` : `你已經把錢和壓力投進自己的生意了，今日被動收入 ${state.businessIncome}。`,
+      description:
+        state.businessLevel > 1
+          ? `你的生意已經開始擴張，今日被動收入 ${state.businessIncome}。`
+          : `你已經把錢和壓力投進自己的生意了，今日被動收入 ${state.businessIncome}。`,
     });
   }
 
@@ -1414,7 +1526,7 @@ export const getStatusMeta = (state) => {
       label: `案子進行中（剩 ${p.daysLeft} 天）`,
       compactLabel: "跑案中",
       icon: "briefcase",
-      description: `你正在跑一個案子，還有 ${p.daysLeft} 天，完工後收款 $${p.totalIncome}。每天自動吃掉一格時段。`,
+      description: `你正在跑一個案子，還有 ${p.daysLeft} 天，完工後收款 $${p.totalIncome}。每天開始都會先扣一筆體力。`,
     });
   }
 
@@ -1422,9 +1534,13 @@ export const getStatusMeta = (state) => {
     rentCountdown,
     phaseLabel: phaseCopy[state.phase],
     currentJob: getJob(state),
-    slotSummary: `${state.dayPlan.remainingSlots} / ${state.dayPlan.totalSlots} 格`,
-    slotCaption: slotRule.caption,
-    canEndDay: state.phase === PHASES.READY && state.dayPlan.actionsTaken.length > 0,
+    actionSummary: `今天已做 ${state.dayPlan.totalActions} 件事`,
+    sleepRecoveryPreview: `睡醒預估：體力 +${recovery.energy} / 壓力 ${recovery.stress}`,
+    repeatWarning:
+      state.dayPlan.lastRepeatPenalty?.repeatIndex > 1
+        ? `再做同一件會更累、賺更少、風險更高。上次是第 ${state.dayPlan.lastRepeatPenalty.repeatIndex} 次。`
+        : "",
+    canSleep: state.phase === PHASES.READY,
     activeConditions,
     character: state.character,
   };
@@ -1455,14 +1571,20 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
     return nextState;
   }
 
-  const action = ACTIONS[actionId];
+  const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
+  const adjustedEffects = applyRepeatPenaltyToEffects(selected.effects, repeatPenalty);
+  if (!canSurviveEffects(nextState, adjustedEffects)) {
+    return nextState;
+  }
+
   beginTurnLogIfNeeded(nextState);
   nextState.turnLog.actionId = actionId;
   pushLine(nextState, `你今天選了「${selected.label}」。`);
-  nextState.dayPlan.remainingSlots -= action.slotCost;
-  nextState.dayPlan.actionsTaken.push(action.id);
-  noteRecentAction(nextState, action.id);
-  appendResolution(nextState, { effects: selected.effects });
+  recordUserAction(nextState, actionId, repeatPenalty);
+  appendResolution(nextState, { effects: adjustedEffects });
+  if (repeatPenalty.repeatIndex > 1) {
+    pushLine(nextState, `同樣的安排今天已經做過，這次的代價更直接，效果也開始打折。`);
+  }
   nextState.pendingActionChoice = null;
 
   const failure = detectFailure(nextState);
@@ -1472,7 +1594,7 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
     return nextState;
   }
 
-  return maybeTriggerEventOrContinue(nextState, rng);
+  return maybeTriggerEventOrContinue(nextState, rng, repeatPenalty);
 };
 
 export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
@@ -1502,8 +1624,8 @@ export const dispatchStartupDecision = (state, optionId, rng = Math.random) => {
     return nextState;
   }
 
-  const event = STARTUP_FIXED_EVENTS.find((e) => e.id === nextState.pendingStartupDecision.id);
-  const option = event?.options.find((o) => o.id === optionId);
+  const event = STARTUP_FIXED_EVENTS.find((entry) => entry.id === nextState.pendingStartupDecision.id);
+  const option = event?.options.find((entry) => entry.id === optionId);
   if (!option) {
     return nextState;
   }
@@ -1521,7 +1643,7 @@ export const dispatchStartupDecision = (state, optionId, rng = Math.random) => {
   return continueAfterStartupDecision(nextState, rng);
 };
 
-export const dispatchStockTrade = (state, stockId, side, quantity = 1, rng = Math.random) => {
+export const dispatchStockTrade = (state, stockId, side, quantity = 1, _rng = Math.random) => {
   const nextState = cloneState(state);
   if (nextState.phase !== PHASES.READY) {
     return nextState;

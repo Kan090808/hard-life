@@ -287,7 +287,7 @@ export const EVENTS = [
     category: "生活事件",
     title: "朋友約你吃飯",
     description: "朋友說很久沒見了，問你今晚要不要出來聊聊近況。",
-    condition: (state) => state.dayPlan.remainingSlots > 0,
+    condition: (state) => state.phase === "ready-for-action",
     options: [
       {
         id: "go",
@@ -409,7 +409,7 @@ export const EVENTS = [
     category: "生活事件",
     title: "好想犒賞自己一下",
     description: "壓力太久了，心裡有個聲音一直說：就這一次，讓自己喘一下。",
-    condition: (state) => state.mood <= 40 && state.stress >= 60 && state.dayPlan.remainingSlots > 0,
+    condition: (state) => state.mood <= 40 && state.stress >= 60 && state.phase === "ready-for-action",
     options: [
       {
         id: "splurge",

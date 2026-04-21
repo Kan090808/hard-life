@@ -93,13 +93,13 @@ const elements = {
   jobLabel: document.querySelector("#job-label"),
   rentStrikes: document.querySelector("#rent-strikes"),
   phaseLabel: document.querySelector("#phase-label"),
-  slotSummary: document.querySelector("#slot-summary"),
-  slotCaption: document.querySelector("#slot-caption"),
+  actionSummary: document.querySelector("#action-summary"),
+  sleepRecoveryPreview: document.querySelector("#sleep-recovery-preview"),
   conditionStrip: document.querySelector("#condition-strip"),
   goalTitle: document.querySelector("#goal-title"),
   goalCopy: document.querySelector("#goal-copy"),
   takeActionButton: document.querySelector("#take-action-button"),
-  endDayButton: document.querySelector("#end-day-button"),
+  sleepButton: document.querySelector("#sleep-button"),
   resetButton: document.querySelector("#reset-button"),
   introDialog: document.querySelector("#intro-dialog"),
   introStats: document.querySelector("#intro-stats"),
@@ -160,19 +160,19 @@ if (elements.versionBadge) {
 }
 
 const ACTION_FLAVOR = {
-  work: { subtitle: "半天穩定進帳", risk: "1 格・中", tone: "steady" },
-  resign: { subtitle: "把班表停掉", risk: "1 格・轉向", tone: "recover" },
-  overtime: { subtitle: "拿命補現金流", risk: "2 格・重", tone: "danger" },
-  rest: { subtitle: "先把自己修回來", risk: "1 格・輕", tone: "recover" },
-  study: { subtitle: "今天投資明天", risk: "1 格・輕", tone: "growth" },
-  jobSearch: { subtitle: "把希望投出去", risk: "2 格・重", tone: "growth" },
-  reward: { subtitle: "花錢止痛一下", risk: "1 格・輕", tone: "recover" },
-  lifeAdmin: { subtitle: "處理現實問題", risk: "1 格・輕", tone: "recover" },
-  network: { subtitle: "換機會，不保證立刻有錢", risk: "1 格・輕", tone: "growth" },
-  venture: { subtitle: "把自己的生意押下去", risk: "1 格・重", tone: "growth" },
-  stockTrade: { subtitle: "今天先看盤", risk: "0 格・波動", tone: "steady" },
-  attendanceWork: { subtitle: "固定班先上掉", risk: "1 格・固定", tone: "steady" },
-  attendanceLeave: { subtitle: "今天先請假", risk: "1 格・代價", tone: "recover" },
+  work: { subtitle: "臨時工換現金", risk: "耗體中", tone: "steady" },
+  resign: { subtitle: "把班表停掉", risk: "轉向", tone: "recover" },
+  overtime: { subtitle: "拿命補現金流", risk: "耗體重", tone: "danger" },
+  study: { subtitle: "今天投資明天", risk: "耗體輕", tone: "growth" },
+  jobSearch: { subtitle: "把希望投出去", risk: "耗體重", tone: "growth" },
+  reward: { subtitle: "花錢止痛一下", risk: "回穩", tone: "recover" },
+  lifeAdmin: { subtitle: "處理現實問題", risk: "修問題", tone: "recover" },
+  network: { subtitle: "換機會，不保證立刻有錢", risk: "鋪路", tone: "growth" },
+  venture: { subtitle: "把自己的生意押下去", risk: "高壓", tone: "growth" },
+  stockTrade: { subtitle: "今天先看盤", risk: "波動", tone: "steady" },
+  attendanceWork: { subtitle: "固定班先扛掉", risk: "日常消耗", tone: "steady" },
+  attendanceLeave: { subtitle: "今天先請假", risk: "代價", tone: "recover" },
+  sleep: { subtitle: "今天收工睡覺", risk: "跨日", tone: "recover" },
 };
 
 const DELTA_LINE_PATTERN = /^(金錢|體力|心情|壓力|技能) ([+-].+)$/;
@@ -281,8 +281,10 @@ const isRenderableState = (candidate) => {
     ["intelligence", "physique", "luck", "wealth"].every((key) => Number.isFinite(candidate.character[key]));
   const hasDayPlan =
     candidate.dayPlan &&
-    Number.isFinite(candidate.dayPlan.remainingSlots) &&
-    Number.isFinite(candidate.dayPlan.totalSlots) &&
+    Number.isFinite(candidate.dayPlan.startingEnergy) &&
+    Number.isFinite(candidate.dayPlan.totalActions) &&
+    candidate.dayPlan.actionCounts &&
+    typeof candidate.dayPlan.actionCounts === "object" &&
     Array.isArray(candidate.dayPlan.actionsTaken);
   const hasCoreStats = ["day", "money", "energy", "mood", "stress", "skill", "jobLevel"].every((key) => Number.isFinite(candidate[key]));
 
@@ -303,6 +305,10 @@ const normalizeSavedState = (savedState) => {
       ...baseline.dayPlan,
       ...(savedState.dayPlan ?? {}),
       actionsTaken: Array.isArray(savedState.dayPlan?.actionsTaken) ? [...savedState.dayPlan.actionsTaken] : [...baseline.dayPlan.actionsTaken],
+      actionCounts:
+        savedState.dayPlan?.actionCounts && typeof savedState.dayPlan.actionCounts === "object"
+          ? { ...savedState.dayPlan.actionCounts }
+          : { ...baseline.dayPlan.actionCounts },
     },
     conditions: { ...baseline.conditions, ...(savedState.conditions ?? {}) },
     history: { ...baseline.history, ...(savedState.history ?? {}) },
@@ -727,8 +733,11 @@ const getDangerLine = () => {
   if (state.conditions.scooterBroken) {
     return "機車還沒修，所有要出門的安排都會更痛。";
   }
-  if (state.dayPlan.remainingSlots < state.dayPlan.totalSlots) {
-    return "今天已經開始動了，還要不要再塞第二件事，自己決定。";
+  if (state.dayPlan.lastRepeatPenalty?.repeatIndex > 1) {
+    return "同一件事今天做太多次，接下來只會更累、賺更少，也更容易出事。";
+  }
+  if (state.dayPlan.totalActions > 0) {
+    return "今天已經開始動了，還要不要再往下硬撐，自己決定。";
   }
   return "先看房租、體力和壓力，再決定今天要把哪裡拿去換。";
 };
@@ -755,10 +764,10 @@ const getGoalHint = () => {
     };
   }
 
-  if (state.dayPlan.remainingSlots === 1 && state.dayPlan.totalSlots === 2) {
+  if (state.dayPlan.lastRepeatPenalty?.repeatIndex > 1) {
     return {
-      title: "今天還能再放一格",
-      copy: "如果體力和壓力還撐得住，現在可以補休息、學習或處理雜事。",
+      title: "今天別再硬刷同一件事",
+      copy: "同一招今天再做只會越來越虧，現在換個方向或乾脆睡覺通常更合理。",
     };
   }
 
@@ -769,19 +778,11 @@ const getGoalHint = () => {
 };
 
 const getActionPreview = (action) => {
-  const preview = [action.slotLabel];
+  const preview = [action.energyPreview, action.repeatPenaltyPreview];
   const effects = { ...action.effects };
 
-  if (action.id === "rest") {
-    const physique = state.character.physique;
-    const restEnergy = 18 + physique * 2;
-    const restStress = 12 + physique;
-    preview.push(`體力 +${restEnergy}`, "心情 +10", `壓力 -${restStress}`, "體能越高，休息回得越多");
-    return preview;
-  }
-
   if (action.id === "resign") {
-    preview.push("工作狀態 → 待業中", "時間壓力解除", "現金流變差");
+    preview.push("工作狀態 → 待業中", "明天起不再先被上班問題堵住");
     return preview;
   }
 
@@ -834,18 +835,18 @@ const getActionPreview = (action) => {
 
 const getPlanningNote = () => {
   const meta = getStatusMeta(state);
-  if (meta.canEndDay) {
-    return "你可以繼續安排今天，也可以在行動面板裡直接結束今天。";
+  if (meta.repeatWarning) {
+    return meta.repeatWarning;
   }
-  if (state.dayPlan.remainingSlots === state.dayPlan.totalSlots) {
-    return "今天通常能安排一到兩件事，但愈重的行動愈會吃掉你整天。";
+  if (state.dayPlan.totalActions === 0) {
+    return "今天能做多少事只看體力，不想再硬撐就直接睡覺。";
   }
-  return "今天的空間已經縮小了，接下來的每一格都很貴。";
+  return "今天已經開始動了，接下來每一件事都在問你還值不值得。";
 };
 
 const getActionContextHint = (action) => {
   if (action.id === "resign") {
-    return "離職後明天開始不再被固定班表吃掉一格。";
+    return "離職後明天開始不再被固定工作打斷日初流程。";
   }
   if (action.id === "jobSearch") {
     return `目前翻身機率 ${action.tag}。`;
@@ -874,7 +875,7 @@ const getResultButtonCopy = () => {
   if (state.ending) {
     return "看完了";
   }
-  if (state.phase === "ready-for-action" && state.dayPlan.remainingSlots > 0) {
+  if (state.phase === "ready-for-action") {
     return "回主畫面，繼續安排今天";
   }
   return "知道了，回主畫面";
@@ -958,10 +959,10 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
   elements.jobLabel.textContent = meta.currentJob.name;
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
-  elements.slotSummary.textContent = meta.slotSummary;
-  elements.slotCaption.textContent = meta.slotCaption;
+  elements.actionSummary.textContent = meta.actionSummary;
+  elements.sleepRecoveryPreview.textContent = meta.sleepRecoveryPreview;
   elements.goalTitle.textContent = goalHint.title;
-  elements.goalCopy.textContent = goalHint.copy;
+  elements.goalCopy.textContent = meta.repeatWarning || goalHint.copy;
   elements.statusPanel.classList.toggle("details-expanded", uiState.detailsExpanded);
   elements.detailsToggle.setAttribute("aria-expanded", String(uiState.detailsExpanded));
   elements.detailsToggle.querySelector(".toggle-text").textContent = uiState.detailsExpanded ? "收起" : "詳情";
@@ -979,11 +980,9 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
 
 const renderMainButtons = () => {
   const disabled = hasBlockingDialog() || state.phase !== "ready-for-action";
-  const slotsEmpty = state.dayPlan.remainingSlots === 0;
-  elements.takeActionButton.disabled = disabled || slotsEmpty;
-  elements.takeActionButton.textContent =
-    state.dayPlan.remainingSlots === state.dayPlan.totalSlots ? "安排今天" : "繼續安排今天";
-  elements.endDayButton.disabled = disabled;
+  elements.takeActionButton.disabled = disabled;
+  elements.takeActionButton.textContent = state.dayPlan.totalActions === 0 ? "採取行動" : "繼續做事";
+  elements.sleepButton.disabled = disabled;
   elements.resetButton.disabled = isMode("intro");
   elements.soundToggle.textContent = uiState.audioEnabled ? AUDIO_COPY.on : AUDIO_COPY.off;
   elements.soundToggle.setAttribute("aria-pressed", String(uiState.audioEnabled));
@@ -1039,8 +1038,8 @@ const handleActionDialogClick = (event) => {
     return;
   }
 
-  if (role === "end-day") {
-    handleActionChoice("endDay");
+  if (role === "sleep") {
+    handleActionChoice("sleep");
     return;
   }
 
@@ -1173,7 +1172,7 @@ const renderActionSelection = () => {
   const meta = getStatusMeta(state);
   elements.actionDialogKicker.textContent = "回合選單";
   elements.actionDialogTitle.textContent = "今天還要安排什麼";
-  elements.actionDialogCopy.textContent = `剩下 ${meta.slotSummary}`;
+  elements.actionDialogCopy.textContent = `${meta.actionSummary} · ${meta.sleepRecoveryPreview}`;
   elements.actionDialogBody.innerHTML = "";
   elements.actionDialogActions.innerHTML = "";
 
@@ -1280,8 +1279,8 @@ const renderActionResult = () => {
   elements.actionDialogKicker.textContent = state.dayPlan.actionsTaken.length > 0 ? "今天目前進度" : "回合結果";
   elements.actionDialogTitle.textContent = "今天被你安排成這樣";
   elements.actionDialogCopy.textContent =
-    state.phase === "ready-for-action" && state.dayPlan.remainingSlots > 0
-      ? "今天還沒真的結束，你可以回主畫面繼續安排下一格。"
+    state.phase === "ready-for-action"
+      ? "今天還沒真的結束，你可以回主畫面繼續做事，或直接睡覺結算。"
       : "今天的安排已經結束，代價和結果都留下來了。";
   elements.actionDialogBody.innerHTML = `
     <section class="settlement-card ${getResultTone(latest)}">
@@ -1960,13 +1959,13 @@ assertRequiredElements(
   "jobLabel",
   "rentStrikes",
   "phaseLabel",
-  "slotSummary",
-  "slotCaption",
+  "actionSummary",
+  "sleepRecoveryPreview",
   "conditionStrip",
   "goalTitle",
   "goalCopy",
   "takeActionButton",
-  "endDayButton",
+  "sleepButton",
   "resetButton",
   "introDialog",
   "introStats",
@@ -2062,9 +2061,9 @@ bindClick(elements.takeActionButton, () => {
   render();
 });
 
-bindClick(elements.endDayButton, () => {
+bindClick(elements.sleepButton, () => {
   playClickSfx();
-  handleActionChoice("endDay");
+  handleActionChoice("sleep");
 });
 
 bindClick(elements.resetButton, () => {

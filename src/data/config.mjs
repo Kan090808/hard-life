@@ -183,7 +183,6 @@ export const TOTAL_DAYS = 30;
 export const DAILY_LIVING_COST = 280;
 export const RENT_AMOUNT = 4000;
 export const RENT_DAYS = [7, 14, 21, 28];
-export const EVENT_TRIGGER_RATE = 0.4;
 export const MAX_LOG_ENTRIES = 8;
 
 export const STAT_BOUNDS = {
@@ -192,33 +191,6 @@ export const STAT_BOUNDS = {
   stress: { min: 0, max: 100 },
   skill: { min: 0, max: 100 },
 };
-
-export const DAY_SLOT_RULES = [
-  {
-    id: "high",
-    minEnergy: 70,
-    totalSlots: 2,
-    maxHeavyActions: 2,
-    slotLabel: "2 格，自由安排",
-    caption: "今天還有兩格時間，重行動也扛得住。",
-  },
-  {
-    id: "mid",
-    minEnergy: 40,
-    totalSlots: 2,
-    maxHeavyActions: 1,
-    slotLabel: "2 格，但只能扛 1 次重行動",
-    caption: "今天還有兩格，但只能再扛一次重行動。",
-  },
-  {
-    id: "low",
-    minEnergy: 0,
-    totalSlots: 1,
-    maxHeavyActions: 0,
-    slotLabel: "只剩 1 格",
-    caption: "今天只剩一格力氣，先別再硬來。",
-  },
-];
 
 export const CONDITION_CONFIG = {
   scooterBroken: {
@@ -284,14 +256,14 @@ export const DEFAULT_CONDITIONS = {
 
 export const DEFAULT_HISTORY = {
   consecutiveHeavyDays: 0,
-  daysSinceRest: 0,
+  daysSinceFullSleep: 0,
   recentActions: [],
   lastDayActions: [],
 };
 
 export const GAME_COPY = {
   title: "打工人生：月底前活下去",
-  subtitle: "每天安排一到兩件事，在月底前撐住現金、體力與心情。",
+  subtitle: "一天能做多少事只看你還剩多少體力，在月底前撐住現金、體力與心情。",
 };
 
 export const CHARACTER_STAT_DISPLAY = [
@@ -318,7 +290,7 @@ export const JOBS = {
     name: "穩定兼職",
     workIncome: 700,
     overtimeIncome: 300,
-    tagline: "每天都要進班，時間開始被固定吃掉。",
+    tagline: "每天睡醒都要決定要不要去上班，穩定但很耗人。",
     badge: "Lv.2 穩定兼職",
     mark: "兼職工牌",
     requiresAttendance: true,
@@ -341,7 +313,7 @@ export const JOBS = {
     name: "正職新人",
     workIncome: 980,
     overtimeIncome: 420,
-    tagline: "收入提高了，但每天先被公司拿走一格。",
+    tagline: "收入提高了，但每天睡醒先得決定還要不要去撐那班。",
     badge: "Lv.3 正職新人",
     mark: "識別證",
     requiresAttendance: true,
@@ -377,7 +349,6 @@ export const ACTIONS = {
     label: "去打工",
     tag: "隨機工作",
     description: "今天去接一份臨時工作，報酬和體力消耗看你接到哪一種。",
-    slotCost: 1,
     intensity: "medium",
     category: "job",
     special: "workChoice",
@@ -386,8 +357,7 @@ export const ACTIONS = {
     id: "resign",
     label: "離職",
     tag: "退出工作",
-    description: "直接把目前這份固定工作停掉，拿回之後每天被班表吃掉的那一格時間。",
-    slotCost: 1,
+    description: "直接把目前這份固定工作停掉，之後不再每天睡醒先面對上班抉擇。",
     intensity: "light",
     category: "recovery",
     special: "resign",
@@ -397,7 +367,6 @@ export const ACTIONS = {
     label: "加班",
     tag: "班後再扛一段",
     description: "固定班之外再多賣一段時間，錢更多，代價也更直接。",
-    slotCost: 1,
     intensity: "heavy",
     category: "job",
     effects: {
@@ -408,28 +377,11 @@ export const ACTIONS = {
     incomeKey: "overtimeIncome",
     disabledReason: "你現在沒有能自由選的加班班表。",
   },
-  rest: {
-    id: "rest",
-    label: "休息",
-    tag: "修復自己",
-    description: "留一格給休息，今天少賺，但明天比較像個人。",
-    slotCost: 1,
-    intensity: "light",
-    category: "recovery",
-    special: "rest",
-    effects: {
-      money: -150,
-      energy: 28,
-      mood: 10,
-      stress: -15,
-    },
-  },
   study: {
     id: "study",
     label: "學技能",
     tag: "長期投資",
-    description: "花一格時間和一點錢，把未來往前推。技能越高，課程費越貴。",
-    slotCost: 1,
+    description: "花時間和一點錢，把未來往前推。技能越高，課程費越貴。",
     intensity: "light",
     category: "growth",
     special: "study",
@@ -445,8 +397,7 @@ export const ACTIONS = {
     id: "jobSearch",
     label: "找新工作",
     tag: "試著翻身",
-    description: "全天整理履歷、投遞、面試，賭一次階級往上。",
-    slotCost: 2,
+    description: "整理履歷、投遞、面試，賭一次階級往上。",
     intensity: "heavy",
     category: "growth",
     special: "jobSearch",
@@ -456,7 +407,6 @@ export const ACTIONS = {
     label: "犒賞自己",
     tag: "花錢止痛",
     description: "今天花點錢安撫自己，但花多少、回多少狀態，要看你選哪一種。",
-    slotCost: 1,
     intensity: "light",
     category: "recovery",
     special: "rewardChoice",
@@ -466,7 +416,6 @@ export const ACTIONS = {
     label: "處理雜事",
     tag: "修問題",
     description: "修車、處理設備、安撫房東或跑補助，今天很現實。",
-    slotCost: 1,
     intensity: "light",
     category: "utility",
     special: "lifeAdmin",
@@ -476,7 +425,6 @@ export const ACTIONS = {
     label: "社交拜訪",
     tag: "累積機會",
     description: "見朋友、跑聚會、維持關係，短期不一定賺錢，但可能帶來門路。",
-    slotCost: 1,
     intensity: "light",
     category: "social",
     special: "network",
@@ -486,7 +434,6 @@ export const ACTIONS = {
     label: "創業",
     tag: "開公司",
     description: "把錢和判斷力壓進自己的事業，之後每天都會回報你。",
-    slotCost: 1,
     intensity: "heavy",
     category: "growth",
     special: "venture",
@@ -496,7 +443,6 @@ export const ACTIONS = {
     label: "股票市場",
     tag: "隨時可進場",
     description: "查看今天 5 檔股票的價格，可多次買賣、每次自訂股數。",
-    slotCost: 0,
     intensity: "light",
     category: "income",
     special: "stockTrade",

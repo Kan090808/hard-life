@@ -128,8 +128,8 @@
               <div class="meta-pill"><span>工作</span><strong id="job-label">便利商店打工</strong></div>
               <div class="meta-pill"><span>欠租</span><strong id="rent-strikes">0 次</strong></div>
               <div class="meta-pill"><span>狀態</span><strong id="phase-label">準備選擇今天要做什麼</strong></div>
-              <div class="meta-pill"><span>今日時段</span><strong id="slot-summary">2 / 2 格</strong></div>
-              <div class="meta-pill wide"><span>安排限制</span><strong id="slot-caption">今天還有兩格時間可以安排。</strong></div>
+              <div class="meta-pill"><span>今日進度</span><strong id="action-summary">今天已做 0 件事</strong></div>
+              <div class="meta-pill wide"><span>睡醒預估</span><strong id="sleep-recovery-preview">體力 +26 / 壓力 -7</strong></div>
             </div>
           </div>
         </section>
@@ -142,7 +142,7 @@
           </article>
           <div class="control-buttons">
             <button class="control-button primary-control" id="take-action-button" type="button">採取行動</button>
-            <button class="control-button secondary-control" id="end-day-button" type="button">今天先到這裡</button>
+            <button class="control-button secondary-control" id="sleep-button" type="button">睡覺</button>
             <button class="control-button danger-control" id="reset-button" type="button">放棄人生吧</button>
           </div>
           <div class="utility-row">
@@ -172,7 +172,7 @@
           </div>
         </div>
         <p class="dialog-copy" id="intro-copy">
-          《打工人生：月底前活下去》是一款 30 天生存決策遊戲。每天通常能安排一到兩件事，但體力、房租與突發事件會讓你的時間一下就不夠用。
+          《打工人生：月底前活下去》是一款 30 天生存決策遊戲。一天能做多少事只看你還剩多少體力，但房租、工作與突發事件會讓你很快想睡也睡不安穩。
         </p>
         <p class="boot-status" id="boot-status" hidden aria-live="polite"></p>
         <div class="intro-stats" id="intro-stats">
@@ -196,7 +196,7 @@
           </div>
           <div class="intro-point">
             <span>提醒</span>
-            <strong>休息不是浪費，學技能不是立刻有錢。</strong>
+            <strong>睡覺會回體力，但硬刷同一件事只會越做越虧。</strong>
           </div>
         </div>
         <div class="dialog-actions">

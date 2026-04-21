@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createInitialState, detectFailure, dispatchAction, dispatchEventChoice, evaluateEnding } from "../src/game.mjs";
+import { createInitialState, detectFailure, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, evaluateEnding } from "../src/game.mjs";
 
 const sequence = (...values) => {
   let index = 0;
@@ -10,96 +10,189 @@ const sequence = (...values) => {
   };
 };
 
-const session = createInitialState();
+const resetDayPlan = (energy) => ({
+  startingEnergy: energy,
+  actionsTaken: [],
+  actionCounts: {},
+  totalActions: 0,
+  lastRepeatActionId: null,
+  lastRepeatIndex: 0,
+  lastRepeatPenalty: null,
+});
+
+const createStableState = () => {
+  const state = createInitialState(sequence(0.42));
+  state.day = 1;
+  state.totalDays = 30;
+  state.money = 3500;
+  state.energy = 80;
+  state.mood = 60;
+  state.stress = 20;
+  state.skill = 0;
+  state.jobLevel = 1;
+  state.businessLevel = 0;
+  state.businessIncome = 0;
+  state.unpaidRentCount = 0;
+  state.character = { intelligence: 3, physique: 3, luck: 3, wealth: 3 };
+  state.conditions = {
+    scooterBroken: false,
+    computerBroken: false,
+    burnoutRisk: false,
+    hasFreelanceContact: false,
+    landlordAngry: false,
+    clientLead: false,
+  };
+  state.history = {
+    consecutiveHeavyDays: 0,
+    daysSinceFullSleep: 0,
+    recentActions: [],
+    lastDayActions: [],
+  };
+  state.phase = "ready-for-action";
+  state.pendingAttendance = null;
+  state.pendingStartupDecision = null;
+  state.pendingActionChoice = null;
+  state.pendingEvent = null;
+  state.ending = null;
+  state.stockNews = [];
+  state.activityLog = [];
+  state.unlockedMilestones = [];
+  state.latestAchievements = [];
+  state.turnLog = null;
+  state.dailyWorkOptions = [
+    { id: "flyer", label: "發傳單", effects: { money: 500, energy: -12, mood: -2, stress: 4 } },
+    { id: "dishwash", label: "洗碗支援", effects: { money: 650, energy: -20, mood: -6, stress: 7 } },
+    { id: "tutor", label: "家教代班", effects: { money: 700, energy: -10, mood: 2, stress: 5 } },
+  ];
+  state.dailyRewardOptions = [
+    { id: "snack", label: "買點好吃的", effects: { money: -150, mood: 10, stress: -5 } },
+    { id: "movie", label: "看場電影", effects: { money: -350, mood: 18, stress: -10 } },
+    { id: "cafeday", label: "咖啡廳耍廢", effects: { money: -220, mood: 14, stress: -7 } },
+  ];
+  state.dailyFreelanceOffer = null;
+  state.activeCaseProject = null;
+  state.dayPlan = resetDayPlan(state.energy);
+  return state;
+};
+
+const session = createStableState();
 assert.equal(session.day, 1);
-assert.equal(session.money, 3000);
+assert.equal(session.money, 3500);
 assert.equal(session.energy, 80);
-assert.equal(session.dayPlan.totalSlots, 2);
-assert.equal(session.dayPlan.remainingSlots, 2);
+assert.equal(session.dayPlan.totalActions, 0);
+assert.equal("totalSlots" in session.dayPlan, false);
 assert.equal(session.conditions.scooterBroken, false);
 
-const halfDay = dispatchAction(createInitialState(), "study", sequence(0.99));
-assert.equal(halfDay.day, 1);
-assert.equal(halfDay.phase, "ready-for-action");
-assert.equal(halfDay.dayPlan.remainingSlots, 1);
-assert.equal(halfDay.money, 2650);
-assert.equal(halfDay.skill, 10);
+const firstStudy = dispatchAction(createStableState(), "study", sequence(0.99));
+assert.equal(firstStudy.day, 1);
+assert.equal(firstStudy.phase, "ready-for-action");
+assert.equal(firstStudy.dayPlan.totalActions, 1);
+assert.equal(firstStudy.dayPlan.actionCounts.study, 1);
+assert.equal(firstStudy.energy, 66);
+assert.equal(firstStudy.money, 3100);
+assert.equal(firstStudy.skill, 10);
 
-const endDay = dispatchAction(halfDay, "endDay", sequence(0.99));
-assert.equal(endDay.day, 2);
-assert.equal(endDay.money, 2500);
-assert.equal(endDay.dayPlan.totalSlots, 2);
+const repeatedStudy = dispatchAction(firstStudy, "study", sequence(0.99));
+assert.equal(repeatedStudy.phase, "ready-for-action");
+assert.equal(repeatedStudy.dayPlan.actionCounts.study, 2);
+assert.equal(repeatedStudy.energy, 46);
+assert.equal(repeatedStudy.money, 2620);
+assert.equal(repeatedStudy.skill, 19);
+assert.equal(repeatedStudy.dayPlan.lastRepeatPenalty.repeatIndex, 2);
 
-const workThenCommit = dispatchAction(createInitialState(), "work", sequence(0.99));
-assert.equal(workThenCommit.day, 1);
-assert.equal(workThenCommit.phase, "ready-for-action");
-assert.equal(workThenCommit.dayPlan.remainingSlots, 1);
-assert.equal(workThenCommit.money, 3800);
-assert.equal(workThenCommit.energy, 55);
+const eventRiskState = createStableState();
+eventRiskState.day = 2;
+const eventStudy1 = dispatchAction(eventRiskState, "study", sequence(0.25));
+const eventStudy2 = dispatchAction(eventStudy1, "study", sequence(0.25, 0.0));
+assert.equal(eventStudy2.phase, "resolving-event");
 
-const resignationState = createInitialState();
-resignationState.jobLevel = 2;
-resignationState.phase = "ready-for-action";
-resignationState.pendingAttendance = null;
-resignationState.dayPlan.totalSlots = 2;
-resignationState.dayPlan.remainingSlots = 2;
-resignationState.dayPlan.actionsTaken = [];
-resignationState.turnLog = null;
-const resigned = dispatchAction(resignationState, "resign", sequence(0.99));
-assert.equal(resigned.pendingActionChoice, null);
-assert.equal(resigned.jobLevel, 1);
-assert.equal(resigned.dayPlan.remainingSlots, 1);
-assert.equal(resigned.phase, "ready-for-action");
+const slept = dispatchAction(firstStudy, "sleep", sequence(0.99));
+assert.equal(slept.day, 2);
+assert.equal(slept.phase, "ready-for-action");
+assert.equal(slept.energy, 92);
+assert.equal(slept.stress, 18);
+assert.equal(slept.dayPlan.totalActions, 0);
 
-const workDayDone = dispatchAction(workThenCommit, "endDay", sequence(0.99));
-assert.equal(workDayDone.day, 2);
-assert.equal(workDayDone.money, 3650);
-
-const rentPressure = createInitialState();
+const rentPressure = createStableState();
 rentPressure.day = 7;
 rentPressure.money = 100;
-const rentResult = dispatchAction(rentPressure, "rest", sequence(0.99));
-const rentCommitted = dispatchAction(rentResult, "endDay", sequence(0.99));
+const rentCommitted = dispatchAction(rentPressure, "sleep", sequence(0.99));
 assert.equal(rentCommitted.unpaidRentCount, 1);
 assert.equal(rentCommitted.conditions.landlordAngry, true);
 assert.equal(rentCommitted.day, 8);
 
-const careerJump = createInitialState();
+const careerJump = createStableState();
 careerJump.day = 10;
 careerJump.skill = 64;
 careerJump.money = 6000;
-const jobResult = dispatchAction(careerJump, "jobSearch", sequence(0.01, 0.99));
+const jobResult = dispatchAction(careerJump, "jobSearch", sequence(0.01));
 assert.equal(jobResult.jobLevel, 3);
-assert.equal(jobResult.day, 11);
+assert.equal(jobResult.day, 10);
 
-const contactState = dispatchAction(createInitialState(), "network", sequence(0.5, 0.99));
-assert.equal(contactState.conditions.hasFreelanceContact, true);
-assert.equal(contactState.dayPlan.remainingSlots, 1);
+const workChoice = dispatchAction(createStableState(), "work", sequence(0.99));
+assert.equal(workChoice.phase, "action-choice");
+const workResolved = dispatchActionChoice(workChoice, "flyer", sequence(0.99));
+assert.equal(workResolved.dayPlan.actionCounts.work, 1);
+assert.equal(workResolved.money, 4000);
 
-const scooterEvent = dispatchAction(createInitialState(), "work", sequence(0.1, 0.0));
-assert.equal(scooterEvent.phase, "resolving-event");
-assert.equal(scooterEvent.pendingEvent.id, "scooter-breakdown");
-const scooterDelayed = dispatchEventChoice(scooterEvent, "delay-repair", sequence(0.99));
-assert.equal(scooterDelayed.conditions.scooterBroken, true);
-assert.equal(scooterDelayed.day, 1);
-const scooterCommitted = dispatchAction(scooterDelayed, "endDay", sequence(0.99));
-assert.equal(scooterCommitted.day, 2);
+const fixedJobState = createStableState();
+fixedJobState.jobLevel = 2;
+const fixedJobSlept = dispatchAction(fixedJobState, "sleep", sequence(0.99));
+assert.equal(fixedJobSlept.phase, "attendance-decision");
+assert.equal(fixedJobSlept.pendingAttendance.title.includes("穩定兼職"), true);
 
-const repaired = dispatchAction(scooterCommitted, "lifeAdmin", sequence(0.99));
-assert.equal(repaired.conditions.scooterBroken, false);
-assert.equal(repaired.phase, "ready-for-action");
+const caseState = createStableState();
+caseState.day = 5;
+caseState.activeCaseProject = { totalIncome: 900, daysLeft: 1, energyCostPerDay: 12 };
+const caseAfterSleep = dispatchAction(caseState, "sleep", sequence(0.99));
+assert.equal(caseAfterSleep.phase, "ready-for-action");
+assert.equal(caseAfterSleep.activeCaseProject, null);
+assert.equal(caseAfterSleep.energy, 88);
+assert.equal(caseAfterSleep.money, 4071);
 
-const debtFailure = createInitialState();
+const collapseState = createStableState();
+collapseState.phase = "attendance-decision";
+collapseState.pendingAttendance = {
+  title: "測試",
+  description: "",
+  options: [
+    { id: "work", text: "去上班", caption: "" },
+    { id: "leave", text: "今天請假", caption: "" },
+  ],
+};
+collapseState.jobLevel = 2;
+collapseState.energy = 18;
+const collapseResult = dispatchAttendanceChoice(collapseState, "work", sequence(0.99));
+assert.equal(collapseResult.phase, "game-over");
+assert.equal(collapseResult.ending.id, "collapse");
+
+const debtFailure = createStableState();
 debtFailure.money = -3200;
 assert.equal(detectFailure(debtFailure)?.id, "debt");
 
-const endingState = createInitialState();
+const endingState = createStableState();
 endingState.day = 30;
-endingState.money = 32000;
+endingState.money = 42000;
 endingState.skill = 85;
 endingState.stress = 40;
 assert.equal(evaluateEnding(endingState).id, "free-life");
 
+const attendanceState = createStableState();
+attendanceState.phase = "attendance-decision";
+attendanceState.pendingAttendance = {
+  title: "測試",
+  description: "",
+  options: [
+    { id: "work", text: "去上班", caption: "" },
+    { id: "leave", text: "今天請假", caption: "" },
+  ],
+};
+attendanceState.jobLevel = 2;
+const attended = dispatchAttendanceChoice(attendanceState, "work", sequence(0.99));
+assert.equal(attended.phase, "ready-for-action");
+assert.equal(attended.money, 4200);
+assert.equal(attended.energy, 62);
+
 console.log(
-  "Verification passed: slot planning, end-day commit, rent pressure, job progression, persistent conditions, event resolution, and ending rules behave as expected."
+  "Verification passed: pure-energy days, sleep recovery, repeat-action penalties, attendance gating, case-work auto drain, rent pressure, and ending rules behave as expected."
 );

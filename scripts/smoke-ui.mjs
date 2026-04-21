@@ -145,11 +145,11 @@ const runStartFlowSmoke = async (page) => {
 const runDirectActionSmoke = async (page) => {
   const takeActionButton = page.locator("#take-action-button");
   const actionDialog = page.locator("#action-dialog");
-  const restButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="rest"]');
+  const studyButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="study"]');
   const confirmButton = page.locator('#action-dialog button[data-role="confirm-action-result"]');
 
   await clickAndWait(page, takeActionButton, "take action button re-opens action dialog");
-  await clickAndWait(page, restButton, "rest action button responds");
+  await clickAndWait(page, studyButton, "study action button responds");
   await assertVisible(actionDialog, "result dialog is visible after a direct action");
   await clickAndWait(page, confirmButton, "direct action result can be confirmed");
   assert.equal(await actionDialog.isVisible(), false, "action dialog should close after confirming a direct action result");
@@ -160,18 +160,18 @@ const runPersistenceReloadSmoke = async (page, origin) => {
   const introDialog = page.locator("#intro-dialog");
   const takeActionButton = page.locator("#take-action-button");
   const walletAmount = page.locator("#wallet-amount");
-  const slotSummary = page.locator("#slot-summary");
+  const actionSummary = page.locator("#action-summary");
 
   const savedWalletAmount = await walletAmount.textContent();
-  const savedSlotSummary = await slotSummary.textContent();
+  const savedActionSummary = await actionSummary.textContent();
 
   await page.goto(origin, { waitUntil: "networkidle" });
   assert.equal(await introDialog.isVisible(), false, "intro dialog should stay hidden after reloading an active run");
   console.log("PASS active run does not return to intro after reload");
   assert.equal(await walletAmount.textContent(), savedWalletAmount, "wallet amount should persist after reload");
   console.log("PASS wallet amount persists after reload");
-  assert.equal(await slotSummary.textContent(), savedSlotSummary, "slot summary should persist after reload");
-  console.log("PASS slot summary persists after reload");
+  assert.equal(await actionSummary.textContent(), savedActionSummary, "action summary should persist after reload");
+  console.log("PASS action summary persists after reload");
   assert.equal(await takeActionButton.isDisabled(), false, "take action should remain available after reload");
   console.log("PASS take action stays available after reload");
 };
