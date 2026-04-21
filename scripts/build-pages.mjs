@@ -40,6 +40,7 @@ await mkdir(dist, { recursive: true });
 
 await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
 await cp(resolve(root, "styles.css"), resolve(dist, "styles.css"));
+await cp(resolve(root, "assets"), resolve(dist, "assets"), { recursive: true });
 await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
 if (await fileExists(analyticsSummaryFile)) {
   await cp(analyticsSummaryFile, resolve(dist, "analytics-summary.json"));
