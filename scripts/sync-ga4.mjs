@@ -48,7 +48,7 @@ const getAccessToken = async (sa) => {
 };
 
 const runReport = async (token, body) => {
-  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}/runReport`;
+  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${PROPERTY_ID}:runReport`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
