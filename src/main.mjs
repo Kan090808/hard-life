@@ -709,22 +709,31 @@ const renderAnalyticsDialog = () => {
   const summary = uiState.analyticsSummary;
   elements.analyticsDialogStatus.textContent = getAnalyticsStatusText();
 
-  const stats = [
+  const cumulativeStats = [
     { label: "累計玩家", value: summary?.totalPlayers },
     { label: "累計人生", value: summary?.totalStarts },
-    { label: "今日人生", value: summary?.startsToday },
     { label: "累計通關", value: summary?.totalClears },
-    { label: "今日通關", value: summary?.clearsToday },
     { label: "累計過勞", value: summary?.totalBurnouts },
+  ];
+
+  const todayStats = [
+    { label: "今日玩家", value: summary?.playersToday },
+    { label: "今日人生", value: summary?.startsToday },
+    { label: "今日通關", value: summary?.clearsToday },
     { label: "今日過勞", value: summary?.burnoutsToday },
   ];
 
-  elements.analyticsDialogGrid.innerHTML = stats
-    .map(
-      (stat) =>
-        `<article class="analytics-card"><span class="analytics-label">${stat.label}</span><strong class="analytics-value">${formatAnalyticsValue(stat.value)}</strong></article>`
-    )
-    .join("");
+  const renderCards = (stats) =>
+    stats
+      .map(
+        (stat) =>
+          `<article class="analytics-card"><span class="analytics-label">${stat.label}</span><strong class="analytics-value">${formatAnalyticsValue(stat.value)}</strong></article>`
+      )
+      .join("");
+
+  elements.analyticsDialogGrid.innerHTML =
+    `<p class="analytics-section-label">累計</p>${renderCards(cumulativeStats)}` +
+    `<p class="analytics-section-label">今日</p>${renderCards(todayStats)}`;
 };
 
 const getRentCaption = () => {
