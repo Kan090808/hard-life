@@ -1,6 +1,8 @@
 import { GAME_COPY, JOBS } from "./data/config.mjs";
 
 const SHARE_TITLE = GAME_COPY.title;
+const SHARE_IMAGE_SIZE = { width: 1200, height: 1750 };
+const SHARE_FONT_STACK = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
 const IN_APP_BROWSER_PATTERN = /FBAN|FBAV|Instagram|Line|MicroMessenger|Messenger/i;
 
 /**
@@ -68,6 +70,19 @@ const getEndingRank = (ending) => {
   return rankMap[ending.id] ?? { label: "本月稱號：月底生還者", tone: "steady" };
 };
 
+const getEndingToneColors = (tone) => {
+  switch (tone) {
+    case "danger":
+      return { background: "#ffe0d7", accent: "#ff6565", accentDeep: "#b93333" };
+    case "growth":
+      return { background: "#dbf7e9", accent: "#13b56e", accentDeep: "#0d7c4d" };
+    case "warning":
+      return { background: "#fff0cf", accent: "#ffc53d", accentDeep: "#c57f14" };
+    default:
+      return { background: "#f6f1ff", accent: "#6f61ff", accentDeep: "#3d2eb6" };
+  }
+};
+
 const getShareSnapshot = (state, url) => {
   const ending = state.ending ?? { title: "月底結算", body: GAME_COPY.subtitle, type: "summary" };
   const rank = getEndingRank(ending);
@@ -75,6 +90,8 @@ const getShareSnapshot = (state, url) => {
 
   const records = details.records?.length > 0 ? details.records : ["本月尚未有特別紀錄"];
   const tags = details.tags?.length > 0 ? details.tags.map((t) => t.label) : ["本月尚未獲得標籤"];
+  const advice = details.advice || "這輪撐得不錯，下次可以挑戰更高存款或更低壓力。";
+  const tagsText = tags.join("｜");
 
   return {
     title: ending.title,
@@ -92,6 +109,8 @@ const getShareSnapshot = (state, url) => {
     ],
     records,
     tags,
+    tagsText,
+    advice,
     url,
   };
 };
@@ -105,6 +124,54 @@ const waitForFonts = async (documentLike) => {
     documentLike.fonts.ready.catch(() => {}),
     new Promise((resolve) => setTimeout(resolve, 180)),
   ]);
+};
+
+const wrapCanvasText = (ctx, text, maxWidth) => {
+  const paragraphs = String(text).split("\n");
+  const lines = [];
+
+  for (const paragraph of paragraphs) {
+    if (!paragraph) {
+      lines.push("");
+      continue;
+    }
+
+    let current = "";
+    for (const char of paragraph) {
+      const next = current + char;
+      if (ctx.measureText(next).width <= maxWidth || current.length === 0) {
+        current = next;
+        continue;
+      }
+      lines.push(current);
+      current = char;
+    }
+    lines.push(current);
+  }
+
+  return lines;
+};
+
+const drawWrappedText = (ctx, text, x, y, maxWidth, lineHeight, maxLines = Number.POSITIVE_INFINITY) => {
+  const lines = wrapCanvasText(ctx, text, maxWidth).slice(0, maxLines);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, x, y + lineHeight * index);
+  });
+  return y + lineHeight * Math.max(lines.length, 1);
+};
+
+const drawRoundedRect = (ctx, x, y, width, height, radius) => {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
 };
 
 const createCanvas = (width, height, documentLike) => {
@@ -140,41 +207,6 @@ const canvasToBlob = async (canvas) => {
   }
 
   throw new Error("blob-unsupported");
-};
-
-const extractCssText = (documentLike) => {
-  if (!documentLike?.styleSheets) {
-    return "";
-  }
-
-  const chunks = [];
-  for (const sheet of documentLike.styleSheets) {
-    try {
-      if (!sheet?.cssRules) {
-        continue;
-      }
-      for (const rule of sheet.cssRules) {
-        chunks.push(rule.cssText);
-      }
-    } catch {}
-  }
-  return chunks.join("\n");
-};
-
-const escapeSvgText = (value) =>
-  String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-
-const loadImageElement = async (src, documentLike) => {
-  const image = documentLike?.createElement ? documentLike.createElement("img") : new Image();
-  await new Promise((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error("image-load-failed"));
-    image.src = src;
-  });
-  return image;
 };
 
 const triggerBlobDownload = (filename, blob, documentLike, urlApi) => {
@@ -282,66 +314,156 @@ const buildShareText = (state, url) => {
     `工作 ${snapshot.jobName} ・ ${snapshot.jobBadge}`,
     snapshot.stats.map((entry) => `${entry.label} ${entry.value}`).join(" ・ "),
     `本月紀錄：${snapshot.records.join("、")}`,
-    `本月標籤：${snapshot.tags.join("、")}`,
+    `本月標籤：${snapshot.tagsText}`,
+    `下次建議：${snapshot.advice}`,
     snapshot.url,
   ].filter(Boolean).join("\n");
 };
 
-const renderShareImage = async (captureElement, state, url, overrides = {}) => {
-  const { document, URL: urlApi } = getRuntime(overrides);
-  if (!captureElement) {
-    throw new Error("capture-element-missing");
-  }
-  if (typeof urlApi?.createObjectURL !== "function") {
-    throw new Error("svg-object-url-unavailable");
-  }
-
+const renderShareImage = async (state, url, overrides = {}) => {
+  const { document } = getRuntime(overrides);
   await waitForFonts(document);
 
   const snapshot = getShareSnapshot(state, url);
-  const rect = captureElement.getBoundingClientRect();
-  const width = Math.max(1, Math.round(rect.width));
-  const height = Math.max(1, Math.round(rect.height));
-  const scale = Math.max(2, Math.ceil(globalThis.devicePixelRatio || 1));
-  const outputWidth = width * scale;
-  const outputHeight = height * scale;
-
-  const clonedNode = captureElement.cloneNode(true);
-  clonedNode.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-  clonedNode.style.margin = "0";
-  clonedNode.style.width = `${width}px`;
-  clonedNode.style.minHeight = `${height}px`;
-  clonedNode.style.boxSizing = "border-box";
-
-  const cssText = extractCssText(document);
-  const serializer = new XMLSerializer();
-  const serializedNode = serializer.serializeToString(clonedNode);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${width} ${height}">
-      <foreignObject x="0" y="0" width="${width}" height="${height}">
-        <style>${escapeSvgText(cssText)}</style>
-        ${serializedNode}
-      </foreignObject>
-    </svg>
-  `;
-  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const svgUrl = urlApi.createObjectURL(svgBlob);
-  const image = await loadImageElement(svgUrl, document);
-
-  const canvas = createCanvas(outputWidth, outputHeight, document);
+  const { width, height } = SHARE_IMAGE_SIZE;
+  const canvas = createCanvas(width, height, document);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("2d-context-unavailable");
   }
-  ctx.drawImage(image, 0, 0, outputWidth, outputHeight);
+
+  const colors = getEndingToneColors(snapshot.tone);
+
+  // Background
+  ctx.fillStyle = colors.background;
+  ctx.fillRect(0, 0, width, height);
+
+  // Top accent bar
+  ctx.fillStyle = colors.accent;
+  ctx.fillRect(0, 0, width, 28);
+
+  // Watermark
+  ctx.fillStyle = "rgba(24, 28, 38, 0.06)";
+  ctx.font = `900 168px ${SHARE_FONT_STACK}`;
+  ctx.textAlign = "center";
+  ctx.fillText(snapshot.tone === "danger" ? "失敗" : "通關", width / 2, 280);
+  ctx.textAlign = "left";
+
+  // Title card
+  drawRoundedRect(ctx, 72, 100, width - 144, 300, 34);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = colors.accent;
+  ctx.stroke();
+
+  ctx.fillStyle = colors.accentDeep;
+  ctx.font = `700 34px ${SHARE_FONT_STACK}`;
+  ctx.fillText("月底結算", 112, 164);
+
+  ctx.fillStyle = "#181c26";
+  ctx.font = `800 78px ${SHARE_FONT_STACK}`;
+  let currentY = drawWrappedText(ctx, snapshot.title, 112, 246, width - 224, 92, 2);
+
+  ctx.fillStyle = "#5d5d6f";
+  ctx.font = `400 34px ${SHARE_FONT_STACK}`;
+  currentY = drawWrappedText(ctx, snapshot.body, 112, currentY + 42, width - 224, 48, 4);
+
+  // Rank card — mirrors the ending page rank card: rankLabel, tagsText, jobName, advice
+  const RANK_CARD_Y = 440;
+  const RANK_CARD_H = 230;
+  drawRoundedRect(ctx, 72, RANK_CARD_Y, width - 144, RANK_CARD_H, 28);
+  ctx.fillStyle = "#fffdf6";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#181c26";
+  ctx.stroke();
+
+  ctx.fillStyle = colors.accentDeep;
+  ctx.font = `700 32px ${SHARE_FONT_STACK}`;
+  ctx.fillText(snapshot.rankLabel, 112, RANK_CARD_Y + 58);
+
+  let rankLineY = RANK_CARD_Y + 58;
+  if (snapshot.tagsText) {
+    ctx.fillStyle = colors.accentDeep;
+    ctx.font = `500 26px ${SHARE_FONT_STACK}`;
+    ctx.fillText(snapshot.tagsText, 112, RANK_CARD_Y + 100);
+    rankLineY = RANK_CARD_Y + 100;
+  }
+
+  ctx.fillStyle = "#181c26";
+  ctx.font = `700 28px ${SHARE_FONT_STACK}`;
+  ctx.fillText(snapshot.jobName, 112, rankLineY + 46);
+
+  ctx.fillStyle = "#5d5d6f";
+  ctx.font = `400 24px ${SHARE_FONT_STACK}`;
+  drawWrappedText(ctx, snapshot.advice, 112, rankLineY + 90, width - 224, 36, 2);
+
+  // Stats grid — matches ending page 2×2 grid: 存款, 體力/心情, 壓力/技能, 工作等級
+  const STATS_Y = RANK_CARD_Y + RANK_CARD_H + 20;
+  const cardWidth = (width - 144 - 24) / 2;
+  const statBoxes = [
+    { label: snapshot.stats[0].label, value: snapshot.stats[0].value, x: 72, y: STATS_Y },
+    { label: `${snapshot.stats[1].label} / ${snapshot.stats[2].label}`, value: `${snapshot.stats[1].value} / ${snapshot.stats[2].value}`, x: 72 + cardWidth + 24, y: STATS_Y },
+    { label: `${snapshot.stats[3].label} / ${snapshot.stats[4].label}`, value: `${snapshot.stats[3].value} / ${snapshot.stats[4].value}`, x: 72, y: STATS_Y + 204 },
+    { label: "工作等級", value: snapshot.jobBadge, x: 72 + cardWidth + 24, y: STATS_Y + 204 },
+  ];
+
+  for (const box of statBoxes) {
+    drawRoundedRect(ctx, box.x, box.y, cardWidth, 180, 26);
+    ctx.fillStyle = "#fffdf6";
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#181c26";
+    ctx.stroke();
+
+    ctx.fillStyle = "#5d5d6f";
+    ctx.font = `700 24px ${SHARE_FONT_STACK}`;
+    ctx.fillText(box.label, box.x + 34, box.y + 54);
+    ctx.fillStyle = "#181c26";
+    ctx.font = `800 54px ${SHARE_FONT_STACK}`;
+    drawWrappedText(ctx, box.value, box.x + 34, box.y + 118, cardWidth - 68, 62, 2);
+  }
+
+  // Records and tags card — matches 本月紀錄 and 本月標籤 sections on ending page
+  const CONTENT_Y = STATS_Y + 180 + 24 + 180 + 24;
+  drawRoundedRect(ctx, 72, CONTENT_Y, width - 144, 500, 26);
+  ctx.fillStyle = "rgba(255, 253, 246, 0.96)";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#181c26";
+  ctx.stroke();
+
+  ctx.fillStyle = "#5d5d6f";
+  ctx.font = `700 26px ${SHARE_FONT_STACK}`;
+  ctx.fillText("本月紀錄", 112, CONTENT_Y + 54);
+
+  ctx.fillStyle = "#181c26";
+  ctx.font = `500 30px ${SHARE_FONT_STACK}`;
+  currentY = drawWrappedText(ctx, snapshot.records.join("、"), 112, CONTENT_Y + 98, width - 224, 46, 4);
+
+  ctx.fillStyle = "#5d5d6f";
+  ctx.font = `700 26px ${SHARE_FONT_STACK}`;
+  ctx.fillText("本月標籤", 112, currentY + 46);
+
+  ctx.fillStyle = "#181c26";
+  ctx.font = `500 28px ${SHARE_FONT_STACK}`;
+  drawWrappedText(ctx, snapshot.tags.join("、"), 112, currentY + 90, width - 224, 42, 3);
+
+  // Footer
+  ctx.fillStyle = colors.accentDeep;
+  ctx.font = `700 24px ${SHARE_FONT_STACK}`;
+  ctx.fillText(snapshot.url, 72, 1668, width - 144);
+  ctx.fillStyle = "#5d5d6f";
+  ctx.font = `500 22px ${SHARE_FONT_STACK}`;
+  ctx.fillText("打工人生：月底前活下去", 72, 1710);
 
   const blob = await canvasToBlob(canvas);
-  urlApi.revokeObjectURL(svgUrl);
 
   return {
     blob,
-    width: outputWidth,
-    height: outputHeight,
+    width,
+    height,
     filename: "打工人生結果.png",
     alt: `${snapshot.title}｜${snapshot.rankLabel}`,
   };
