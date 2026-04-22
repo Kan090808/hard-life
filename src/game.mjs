@@ -35,6 +35,7 @@ const REPEAT_WELLBEING_DROP = 0.15;
 const REPEAT_EVENT_RISK = 0.12;
 const BASE_EVENT_TRIGGER_RATE = 0.18;
 const MAX_EVENT_TRIGGER_RATE = 0.66;
+const DAY_START_EVENT_RATE = 0.35;
 
 const cloneEffects = (effects = {}) => ({ ...effects });
 
@@ -1151,6 +1152,11 @@ const applyActiveCaseWork = (state) => {
 
 const maybeTriggerDayStartEvent = (state, rng) => {
   if (state.day <= 1 || !canTriggerMoreDayStartEventsToday(state)) {
+    state.phase = PHASES.READY;
+    return state;
+  }
+
+  if (rng() >= DAY_START_EVENT_RATE) {
     state.phase = PHASES.READY;
     return state;
   }

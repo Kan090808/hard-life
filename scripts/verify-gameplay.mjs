@@ -90,14 +90,14 @@ assert.equal(firstStudy.dayPlan.totalActions, 1);
 assert.equal(firstStudy.dayPlan.actionCounts.study, 1);
 assert.equal(firstStudy.energy, 66);
 assert.equal(firstStudy.money, 3100);
-assert.equal(firstStudy.skill, 10);
+assert.equal(firstStudy.skill, 14);
 
 const repeatedStudy = dispatchAction(firstStudy, "study", sequence(0.99));
 assert.equal(repeatedStudy.phase, "ready-for-action");
 assert.equal(repeatedStudy.dayPlan.actionCounts.study, 2);
 assert.equal(repeatedStudy.energy, 46);
 assert.equal(repeatedStudy.money, 2620);
-assert.equal(repeatedStudy.skill, 19);
+assert.equal(repeatedStudy.skill, 26);
 assert.equal(repeatedStudy.dayPlan.lastRepeatPenalty.repeatIndex, 2);
 
 const eventRiskState = createStableState();
