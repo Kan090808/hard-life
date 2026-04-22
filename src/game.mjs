@@ -8,8 +8,10 @@ import {
   DEFAULT_SUMMARY_STATS,
   FAILURE_ENDINGS,
   JOBS,
+  MAX_DAY_START_EVENTS_PER_DAY,
   MAX_LOG_ENTRIES,
   MILESTONES,
+  PASSIVE_ACTION_EVENT_TAGS,
   PHASES,
   RENT_AMOUNT,
   RENT_DAYS,
@@ -33,6 +35,7 @@ const REPEAT_WELLBEING_DROP = 0.15;
 const REPEAT_EVENT_RISK = 0.12;
 const BASE_EVENT_TRIGGER_RATE = 0.18;
 const MAX_EVENT_TRIGGER_RATE = 0.66;
+const DAY_START_EVENT_RATE = 0.35;
 
 const cloneEffects = (effects = {}) => ({ ...effects });
 
@@ -495,6 +498,7 @@ const createDayPlan = (state) => ({
   lastRepeatActionId: null,
   lastRepeatIndex: 0,
   lastRepeatPenalty: null,
+  dayStartEventsTriggeredToday: 0,
 });
 
 const initializeDayPlan = (state) => {
@@ -768,7 +772,7 @@ const getProjectedActionEffects = (state, action) => {
         energy: -14,
         mood: -4,
         stress: 5,
-        skill: 10,
+        skill: state.conditions.computerBroken ? 7 : 10,
       };
     case "jobSearch":
       return {
@@ -866,6 +870,47 @@ const getBurnoutPenalty = (state, action) => {
   };
 };
 
+const JOB_RESULT_COPY = {
+  failure: [
+    {
+      title: "履歷石沉大海",
+      description: "你投了幾份履歷，但今天沒有任何回音。已讀不回，有時也是人生的一部分。",
+      buttonText: "繼續找",
+      category: "求職結果",
+    },
+    {
+      title: "面試沒過",
+      description: "對方說會再通知你。你知道這句話通常不是真的會通知。",
+      buttonText: "繼續找",
+      category: "求職結果",
+    },
+  ],
+  close: {
+    title: "有一點回音",
+    description: "對方回覆了，但還沒到錄取那一步。至少你知道自己不是完全沒機會。",
+    buttonText: "繼續努力",
+    category: "求職結果",
+  },
+  2: {
+    title: "找到兼職了",
+    description: "對方願意給你固定班表，錢不算多，但至少每天有比較穩的收入了。",
+    buttonText: "確認上班",
+    category: "求職成功",
+  },
+  3: {
+    title: "拿到正職了",
+    description: "公司願意錄用你。收入變穩了，但每天也會先被工作吃掉一大段力氣。",
+    buttonText: "確認上任",
+    category: "求職成功",
+  },
+  4: {
+    title: "接案路線打開了",
+    description: "你開始有能力靠技能接活，不再只能等班表或老闆安排。",
+    buttonText: "確認轉型",
+    category: "求職成功",
+  },
+};
+
 const resolveJobSearch = (state, rng) => {
   const successRate = Math.min(
     1,
@@ -874,13 +919,10 @@ const resolveJobSearch = (state, rng) => {
   const success = rng() < successRate;
 
   if (!success) {
+    const copy = rng() < 0.5 ? JOB_RESULT_COPY.failure[0] : JOB_RESULT_COPY.failure[1];
+    state.pendingJobResult = copy;
     return {
-      effects: {
-        energy: -14,
-        mood: -12,
-        stress: 10,
-      },
-      log: "履歷投出去了，但今天只多收穫了幾封已讀不回。",
+      effects: { energy: -14, mood: -12, stress: 10 },
     };
   }
 
@@ -894,36 +936,81 @@ const resolveJobSearch = (state, rng) => {
           : state.jobLevel;
 
   if (nextLevel > state.jobLevel) {
+    state.pendingJobResult = JOB_RESULT_COPY[nextLevel] ?? {
+      title: "工作升級了",
+      description: `你談到更好的工作了，現在是 ${JOBS[nextLevel].name}。`,
+      buttonText: "確認",
+      category: "求職成功",
+    };
     return {
-      effects: {
-        jobLevel: nextLevel - state.jobLevel,
-        mood: 10,
-        stress: -8,
-      },
-      log: `你真的談到比較像樣的工作了，現在是 ${JOBS[nextLevel].name}。`,
+      effects: { jobLevel: nextLevel - state.jobLevel, mood: 10, stress: -8 },
     };
   }
 
+  state.pendingJobResult = JOB_RESULT_COPY.close;
   return {
-    effects: {
-      mood: 4,
-      stress: -2,
-    },
-    log: "今天有一點回音，但還差一點條件才能真的跳出去。",
+    effects: { mood: 4, stress: -2 },
   };
 };
 
+const getActionEventTags = (actionId) =>
+  ACTIONS[actionId]?.eventTags ?? PASSIVE_ACTION_EVENT_TAGS[actionId] ?? [];
+
+const lastActionHasTag = (state, tag) =>
+  getActionEventTags(state.dayPlan.actionsTaken.at(-1)).includes(tag);
+
+const canTriggerMoreDayStartEventsToday = (state) =>
+  (state.dayPlan.dayStartEventsTriggeredToday ?? 0) < MAX_DAY_START_EVENTS_PER_DAY;
+
+const recordDayStartEventTriggeredToday = (state) => {
+  state.dayPlan.dayStartEventsTriggeredToday =
+    (state.dayPlan.dayStartEventsTriggeredToday ?? 0) + 1;
+};
+
+const getDayStartEvents = (state) =>
+  EVENTS.filter(
+    (event) => event.trigger === "dayStart" && (!event.condition || event.condition(state))
+  );
+
 const getStudyCost = (skill) => 400 + Math.floor(skill / 10) * 80;
 
-const resolveStudy = (state) => ({
-  effects: {
-    money: -getStudyCost(state.skill),
-    energy: -14,
-    mood: -4,
-    stress: 5,
-    skill: 10,
-  },
-});
+const rollStudySkillGain = (state, rng) => {
+  const min = 6;
+  const max = 14;
+  const intelligence = state.character.intelligence;
+  const lowRoll = min + Math.floor(rng() * (max - min + 1));
+  const highRoll = min + Math.floor(rng() * (max - min + 1));
+  const useHighRollChance = 0.25 + intelligence * 0.12;
+  return rng() < useHighRollChance ? Math.max(lowRoll, highRoll) : Math.min(lowRoll, highRoll);
+};
+
+const applyComputerBrokenStudyPenalty = (state, gain, rng) => {
+  if (!state.conditions.computerBroken) return gain;
+  const luck = state.character.luck;
+  const maxPenalty = 6;
+  const minPenalty = 1;
+  const penaltyBase = maxPenalty - (luck - 1);
+  const penalty = clampNumber(penaltyBase + Math.floor(rng() * 3) - 1, minPenalty, maxPenalty);
+  return Math.max(1, gain - penalty);
+};
+
+const resolveStudy = (state, rng) => {
+  const baseGain = rollStudySkillGain(state, rng);
+  const finalGain = applyComputerBrokenStudyPenalty(state, baseGain, rng);
+  return {
+    effects: {
+      money: -getStudyCost(state.skill),
+      energy: -14,
+      mood: -4,
+      stress: 5,
+      skill: finalGain,
+    },
+    log:
+      state.conditions.computerBroken && finalGain < baseGain
+        ? `你今天學到了一些東西，但電腦狀況太差，原本可以進步更多。技能 +${finalGain}。`
+        : `你今天吸收得不錯，技能 +${finalGain}。`,
+  };
+};
 
 
 const resolveNetwork = (state, rng) => {
@@ -1063,16 +1150,77 @@ const applyActiveCaseWork = (state) => {
   return state;
 };
 
-const continueAfterAttendance = (state) => {
-  if (state.activeCaseProject) {
-    return applyActiveCaseWork(state);
+const maybeTriggerDayStartEvent = (state, rng) => {
+  if (state.day <= 1 || !canTriggerMoreDayStartEventsToday(state)) {
+    state.phase = PHASES.READY;
+    return state;
   }
 
-  state.phase = PHASES.READY;
+  if (rng() >= DAY_START_EVENT_RATE) {
+    state.phase = PHASES.READY;
+    return state;
+  }
+
+  const eligible = getDayStartEvents(state);
+  if (eligible.length === 0) {
+    state.phase = PHASES.READY;
+    return state;
+  }
+
+  const event = pickWeightedRandom(
+    eligible,
+    (e) => getEventCategoryWeight(state, e.category),
+    rng
+  );
+  if (!event) {
+    state.phase = PHASES.READY;
+    return state;
+  }
+
+  recordDayStartEventTriggeredToday(state);
+  beginTurnLogIfNeeded(state);
+  pushLine(state, `今天一開始就有件事找上你：${event.title}`);
+
+  if (event.autoResolve) {
+    appendResolution(state, event.autoResolve(state, rng));
+    const failure = detectFailure(state);
+    if (failure) {
+      setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
+      commitTurnLog(state);
+      return state;
+    }
+    return maybeTriggerDayStartEvent(state, rng);
+  }
+
+  state.pendingEvent = {
+    id: event.id,
+    title: event.title,
+    category: event.category,
+    description: event.description,
+    options: event.options.map((option) => ({
+      id: option.id,
+      text: option.text,
+      caption: option.caption ?? "",
+    })),
+    _trigger: "dayStart",
+  };
+  state.phase = PHASES.EVENT;
   return state;
 };
 
-const startDayFlow = (state) => {
+const continueAfterAttendance = (state, rng) => {
+  if (state.activeCaseProject) {
+    const nextState = applyActiveCaseWork(state);
+    if (nextState.phase !== PHASES.READY) {
+      return nextState;
+    }
+    return maybeTriggerDayStartEvent(nextState, rng);
+  }
+
+  return maybeTriggerDayStartEvent(state, rng);
+};
+
+const startDayFlow = (state, rng) => {
   const failure = detectFailure(state);
   if (failure) {
     setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
@@ -1081,7 +1229,7 @@ const startDayFlow = (state) => {
   }
 
   if (!getHasScheduledJob(state)) {
-    return continueAfterAttendance(state);
+    return continueAfterAttendance(state, rng);
   }
 
   const job = getJob(state);
@@ -1180,7 +1328,7 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
 
   switch (action.special) {
     case "study":
-      resolution = resolveStudy(state);
+      resolution = resolveStudy(state, rng);
       break;
     case "jobSearch":
       resolution = resolveJobSearch(state, rng);
@@ -1279,7 +1427,11 @@ const applyRecurringCosts = (state, rng) => {
   pushLine(state, `房租繳不出來，這次欠下的 $${RENT_AMOUNT} 會疊到下次租金。欠租累積為 $${state.rentDebt}。`);
 };
 
-const eligibleEvents = (state) => EVENTS.filter((event) => (event.condition ? event.condition(state) : true));
+const eligibleAfterActionEvents = (state) =>
+  EVENTS.filter(
+    (event) =>
+      event.trigger !== "dayStart" && (!event.condition || event.condition(state))
+  );
 
 const tierOrder = ["urgent", "state", "opportunity", "ambient"];
 
@@ -1306,7 +1458,7 @@ const getEventCategoryWeight = (state, category = "") => {
 };
 
 const selectEvent = (state, rng) => {
-  const eligible = eligibleEvents(state);
+  const eligible = eligibleAfterActionEvents(state);
   if (eligible.length === 0) {
     return null;
   }
@@ -1408,7 +1560,7 @@ const finalizeDay = (state, rng) => {
   refreshDailyBoards(state, rng);
   applySleepRecovery(state);
   unlockMilestones(state);
-  return startDayFlow(state);
+  return startDayFlow(state, rng);
 };
 
 const resolveSleep = (state, rng) => {
@@ -1480,6 +1632,21 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
+  if (nextState.pendingJobResult) {
+    const jobResult = nextState.pendingJobResult;
+    nextState.pendingJobResult = null;
+    nextState.pendingEvent = {
+      id: "job-result",
+      title: jobResult.title,
+      category: jobResult.category,
+      description: jobResult.description,
+      options: [{ id: "confirm", text: jobResult.buttonText, caption: "" }],
+      _trigger: "jobResult",
+    };
+    nextState.phase = PHASES.EVENT;
+    return nextState;
+  }
+
   return maybeTriggerEventOrContinue(nextState, rng, repeatPenalty);
 };
 
@@ -1487,6 +1654,13 @@ const resolveEvent = (state, optionId, rng) => {
   const nextState = cloneState(state);
   if (nextState.phase !== PHASES.EVENT || !nextState.pendingEvent) {
     return nextState;
+  }
+
+  const trigger = nextState.pendingEvent._trigger;
+
+  if (trigger === "jobResult") {
+    nextState.pendingEvent = null;
+    return maybeTriggerEventOrContinue(nextState, rng, nextState.dayPlan.lastRepeatPenalty);
   }
 
   const event = EVENTS.find((entry) => entry.id === nextState.pendingEvent.id);
@@ -1506,6 +1680,10 @@ const resolveEvent = (state, optionId, rng) => {
     setEnding(nextState, { type: "failure", ...failure }, PHASES.GAME_OVER);
     commitTurnLog(nextState);
     return nextState;
+  }
+
+  if (trigger === "dayStart") {
+    return maybeTriggerDayStartEvent(nextState, rng);
   }
 
   nextState.phase = PHASES.READY;
@@ -1544,7 +1722,7 @@ export const createInitialState = (rng = Math.random) => {
   };
   initializeDayPlan(state);
   refreshDailyBoards(state, rng);
-  return startDayFlow(state);
+  return startDayFlow(state, rng);
 };
 
 export const getActionViewModels = (state) =>
@@ -1565,7 +1743,8 @@ export const getActionViewModels = (state) =>
             100
         )}% 成功率`;
       } else if (action.id === "study") {
-        tag = `課程費 $${getStudyCost(state.skill)}`;
+        const skillRange = state.conditions.computerBroken ? "技能 +1~14（電腦故障）" : "技能 +6~14";
+        tag = `課程費 $${getStudyCost(state.skill)} · ${skillRange}`;
       } else if (action.incomeKey) {
         tag = `今日收入 $${currentJob[action.incomeKey]}`;
       }
@@ -1771,7 +1950,7 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
       commitTurnLog(nextState);
       return nextState;
     }
-    return continueAfterAttendance(nextState);
+    return continueAfterAttendance(nextState, rng);
   }
 
   if (choice === "leave") {

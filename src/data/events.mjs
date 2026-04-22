@@ -1,3 +1,5 @@
+import { ACTIONS, PASSIVE_ACTION_EVENT_TAGS } from "./config.mjs";
+
 const withLog = (effects = {}, log = "", extras = {}) => ({
   effects,
   log,
@@ -6,10 +8,19 @@ const withLog = (effects = {}, log = "", extras = {}) => ({
 
 const lastActionIs = (state, ids) => ids.includes(state.dayPlan.actionsTaken.at(-1));
 
+const getActionEventTags = (actionId) =>
+  ACTIONS[actionId]?.eventTags ?? PASSIVE_ACTION_EVENT_TAGS[actionId] ?? [];
+
+const actionHasEventTag = (actionId, tag) => getActionEventTags(actionId).includes(tag);
+
+const lastActionHasTag = (state, tag) =>
+  actionHasEventTag(state.dayPlan.actionsTaken.at(-1), tag);
+
 export const EVENTS = [
   {
     id: "body-warning",
     tier: "urgent",
+    trigger: "dayStart",
     category: "健康警訊",
     title: "身體發出警告",
     description: "你今天胸口悶、頭也有點痛，身體像在提醒你這不是鐵打的月曆。",
@@ -56,12 +67,13 @@ export const EVENTS = [
   {
     id: "scooter-breakdown",
     tier: "state",
+    trigger: "afterAction",
     category: "生活意外",
     title: "機車在路上出怪聲",
     description: "通勤途中，機車發出一聲你不想聽懂的聲音。",
     condition: (state) =>
       !state.conditions.scooterBroken &&
-      lastActionIs(state, ["work", "attendanceWork", "overtime", "jobSearch"]) &&
+      lastActionHasTag(state, "goOut") &&
       state.jobLevel < 4,
     options: [
       {
@@ -95,11 +107,12 @@ export const EVENTS = [
   {
     id: "computer-glitch",
     tier: "state",
+    trigger: "afterAction",
     category: "生活意外",
     title: "電腦開始不穩",
     description: "畫面突然閃了一下，你很清楚這通常不是好兆頭。",
     condition: (state) =>
-      !state.conditions.computerBroken && lastActionIs(state, ["study", "freelance"]),
+      !state.conditions.computerBroken && lastActionHasTag(state, "computer"),
     options: [
       {
         id: "back-up",
@@ -132,6 +145,7 @@ export const EVENTS = [
   {
     id: "landlord-message",
     tier: "state",
+    trigger: "dayStart",
     category: "帳單壓力",
     title: "房東傳訊息來了",
     description: "房東問你房租什麼時候補，語氣比上次更不耐煩。",
@@ -170,6 +184,7 @@ export const EVENTS = [
   {
     id: "client-referral",
     tier: "opportunity",
+    trigger: "opportunity",
     category: "轉機",
     title: "朋友丟來一個案源",
     description: "有人問你願不願意接個小案子，終於不是只有垃圾訊息找你。",
@@ -207,6 +222,7 @@ export const EVENTS = [
   {
     id: "freelance-offer",
     tier: "opportunity",
+    trigger: "opportunity",
     category: "接案機會",
     title: "有人找你接案子",
     description: "",
@@ -284,10 +300,11 @@ export const EVENTS = [
   {
     id: "friend-dinner",
     tier: "ambient",
+    trigger: "dayStart",
     category: "生活事件",
     title: "朋友約你吃飯",
     description: "朋友說很久沒見了，問你今晚要不要出來聊聊近況。",
-    condition: (state) => state.phase === "ready-for-action",
+    condition: () => true,
     options: [
       {
         id: "go",
@@ -322,6 +339,7 @@ export const EVENTS = [
   {
     id: "receipt-win",
     tier: "ambient",
+    trigger: "dayStart",
     category: "小確幸",
     title: "發票中獎",
     description: "你翻錢包時發現，原來今天命運還留了一點零頭給你。",
@@ -337,10 +355,11 @@ export const EVENTS = [
   {
     id: "craving-reward",
     tier: "ambient",
+    trigger: "dayStart",
     category: "生活事件",
     title: "好想犒賞自己一下",
     description: "壓力太久了，心裡有個聲音一直說：就這一次，讓自己喘一下。",
-    condition: (state) => state.mood <= 40 && state.stress >= 60 && state.phase === "ready-for-action",
+    condition: (state) => state.mood <= 40 && state.stress >= 60,
     options: [
       {
         id: "splurge",
@@ -369,6 +388,7 @@ export const EVENTS = [
   {
     id: "course-sale",
     tier: "opportunity",
+    trigger: "dayStart",
     category: "轉機",
     title: "線上課程特價",
     description: "你看到一門很實用的課程在打折，剛好是你最近想補的技能。",
@@ -404,6 +424,7 @@ export const EVENTS = [
   {
     id: "bad-sleep",
     tier: "urgent",
+    trigger: "dayStart",
     category: "健康警訊",
     title: "睡眠品質很差",
     description: "昨晚翻了一整晚，天快亮才睡著，今天醒來感覺比沒睡更累。",
@@ -435,6 +456,7 @@ export const EVENTS = [
   {
     id: "cold-symptom",
     tier: "urgent",
+    trigger: "dayStart",
     category: "健康警訊",
     title: "感冒前兆",
     description: "喉嚨有點痛，鼻子也開始不對勁，你知道這是身體在發訊號。",
@@ -465,11 +487,11 @@ export const EVENTS = [
   {
     id: "rainy-commute",
     tier: "ambient",
+    trigger: "afterAction",
     category: "生活事件",
     title: "雨天通勤",
     description: "出門才發現下大雨，衣服淋了一半，心情也跟著壞掉。",
-    condition: (state) =>
-      lastActionIs(state, ["work", "attendanceWork", "overtime", "jobSearch"]),
+    condition: (state) => lastActionHasTag(state, "goOut"),
     options: [
       {
         id: "take-it-slow",
@@ -496,6 +518,7 @@ export const EVENTS = [
   {
     id: "phone-bill",
     tier: "state",
+    trigger: "dayStart",
     category: "帳單壓力",
     title: "電信帳單來了",
     description: "電信帳單扣款通知跳出來，這個月也沒少花。",
@@ -526,6 +549,7 @@ export const EVENTS = [
   {
     id: "family-help",
     tier: "state",
+    trigger: "dayStart",
     category: "帳單壓力",
     title: "家人臨時需要支援",
     description: "家人傳來訊息，說這個月有點緊，問你能不能匯一點過去。",
@@ -556,10 +580,12 @@ export const EVENTS = [
   {
     id: "cover-shift",
     tier: "opportunity",
+    trigger: "afterAction",
     category: "生活事件",
     title: "老闆臨時拜託代班",
     description: "老闆說有人今天臨時請假，問你願不願意多留一段，有加班費。",
-    condition: (state) => state.jobLevel === 2 || state.jobLevel === 3,
+    condition: (state) =>
+      (state.jobLevel === 2 || state.jobLevel === 3) && lastActionHasTag(state, "work"),
     options: [
       {
         id: "accept-shift",
@@ -586,6 +612,7 @@ export const EVENTS = [
   {
     id: "free-workshop",
     tier: "opportunity",
+    trigger: "dayStart",
     category: "轉機",
     title: "免費講座",
     description: "網路上有人辦免費技能講座，主題剛好是你想補強的方向。",
@@ -616,6 +643,7 @@ export const EVENTS = [
   {
     id: "community-event",
     tier: "opportunity",
+    trigger: "opportunity",
     category: "轉機",
     title: "朋友介紹社群活動",
     description: "朋友說有個小型社群聚會，都是跟你一樣在接案的人，問你要不要去認識看看。",
