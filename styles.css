@@ -1509,6 +1509,14 @@ h3 {
   color: var(--ink-soft);
 }
 
+.ending-tagline {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
 /* 4-stat grid */
 .ending-grid {
   display: grid;
@@ -1562,6 +1570,19 @@ h3 {
 
 .ending-achievements p {
   margin-top: 0.4rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.ending-list {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.ending-list li {
   font-size: 0.88rem;
   line-height: 1.55;
   color: var(--ink-soft);

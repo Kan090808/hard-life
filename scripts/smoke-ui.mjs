@@ -27,6 +27,11 @@ const loadPlaywright = () => {
   }
 };
 
+const isMissingBrowserBinaryError = (error) => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return message.includes("Executable doesn't exist");
+};
+
 const getContentType = (pathname) => MIME_TYPES[extname(pathname)] ?? "application/octet-stream";
 
 const resolveRequestPath = (urlPathname) => {
@@ -210,9 +215,20 @@ const runReloadSmoke = async (page, origin) => {
 const main = async () => {
   const { chromium } = loadPlaywright();
   const server = await startStaticServer();
-  const browser = await chromium.launch({ headless: true });
+  let browser = null;
 
   try {
+    try {
+      browser = await chromium.launch({ headless: true });
+    } catch (error) {
+      if (isMissingBrowserBinaryError(error)) {
+        console.warn("WARN Smoke UI tests skipped: Playwright browser binary is not installed.");
+        console.warn("WARN Run `npx playwright install` to enable browser smoke coverage.");
+        return;
+      }
+      throw error;
+    }
+
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const errors = createErrorTracker(page);
     await setupPage(page, server.origin);
@@ -225,7 +241,9 @@ const main = async () => {
     console.log("PASS browser console stayed clean during smoke tests");
     console.log("Smoke UI tests passed.");
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
     await server.close();
   }
 };
