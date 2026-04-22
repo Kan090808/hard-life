@@ -87,6 +87,7 @@ const main = async () => {
 
   const [
     totalPlayersReport,
+    playersTodayReport,
     totalStartsReport,
     startsTodayReport,
     totalBurnoutsReport,
@@ -96,6 +97,7 @@ const main = async () => {
   ] =
     await Promise.all([
       runReport(token, { dateRanges: ALL_TIME, metrics: [{ name: "totalUsers" }] }),
+      runReport(token, { dateRanges: TODAY, metrics: [{ name: "activeUsers" }] }),
       runReport(token, {
         dateRanges: ALL_TIME,
         metrics: [{ name: "eventCount" }],
@@ -132,6 +134,7 @@ const main = async () => {
     status: "ok",
     generatedAt: new Date().toISOString(),
     totalPlayers: firstRowValue(totalPlayersReport),
+    playersToday: firstRowValue(playersTodayReport),
     totalStarts: firstRowValue(totalStartsReport),
     startsToday: firstRowValue(startsTodayReport),
     totalBurnouts: firstRowValue(totalBurnoutsReport),

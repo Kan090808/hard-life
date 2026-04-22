@@ -139,6 +139,19 @@ body.dialog-open .world-decor {
   margin: 0.45rem 0;
 }
 
+.analytics-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0.6rem 0 0;
+}
+
+.analytics-section-label:first-child {
+  margin-top: 0;
+}
+
 button {
   font: inherit;
   touch-action: manipulation;
