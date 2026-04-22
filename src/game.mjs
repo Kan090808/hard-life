@@ -48,6 +48,13 @@ const clampStat = (key, value) => {
 
 const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
 
+const LANDLORD_BLOCKED_ACTIONS = new Set(["work", "overtime", "jobSearch", "study", "reward", "network"]);
+
+const getLandlordBlockRate = (state) => {
+  const luckReduction = (state.character.luck - 3) * 0.04;
+  return clampNumber(0.30 - luckReduction, 0.15, 0.45);
+};
+
 const describeDelta = (key, value) => {
   const labelMap = {
     money: "金錢",
@@ -575,11 +582,6 @@ const getProjectedActionEffects = (state, action) => {
         mood: -12,
         stress: 10,
       };
-    case "lifeAdmin":
-      if (state.conditions.burnoutRisk) {
-        return { money: -150, energy: 10, stress: -10 };
-      }
-      return {};
     case "network":
       return { money: -180, mood: 12, stress: -6 };
     case "venture":
@@ -740,62 +742,6 @@ const resolveStudy = (state) => ({
   },
 });
 
-const resolveLifeAdmin = (state) => {
-  if (state.conditions.scooterBroken) {
-    return {
-      effects: {
-        money: -1200,
-        stress: -8,
-      },
-      conditionChanges: { scooterBroken: false },
-      log: "你把機車修好了，明天至少不會先輸在通勤路上。",
-    };
-  }
-
-  if (state.conditions.computerBroken) {
-    return {
-      effects: {
-        money: -1500,
-        stress: -6,
-      },
-      conditionChanges: { computerBroken: false },
-      log: "你把設備問題處理掉了，之後學技能和接案終於能正常進行。",
-    };
-  }
-
-  if (state.conditions.landlordAngry) {
-    return {
-      effects: {
-        money: -400,
-        mood: 4,
-        stress: -10,
-      },
-      conditionChanges: { landlordAngry: false },
-      log: "你把房東那邊暫時安撫下來，今天的壓力終於沒那麼貼著你。",
-    };
-  }
-
-  if (state.conditions.burnoutRisk) {
-    return {
-      effects: {
-        money: -150,
-        energy: 10,
-        stress: -10,
-      },
-      conditionChanges: { burnoutRisk: false },
-      log: "你去做了檢查、補了眠，也把過勞邊緣往後退了一點。",
-    };
-  }
-
-  return {
-    effects: {
-      money: 250,
-      mood: 2,
-      stress: -4,
-    },
-    log: "你把該跑的雜事處理掉，還順手申請到一點補助。",
-  };
-};
 
 const resolveNetwork = (state, rng) => {
   if (!state.conditions.hasFreelanceContact && rng() < 0.72) {
@@ -1111,8 +1057,26 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
     case "jobSearch":
       resolution = resolveJobSearch(state, rng);
       break;
-    case "lifeAdmin":
-      resolution = resolveLifeAdmin(state);
+    case "repairScooter":
+      resolution = {
+        effects: { money: -1200, stress: -8 },
+        conditionChanges: { scooterBroken: false },
+        log: "你把機車修好了，明天至少不會先輸在通勤路上。",
+      };
+      break;
+    case "repairComputer":
+      resolution = {
+        effects: { money: -1500, stress: -6 },
+        conditionChanges: { computerBroken: false },
+        log: "你把設備問題處理掉了，之後學技能和接案終於能正常進行。",
+      };
+      break;
+    case "appeaseLandlord":
+      resolution = {
+        effects: { money: -400, mood: 4, stress: -10 },
+        conditionChanges: { landlordAngry: false },
+        log: "你把房東那邊暫時安撫下來，今天的壓力終於沒那麼貼著你。",
+      };
       break;
     case "network":
       resolution = resolveNetwork(state, rng);
@@ -1165,13 +1129,22 @@ const applyRecurringCosts = (state, rng) => {
     return;
   }
 
-  if (state.money >= RENT_AMOUNT) {
-    appendResolution(state, { effects: { money: -RENT_AMOUNT } });
-    pushLine(state, `今天繳房租 ${RENT_AMOUNT}，現實照樣準時打卡。`);
+  const dueRent = RENT_AMOUNT + state.rentDebt;
+
+  if (state.money >= dueRent) {
+    appendResolution(state, { effects: { money: -dueRent } });
+    if (state.rentDebt > 0) {
+      pushLine(state, `今天繳房租 $${dueRent}，包含之前欠下的租金，總算先把房東那邊壓下來。`);
+    } else {
+      pushLine(state, `今天繳房租 $${dueRent}，現實照樣準時打卡。`);
+    }
+    state.rentDebt = 0;
+    state.unpaidRentCount = 0;
     state.conditions.landlordAngry = false;
     return;
   }
 
+  state.rentDebt += RENT_AMOUNT;
   state.unpaidRentCount += 1;
   appendResolution(state, {
     effects: {
@@ -1182,7 +1155,7 @@ const applyRecurringCosts = (state, rng) => {
       landlordAngry: true,
     },
   });
-  pushLine(state, `房租繳不出來，欠租次數變成 ${state.unpaidRentCount}。`);
+  pushLine(state, `房租繳不出來，這次欠下的 $${RENT_AMOUNT} 會疊到下次租金。欠租累積為 $${state.rentDebt}。`);
 };
 
 const eligibleEvents = (state) => EVENTS.filter((event) => (event.condition ? event.condition(state) : true));
@@ -1347,6 +1320,22 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
+  if (nextState.conditions.landlordAngry && LANDLORD_BLOCKED_ACTIONS.has(actionId) && rng() < getLandlordBlockRate(nextState)) {
+    beginTurnLogIfNeeded(nextState);
+    nextState.turnLog.actionId = "landlordBlock";
+    appendResolution(nextState, {
+      effects: { stress: 6, mood: -4 },
+      log: "房東似乎在門外，看來暫時沒辦法出門了。你只好把原本的安排取消，壓力又往上堆了一點。",
+    });
+    const blockFailure = detectFailure(nextState);
+    if (blockFailure) {
+      setEnding(nextState, { type: "failure", ...blockFailure }, PHASES.GAME_OVER);
+      commitTurnLog(nextState);
+      return nextState;
+    }
+    return maybeTriggerEventOrContinue(nextState, rng);
+  }
+
   const opensChoice = ["workChoice", "rewardChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(nextState));
   if (opensChoice) {
     return openActionChoice(nextState, action.id);
@@ -1432,6 +1421,9 @@ export const getActionViewModels = (state) =>
     .filter((action) => !["stockTrade", "venture"].includes(action.id))
     .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
+    .filter((action) => action.id !== "repairScooter" || state.conditions.scooterBroken)
+    .filter((action) => action.id !== "repairComputer" || state.conditions.computerBroken)
+    .filter((action) => action.id !== "appeaseLandlord" || state.conditions.landlordAngry)
     .map((action) => {
       const availability = getActionAvailability(state, action);
       const currentJob = getJob(state);
@@ -1477,15 +1469,16 @@ export const getActionViewModels = (state) =>
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["resign", "jobSearch", "overtime", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"]
-        : ["work", "jobSearch", "overtime", "study", "reward", "lifeAdmin", "network", "venture", "stockTrade"];
+        ? ["resign", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network", "venture", "stockTrade"]
+        : ["work", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network", "venture", "stockTrade"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });
 
 export const getStatusMeta = (state) => {
   const nextRent = getNextRentDay(state.day);
+  const dueRent = RENT_AMOUNT + (state.rentDebt ?? 0);
   const rentCountdown =
-    nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${RENT_AMOUNT}` : `${nextRent - state.day} 天後・$${RENT_AMOUNT}`;
+    nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${dueRent}` : `${nextRent - state.day} 天後・$${dueRent}`;
   const recovery = getSleepRecovery(state);
   const phaseCopy = {
     [PHASES.READY]: state.dayPlan.totalActions === 0 ? "準備安排今天" : "今天還能繼續做事，也可以直接睡覺",
@@ -1601,6 +1594,23 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
   const nextState = cloneState(state);
   if (nextState.phase !== PHASES.ATTENDANCE || !nextState.pendingAttendance) {
     return nextState;
+  }
+
+  if (choice === "work" && nextState.conditions.landlordAngry && rng() < getLandlordBlockRate(nextState)) {
+    beginTurnLogIfNeeded(nextState);
+    nextState.turnLog.actionId = "landlordBlock";
+    nextState.pendingAttendance = null;
+    appendResolution(nextState, {
+      effects: { stress: 6, mood: -4 },
+      log: "房東似乎在門外，看來暫時沒辦法出門了。你只好把原本的安排取消，壓力又往上堆了一點。",
+    });
+    const blockFailure = detectFailure(nextState);
+    if (blockFailure) {
+      setEnding(nextState, { type: "failure", ...blockFailure }, PHASES.GAME_OVER);
+      commitTurnLog(nextState);
+      return nextState;
+    }
+    return continueAfterAttendance(nextState);
   }
 
   applyAttendanceOutcome(nextState, choice);
