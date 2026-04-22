@@ -184,6 +184,8 @@ const EVENT_TONE = {
   創業驚喜: "opportunity",
   創業危機: "danger",
   接案機會: "opportunity",
+  求職成功: "growth",
+  求職結果: "steady",
 };
 
 const ICONS = {

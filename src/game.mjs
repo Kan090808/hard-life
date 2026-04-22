@@ -869,6 +869,47 @@ const getBurnoutPenalty = (state, action) => {
   };
 };
 
+const JOB_RESULT_COPY = {
+  failure: [
+    {
+      title: "履歷石沉大海",
+      description: "你投了幾份履歷，但今天沒有任何回音。已讀不回，有時也是人生的一部分。",
+      buttonText: "繼續找",
+      category: "求職結果",
+    },
+    {
+      title: "面試沒過",
+      description: "對方說會再通知你。你知道這句話通常不是真的會通知。",
+      buttonText: "繼續找",
+      category: "求職結果",
+    },
+  ],
+  close: {
+    title: "有一點回音",
+    description: "對方回覆了，但還沒到錄取那一步。至少你知道自己不是完全沒機會。",
+    buttonText: "繼續努力",
+    category: "求職結果",
+  },
+  2: {
+    title: "找到兼職了",
+    description: "對方願意給你固定班表，錢不算多，但至少每天有比較穩的收入了。",
+    buttonText: "確認上班",
+    category: "求職成功",
+  },
+  3: {
+    title: "拿到正職了",
+    description: "公司願意錄用你。收入變穩了，但每天也會先被工作吃掉一大段力氣。",
+    buttonText: "確認上任",
+    category: "求職成功",
+  },
+  4: {
+    title: "接案路線打開了",
+    description: "你開始有能力靠技能接活，不再只能等班表或老闆安排。",
+    buttonText: "確認轉型",
+    category: "求職成功",
+  },
+};
+
 const resolveJobSearch = (state, rng) => {
   const successRate = Math.min(
     1,
@@ -877,13 +918,10 @@ const resolveJobSearch = (state, rng) => {
   const success = rng() < successRate;
 
   if (!success) {
+    const copy = rng() < 0.5 ? JOB_RESULT_COPY.failure[0] : JOB_RESULT_COPY.failure[1];
+    state.pendingJobResult = copy;
     return {
-      effects: {
-        energy: -14,
-        mood: -12,
-        stress: 10,
-      },
-      log: "履歷投出去了，但今天只多收穫了幾封已讀不回。",
+      effects: { energy: -14, mood: -12, stress: 10 },
     };
   }
 
@@ -897,22 +935,20 @@ const resolveJobSearch = (state, rng) => {
           : state.jobLevel;
 
   if (nextLevel > state.jobLevel) {
+    state.pendingJobResult = JOB_RESULT_COPY[nextLevel] ?? {
+      title: "工作升級了",
+      description: `你談到更好的工作了，現在是 ${JOBS[nextLevel].name}。`,
+      buttonText: "確認",
+      category: "求職成功",
+    };
     return {
-      effects: {
-        jobLevel: nextLevel - state.jobLevel,
-        mood: 10,
-        stress: -8,
-      },
-      log: `你真的談到比較像樣的工作了，現在是 ${JOBS[nextLevel].name}。`,
+      effects: { jobLevel: nextLevel - state.jobLevel, mood: 10, stress: -8 },
     };
   }
 
+  state.pendingJobResult = JOB_RESULT_COPY.close;
   return {
-    effects: {
-      mood: 4,
-      stress: -2,
-    },
-    log: "今天有一點回音，但還差一點條件才能真的跳出去。",
+    effects: { mood: 4, stress: -2 },
   };
 };
 
@@ -1590,6 +1626,21 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
+  if (nextState.pendingJobResult) {
+    const jobResult = nextState.pendingJobResult;
+    nextState.pendingJobResult = null;
+    nextState.pendingEvent = {
+      id: "job-result",
+      title: jobResult.title,
+      category: jobResult.category,
+      description: jobResult.description,
+      options: [{ id: "confirm", text: jobResult.buttonText, caption: "" }],
+      _trigger: "jobResult",
+    };
+    nextState.phase = PHASES.EVENT;
+    return nextState;
+  }
+
   return maybeTriggerEventOrContinue(nextState, rng, repeatPenalty);
 };
 
@@ -1600,6 +1651,12 @@ const resolveEvent = (state, optionId, rng) => {
   }
 
   const trigger = nextState.pendingEvent._trigger;
+
+  if (trigger === "jobResult") {
+    nextState.pendingEvent = null;
+    return maybeTriggerEventOrContinue(nextState, rng, nextState.dayPlan.lastRepeatPenalty);
+  }
+
   const event = EVENTS.find((entry) => entry.id === nextState.pendingEvent.id);
   const option = event?.options.find((entry) => entry.id === optionId);
   if (!option) {
