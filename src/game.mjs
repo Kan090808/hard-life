@@ -826,11 +826,6 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
     return { available: true, reason: "" };
   }
 
-  const projected = getRepeatAdjustedProjectedEffects(state, action);
-  if (!canSurviveEffects(state, projected)) {
-    return { available: false, reason: "現在體力不夠，再做會直接倒下。" };
-  }
-
   return { available: true, reason: "" };
 };
 
@@ -1522,7 +1517,7 @@ export const createInitialState = (rng = Math.random) => {
 
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
-    .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" : action.id !== "resign"))
+    .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" && action.id !== "jobSearch" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .filter((action) => action.id !== "repairScooter" || state.conditions.scooterBroken)
     .filter((action) => action.id !== "repairComputer" || state.conditions.computerBroken)
@@ -1561,7 +1556,7 @@ export const getActionViewModels = (state) =>
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["resign", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
+        ? ["resign", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
         : ["work", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });
@@ -1667,8 +1662,6 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
     const isSuccess = rng() < successRate;
     const effects = isSuccess ? optConfig.successEffects : optConfig.failureEffects;
 
-    if (!canSurviveEffects(nextState, effects)) return nextState;
-
     const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = actionId;
@@ -1704,10 +1697,6 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
 
   const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
   const adjustedEffects = applyRepeatPenaltyToEffects(selected.effects, repeatPenalty);
-  if (!canSurviveEffects(nextState, adjustedEffects)) {
-    return nextState;
-  }
-
   beginTurnLogIfNeeded(nextState);
   nextState.turnLog.actionId = actionId;
   pushLine(nextState, `你今天選了「${selected.label}」。`);

@@ -1012,7 +1012,20 @@ const handleActionDialogClick = (event) => {
   }
 
   if (role === "action-choice") {
-    handleActionChoice(button.dataset.actionId);
+    const actionId = button.dataset.actionId;
+    if (actionId === "resign") {
+      playClickSfx();
+      setMode("idle");
+      uiState.confirmDialog = {
+        title: "確定要離職？",
+        copy: "離職後明天開始不再被固定工作打斷日初流程。",
+        confirmLabel: "離職",
+        onConfirm: () => handleActionChoice("resign"),
+      };
+      render();
+      return;
+    }
+    handleActionChoice(actionId);
     return;
   }
 
