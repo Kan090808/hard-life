@@ -1792,7 +1792,6 @@ assertRequiredElements(
   "rentStrikes",
   "phaseLabel",
   "actionSummary",
-  "sleepRecoveryPreview",
   "conditionStrip",
   "goalTitle",
   "goalCopy",
