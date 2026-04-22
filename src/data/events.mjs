@@ -516,37 +516,6 @@ export const EVENTS = [
     ],
   },
   {
-    id: "phone-bill",
-    tier: "state",
-    trigger: "dayStart",
-    category: "帳單壓力",
-    title: "電信帳單來了",
-    description: "電信帳單扣款通知跳出來，這個月也沒少花。",
-    condition: (state) => state.day >= 5 && state.money < 5000,
-    options: [
-      {
-        id: "pay-now",
-        text: "直接繳掉",
-        caption: "金錢 -650、壓力 -4。",
-        resolve: () =>
-          withLog(
-            { money: -650, stress: -4 },
-            "你把帳單結掉，雖然帳戶又少了一截，至少這件事不用再掛心。"
-          ),
-      },
-      {
-        id: "delay-pay",
-        text: "延後繳",
-        caption: "壓力 +10、心情 -5。",
-        resolve: () =>
-          withLog(
-            { stress: 10, mood: -5 },
-            "你把帳單先擱著，但通知一直掛在那裡，壓力沒有因此消失。"
-          ),
-      },
-    ],
-  },
-  {
     id: "family-help",
     tier: "state",
     trigger: "dayStart",

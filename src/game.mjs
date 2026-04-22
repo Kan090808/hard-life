@@ -24,18 +24,18 @@ import { EVENTS } from "./data/events.mjs";
 
 const cloneState = (state) => JSON.parse(JSON.stringify(state));
 
-const SLEEP_RECOVERY_BASE = 14;
-const SLEEP_RECOVERY_PER_PHYSIQUE = 4;
-const SLEEP_STRESS_RELIEF_BASE = 4;
+const SLEEP_RECOVERY_BASE = 10;
+const SLEEP_RECOVERY_PER_PHYSIQUE = 3;
+const SLEEP_STRESS_RELIEF_BASE = 3;
 const SLEEP_STRESS_RELIEF_PER_PHYSIQUE = 1;
 
 const REPEAT_ENERGY_COST = 6;
 const REPEAT_MONEY_DROP = 0.2;
 const REPEAT_WELLBEING_DROP = 0.15;
-const REPEAT_EVENT_RISK = 0.12;
-const BASE_EVENT_TRIGGER_RATE = 0.18;
-const MAX_EVENT_TRIGGER_RATE = 0.66;
-const DAY_START_EVENT_RATE = 0.35;
+const REPEAT_EVENT_RISK = 0.16;
+const BASE_EVENT_TRIGGER_RATE = 0.28;
+const MAX_EVENT_TRIGGER_RATE = 0.82;
+const DAY_START_EVENT_RATE = 0.5;
 
 const cloneEffects = (effects = {}) => ({ ...effects });
 
@@ -914,7 +914,7 @@ const JOB_RESULT_COPY = {
 const resolveJobSearch = (state, rng) => {
   const successRate = Math.min(
     1,
-    0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)
+    0.12 + state.skill * 0.006 + state.character.intelligence * 0.025 + state.character.luck * 0.008 + (state.conditions.hasFreelanceContact ? 0.04 : 0)
   );
   const success = rng() < successRate;
 

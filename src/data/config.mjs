@@ -8,7 +8,7 @@ export const PHASES = {
 };
 
 export const TOTAL_DAYS = 30;
-export const DAILY_LIVING_COST = 280;
+export const DAILY_LIVING_COST = 400;
 export const RENT_AMOUNT = 4000;
 export const RENT_DAYS = [7, 14, 21, 28];
 export const MAX_LOG_ENTRIES = 8;
@@ -63,7 +63,7 @@ export const CONDITION_CONFIG = {
 export const DEFAULT_PLAYER_STATE = {
   day: 1,
   totalDays: TOTAL_DAYS,
-  money: 3500,
+  money: 2000,
   energy: 80,
   mood: 60,
   stress: 20,
