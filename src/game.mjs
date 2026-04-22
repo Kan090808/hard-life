@@ -1517,7 +1517,7 @@ export const createInitialState = (rng = Math.random) => {
 
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
-    .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" : action.id !== "resign"))
+    .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" && action.id !== "jobSearch" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .filter((action) => action.id !== "repairScooter" || state.conditions.scooterBroken)
     .filter((action) => action.id !== "repairComputer" || state.conditions.computerBroken)
@@ -1556,7 +1556,7 @@ export const getActionViewModels = (state) =>
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["resign", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
+        ? ["resign", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
         : ["work", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });
