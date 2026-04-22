@@ -72,6 +72,27 @@ export const DEFAULT_PLAYER_STATE = {
   rentDebt: 0,
 };
 
+export const DEFAULT_SUMMARY_STATS = {
+  rentPaidTimes: 0,
+  rentMissedTimes: 0,
+  rentDebtClearedTimes: 0,
+  landlordBlockedTimes: 0,
+  appeaseLandlordSuccessTimes: 0,
+  scooterRepairedTimes: 0,
+  computerRepairedTimes: 0,
+  burnoutRecoveredTimes: 0,
+  jobsWorked: 0,
+  overtimeTimes: 0,
+  studyTimes: 0,
+  rewardTimes: 0,
+  networkTimes: 0,
+  freelanceAcceptedTimes: 0,
+  maxMoney: 0,
+  minMoney: 0,
+  maxStress: 0,
+  lowestMood: 100,
+};
+
 export const DEFAULT_CONDITIONS = {
   scooterBroken: false,
   computerBroken: false,

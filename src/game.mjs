@@ -5,6 +5,7 @@ import {
   DEFAULT_CONDITIONS,
   DEFAULT_HISTORY,
   DEFAULT_PLAYER_STATE,
+  DEFAULT_SUMMARY_STATS,
   FAILURE_ENDINGS,
   JOBS,
   MAX_LOG_ENTRIES,
@@ -45,8 +46,189 @@ const clampStat = (key, value) => {
 };
 
 const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+const incrementSummaryStat = (state, key, amount = 1) => {
+  state.summaryStats[key] = (state.summaryStats[key] ?? 0) + amount;
+};
+
+const updateSummaryExtremes = (state) => {
+  state.summaryStats.maxMoney = Math.max(state.summaryStats.maxMoney, state.money);
+  state.summaryStats.minMoney = Math.min(state.summaryStats.minMoney, state.money);
+  state.summaryStats.maxStress = Math.max(state.summaryStats.maxStress, state.stress);
+  state.summaryStats.lowestMood = Math.min(state.summaryStats.lowestMood, state.mood);
+};
 
 const LANDLORD_BLOCKED_ACTIONS = new Set(["work", "overtime", "jobSearch", "study", "reward", "network"]);
+
+const ENDING_TAG_CATEGORY_PRIORITY = {
+  survival: 1,
+  career: 2,
+  rent: 3,
+  utility: 4,
+};
+
+const ENDING_TAGS = [
+  {
+    label: "自由工作者",
+    conditionText: "月底工作等級達到「遠端接案者」",
+    difficultyScore: 95,
+    category: "career",
+    matches: (state) => state.jobLevel >= 4,
+  },
+  {
+    label: "知識就是力量",
+    conditionText: "月底技能達到 80",
+    difficultyScore: 90,
+    category: "career",
+    matches: (state) => state.skill >= 80,
+  },
+  {
+    label: "輕輕鬆鬆",
+    conditionText: "月底壓力不高於 35，且體力至少 60",
+    difficultyScore: 88,
+    category: "survival",
+    matches: (state) => state.stress <= 35 && state.energy >= 60,
+  },
+  {
+    label: "壓力山大",
+    conditionText: "本月最高壓力達到 90，或月底壓力達到 80",
+    difficultyScore: 86,
+    category: "survival",
+    matches: (state) => state.stress >= 80 || state.summaryStats.maxStress >= 90,
+  },
+  {
+    label: "逃離死神",
+    conditionText: "本月曾進入過勞邊緣，後來成功解除",
+    difficultyScore: 84,
+    category: "survival",
+    matches: (state) => state.summaryStats.burnoutRecoveredTimes >= 1,
+  },
+  {
+    label: "有點小錢",
+    conditionText: "月底金錢達到 30000",
+    difficultyScore: 82,
+    category: "survival",
+    matches: (state) => state.money >= 30000,
+  },
+  {
+    label: "有借有還",
+    conditionText: "本月曾經欠租，但月底前已補清",
+    difficultyScore: 80,
+    category: "rent",
+    matches: (state) => state.summaryStats.rentMissedTimes >= 1 && state.rentDebt === 0,
+  },
+  {
+    label: "差點破產",
+    conditionText: "本月金錢曾低於 500，但最後沒有破產",
+    difficultyScore: 78,
+    category: "survival",
+    matches: (state) => state.summaryStats.minMoney < 500 && state.money >= 0,
+  },
+  {
+    label: "房東追殺",
+    conditionText: "本月曾被房東堵門，導致出門行動失敗",
+    difficultyScore: 76,
+    category: "rent",
+    matches: (state) => state.summaryStats.landlordBlockedTimes >= 1,
+  },
+  {
+    label: "年輕人就是要加班啊",
+    conditionText: "本月加班至少 5 次",
+    difficultyScore: 74,
+    category: "career",
+    matches: (state) => state.summaryStats.overtimeTimes >= 5,
+  },
+  {
+    label: "有個體面的工作",
+    conditionText: "月底工作等級達到「正職新人」以上",
+    difficultyScore: 72,
+    category: "career",
+    matches: (state) => state.jobLevel >= 3,
+  },
+  {
+    label: "行尸走肉",
+    conditionText: "月底心情低於 40",
+    difficultyScore: 70,
+    category: "survival",
+    matches: (state) => state.mood < 40,
+  },
+  {
+    label: "接案子試試看",
+    conditionText: "本月接案至少 2 次",
+    difficultyScore: 68,
+    category: "career",
+    matches: (state) => state.summaryStats.freelanceAcceptedTimes >= 2,
+  },
+  {
+    label: "房租改天再還",
+    conditionText: "本月曾經欠租",
+    difficultyScore: 66,
+    category: "rent",
+    matches: (state) => state.summaryStats.rentMissedTimes >= 1,
+  },
+  {
+    label: "房東別生氣",
+    conditionText: "本月成功安撫過房東",
+    difficultyScore: 64,
+    category: "rent",
+    matches: (state) => state.summaryStats.appeaseLandlordSuccessTimes >= 1,
+  },
+  {
+    label: "我的戰馬",
+    conditionText: "月底時機車仍是待修狀態，但你撐到月底",
+    difficultyScore: 62,
+    category: "utility",
+    matches: (state) => state.conditions.scooterBroken === true && state.phase === PHASES.COMPLETED,
+  },
+  {
+    label: "電腦好好的",
+    conditionText: "月底時電腦仍是故障狀態，但你撐到月底",
+    difficultyScore: 62,
+    category: "utility",
+    matches: (state) => state.conditions.computerBroken === true && state.phase === PHASES.COMPLETED,
+  },
+  {
+    label: "拯救戰馬",
+    conditionText: "本月修過機車",
+    difficultyScore: 58,
+    category: "utility",
+    matches: (state) => state.summaryStats.scooterRepairedTimes >= 1,
+  },
+  {
+    label: "修理賺錢工具",
+    conditionText: "本月修過電腦",
+    difficultyScore: 58,
+    category: "utility",
+    matches: (state) => state.summaryStats.computerRepairedTimes >= 1,
+  },
+  {
+    label: "喜歡交朋友",
+    conditionText: "本月社交拜訪至少 4 次",
+    difficultyScore: 56,
+    category: "career",
+    matches: (state) => state.summaryStats.networkTimes >= 4,
+  },
+  {
+    label: "有點人脈",
+    conditionText: "月底仍保有接案人脈",
+    difficultyScore: 54,
+    category: "career",
+    matches: (state) => state.conditions.hasFreelanceContact === true,
+  },
+  {
+    label: "對自己好一點",
+    conditionText: "本月犒賞自己至少 4 次",
+    difficultyScore: 52,
+    category: "survival",
+    matches: (state) => state.summaryStats.rewardTimes >= 4,
+  },
+  {
+    label: "拒絕學習",
+    conditionText: "月底技能低於 30，且成功撐到月底",
+    difficultyScore: 50,
+    category: "career",
+    matches: (state) => state.skill < 30 && state.phase === PHASES.COMPLETED,
+  },
+];
 
 const getLandlordBlockRate = (state) => {
   const luckReduction = (state.character.luck - 3) * 0.04;
@@ -118,11 +300,15 @@ const applyEffects = (state, effects = {}) => {
 
 const applyConditionChanges = (state, changes = {}) =>
   Object.entries(changes).flatMap(([conditionId, nextValue]) => {
-    if (state.conditions[conditionId] === nextValue) {
+    const previousValue = state.conditions[conditionId];
+    if (previousValue === nextValue) {
       return [];
     }
 
     state.conditions[conditionId] = nextValue;
+    if (conditionId === "burnoutRisk" && previousValue === true && nextValue === false) {
+      incrementSummaryStat(state, "burnoutRecoveredTimes");
+    }
     return [describeConditionChange(conditionId, nextValue)];
   });
 
@@ -132,6 +318,7 @@ const appendResolution = (state, resolution = {}) => {
   if (resolution.log) {
     pushLine(state, resolution.log);
   }
+  updateSummaryExtremes(state);
 };
 
 const getJob = (state) => JOBS[state.jobLevel];
@@ -167,8 +354,117 @@ const evaluateEnding = (state) => {
   return { type: "completion", ...matched };
 };
 
+const buildEndingTags = (state) =>
+  ENDING_TAGS.filter((tag) => tag.matches(state))
+    .sort((a, b) => {
+      if (b.difficultyScore !== a.difficultyScore) {
+        return b.difficultyScore - a.difficultyScore;
+      }
+      return (ENDING_TAG_CATEGORY_PRIORITY[a.category] ?? 99) - (ENDING_TAG_CATEGORY_PRIORITY[b.category] ?? 99);
+    })
+    .slice(0, 3)
+    .map(({ label, conditionText }) => ({ label, conditionText }));
+
+const buildEndingSummaryLines = (state) => {
+  const moneyLine =
+    state.money >= 40000
+      ? "金錢：戶頭很厚，這個月真的守得漂亮。"
+      : state.money >= 20000
+        ? "金錢：還有一筆存款，至少月底不用慌。"
+        : state.money >= 8000
+          ? "金錢：有撐住，但離安心還有距離。"
+          : state.money >= 0
+            ? "金錢：沒破產，但幾乎沒什麼餘裕。"
+            : "金錢：你是靠透支撐到最後。";
+  const energyLine =
+    state.energy >= 70
+      ? "體力：身體狀態還不錯，沒有完全燃燒自己。"
+      : state.energy >= 40
+        ? "體力：還能動，但明顯累了。"
+        : "體力：你幾乎是用最後一口氣撐完。";
+  const moodLine =
+    state.mood >= 70
+      ? "心情：心情還守得住，這很難得。"
+      : state.mood >= 40
+        ? "心情：沒有崩掉，但也稱不上輕鬆。"
+        : "心情：你活下來了，但心裡其實很累。";
+  const stressLine =
+    state.stress <= 35
+      ? "壓力：壓力控制得不錯，節奏有抓到。"
+      : state.stress <= 65
+        ? "壓力：壓力不低，但還在可控範圍。"
+        : "壓力：你一路頂著壓力硬撐。";
+
+  return [moneyLine, energyLine, moodLine, stressLine];
+};
+
+const buildEndingRecords = (state) => {
+  const records = [];
+  const { summaryStats } = state;
+  const append = (condition, text) => {
+    if (condition) {
+      records.push(text);
+    }
+  };
+
+  append(
+    summaryStats.rentPaidTimes > 0 || summaryStats.rentMissedTimes > 0,
+    `繳了 ${summaryStats.rentPaidTimes} 次房租，欠租 ${summaryStats.rentMissedTimes} 次`
+  );
+  append(state.rentDebt > 0, `月底仍欠租金 $${state.rentDebt}`);
+  append(summaryStats.landlordBlockedTimes > 0, `被房東堵門 ${summaryStats.landlordBlockedTimes} 次`);
+  append(summaryStats.maxStress > 0, `本月最高壓力 ${summaryStats.maxStress}`);
+  append(summaryStats.minMoney < DEFAULT_PLAYER_STATE.money, `本月最低金錢 $${summaryStats.minMoney}`);
+  append(summaryStats.jobsWorked > 0, `工作 ${summaryStats.jobsWorked} 次`);
+  append(summaryStats.overtimeTimes > 0, `加班 ${summaryStats.overtimeTimes} 次`);
+  append(summaryStats.freelanceAcceptedTimes > 0, `接案 ${summaryStats.freelanceAcceptedTimes} 次`);
+  append(summaryStats.studyTimes > 0, `學技能 ${summaryStats.studyTimes} 次，月底技能 ${state.skill}`);
+  append(summaryStats.scooterRepairedTimes > 0, `修過 ${summaryStats.scooterRepairedTimes} 次機車`);
+  append(summaryStats.computerRepairedTimes > 0, `修過 ${summaryStats.computerRepairedTimes} 次電腦`);
+  append(summaryStats.networkTimes > 0, `社交拜訪 ${summaryStats.networkTimes} 次`);
+  append(summaryStats.rewardTimes > 0, `犒賞自己 ${summaryStats.rewardTimes} 次`);
+
+  return records.slice(0, 6);
+};
+
+const buildEndingAdvice = (state) => {
+  const { summaryStats } = state;
+  if (summaryStats.rentMissedTimes >= 2) {
+    return "下次可以先留一筆房租，不然房東壓力會一路滾大。";
+  }
+  if (state.rentDebt > 0) {
+    return "租金欠著會越滾越大，下次可以早點準備房租。";
+  }
+  if (state.stress >= 80 || summaryStats.maxStress >= 90) {
+    return "你這輪太硬撐了，偶爾休息不是浪費。";
+  }
+  if (state.skill < 30) {
+    return "技能太低時選擇會很少，下次可以早點投資自己。";
+  }
+  if (state.money < 5000) {
+    return "現金太薄，任何突發事件都會很痛。";
+  }
+  if (state.conditions.computerBroken) {
+    return "電腦故障拖太久，學習和接案都會卡。";
+  }
+  if (state.conditions.scooterBroken) {
+    return "機車壞了不修，出門行動會一直被扣狀態。";
+  }
+  return "這輪撐得不錯，下次可以挑戰更高存款或更低壓力。";
+};
+
+const buildEndingDetails = (state) => ({
+  tags: buildEndingTags(state),
+  summaryLines: buildEndingSummaryLines(state),
+  records: buildEndingRecords(state),
+  advice: buildEndingAdvice(state),
+});
+
 const setEnding = (state, ending, phase) => {
-  state.ending = ending;
+  state.ending = {
+    ...ending,
+    details: buildEndingDetails(state),
+  };
   state.phase = phase;
 };
 
@@ -452,6 +748,16 @@ const recordUserAction = (state, actionId, penalty) => {
   noteRecentAction(state, actionId);
 };
 
+const updateSummaryActionCounts = (state, actionId) => {
+  if (actionId === "work") incrementSummaryStat(state, "jobsWorked");
+  if (actionId === "overtime") incrementSummaryStat(state, "overtimeTimes");
+  if (actionId === "study") incrementSummaryStat(state, "studyTimes");
+  if (actionId === "reward") incrementSummaryStat(state, "rewardTimes");
+  if (actionId === "network") incrementSummaryStat(state, "networkTimes");
+  if (actionId === "repairScooter") incrementSummaryStat(state, "scooterRepairedTimes");
+  if (actionId === "repairComputer") incrementSummaryStat(state, "computerRepairedTimes");
+};
+
 const getProjectedActionEffects = (state, action) => {
   const job = getJob(state);
 
@@ -683,6 +989,9 @@ const applyAttendanceOutcome = (state, choice) => {
   appendResolution(state, {
     effects: working ? job.attendanceEffects : job.leaveEffects,
   });
+  if (working) {
+    incrementSummaryStat(state, "jobsWorked");
+  }
   pushLine(
     state,
     working
@@ -915,7 +1224,9 @@ const applyRecurringCosts = (state, rng) => {
 
   if (state.money >= dueRent) {
     appendResolution(state, { effects: { money: -dueRent } });
+    incrementSummaryStat(state, "rentPaidTimes");
     if (state.rentDebt > 0) {
+      incrementSummaryStat(state, "rentDebtClearedTimes");
       pushLine(state, `今天繳房租 $${dueRent}，包含之前欠下的租金，總算先把房東那邊壓下來。`);
     } else {
       pushLine(state, `今天繳房租 $${dueRent}，現實照樣準時打卡。`);
@@ -928,6 +1239,7 @@ const applyRecurringCosts = (state, rng) => {
 
   state.rentDebt += RENT_AMOUNT;
   state.unpaidRentCount += 1;
+  incrementSummaryStat(state, "rentMissedTimes");
   appendResolution(state, {
     effects: {
       stress: 30,
@@ -1105,6 +1417,7 @@ const resolveAction = (state, actionId, rng) => {
   if (nextState.conditions.landlordAngry && LANDLORD_BLOCKED_ACTIONS.has(actionId) && rng() < getLandlordBlockRate(nextState)) {
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = "landlordBlock";
+    incrementSummaryStat(nextState, "landlordBlockedTimes");
     appendResolution(nextState, {
       effects: { stress: 6, mood: -4 },
       log: "房東似乎在門外，看來暫時沒辦法出門了。你只好把原本的安排取消，壓力又往上堆了一點。",
@@ -1129,6 +1442,7 @@ const resolveAction = (state, actionId, rng) => {
   nextState.turnLog.actionId = getActionLogId(nextState, action);
   pushLine(nextState, `你今天安排了「${getActionLogLabel(nextState, action)}」。`);
   recordUserAction(nextState, action.id, repeatPenalty);
+  updateSummaryActionCounts(nextState, action.id);
 
   resolveBaseAction(nextState, actionId, rng, repeatPenalty);
 
@@ -1155,6 +1469,9 @@ const resolveEvent = (state, optionId, rng) => {
   }
 
   appendResolution(nextState, option.resolve(nextState, rng));
+  if (nextState.pendingEvent.id === "freelance-offer" && optionId !== "decline") {
+    incrementSummaryStat(nextState, "freelanceAcceptedTimes");
+  }
   nextState.pendingEvent = null;
 
   const failure = detectFailure(nextState);
@@ -1170,8 +1487,9 @@ const resolveEvent = (state, optionId, rng) => {
 
 export const createInitialState = (rng = Math.random) => {
   const character = createCharacter(rng);
+  const startingState = getStartingState(character);
   const state = {
-    ...getStartingState(character),
+    ...startingState,
     character,
     conditions: { ...DEFAULT_CONDITIONS },
     history: { ...DEFAULT_HISTORY },
@@ -1189,6 +1507,13 @@ export const createInitialState = (rng = Math.random) => {
     dailyFreelanceOffer: null,
     activeCaseProject: null,
     dayPlan: null,
+    summaryStats: {
+      ...DEFAULT_SUMMARY_STATS,
+      maxMoney: startingState.money,
+      minMoney: startingState.money,
+      maxStress: startingState.stress,
+      lowestMood: startingState.mood,
+    },
   };
   initializeDayPlan(state);
   refreshDailyBoards(state, rng);
@@ -1348,12 +1673,16 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = actionId;
     recordUserAction(nextState, actionId, repeatPenalty);
+    updateSummaryActionCounts(nextState, actionId);
 
     appendResolution(nextState, {
       effects,
       conditionChanges: { landlordAngry: !isSuccess },
       log: isSuccess ? optConfig.successLog : optConfig.failureLog,
     });
+    if (isSuccess) {
+      incrementSummaryStat(nextState, "appeaseLandlordSuccessTimes");
+    }
 
     nextState.pendingActionChoice = null;
 
@@ -1383,6 +1712,7 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
   nextState.turnLog.actionId = actionId;
   pushLine(nextState, `你今天選了「${selected.label}」。`);
   recordUserAction(nextState, actionId, repeatPenalty);
+  updateSummaryActionCounts(nextState, actionId);
   appendResolution(nextState, { effects: adjustedEffects });
   if (repeatPenalty.repeatIndex > 1) {
     pushLine(nextState, `同樣的安排今天已經做過，這次的代價更直接，效果也開始打折。`);
@@ -1409,6 +1739,7 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = "landlordBlock";
     nextState.pendingAttendance = null;
+    incrementSummaryStat(nextState, "landlordBlockedTimes");
     appendResolution(nextState, {
       effects: { stress: 6, mood: -4 },
       log: "房東似乎在門外，看來暫時沒辦法出門了。你只好把原本的安排取消，壓力又往上堆了一點。",

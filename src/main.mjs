@@ -1,5 +1,5 @@
 import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
-import { CHARACTER_STAT_DISPLAY, CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
+import { CHARACTER_STAT_DISPLAY, GAME_COPY, JOBS, STAT_DISPLAY } from "./data/config.mjs";
 import { APP_VERSION } from "./version.mjs";
 import {
   isAudioSupported,
@@ -312,6 +312,10 @@ const normalizeSavedState = (savedState) => {
     latestAchievements: Array.isArray(savedState.latestAchievements) ? cloneSerializable(savedState.latestAchievements) : baseline.latestAchievements,
     dailyWorkOptions: Array.isArray(savedState.dailyWorkOptions) ? cloneSerializable(savedState.dailyWorkOptions) : baseline.dailyWorkOptions,
     dailyRewardOptions: Array.isArray(savedState.dailyRewardOptions) ? cloneSerializable(savedState.dailyRewardOptions) : baseline.dailyRewardOptions,
+    summaryStats:
+      savedState.summaryStats && typeof savedState.summaryStats === "object"
+        ? { ...baseline.summaryStats, ...savedState.summaryStats }
+        : { ...baseline.summaryStats },
     pendingAttendance: savedState.pendingAttendance ?? null,
     pendingActionChoice: savedState.pendingActionChoice ?? null,
     pendingEvent: savedState.pendingEvent ?? null,
@@ -1412,27 +1416,17 @@ const renderEndingDialog = () => {
   elements.endingCapture.dataset.stamp = isFailure ? "失敗" : "通關";
 
   const rank = getEndingRank();
-  const achievementList =
-    state.unlockedMilestones.length > 0
-      ? state.unlockedMilestones
-          .map((id) => {
-            const milestone = MILESTONES.find((entry) => entry.id === id);
-            return milestone?.title ?? id;
-          })
-          .join("、")
-      : "本月尚未解鎖里程碑";
-  const activeConditionLabels = Object.entries(state.conditions)
-    .filter(([, enabled]) => enabled)
-    .map(([id]) => CONDITION_CONFIG[id]?.label ?? id)
-    .join("、") || "沒有持續問題留到月底";
+  const details = state.ending.details ?? { tags: [], summaryLines: [], records: [], advice: "" };
+  const tagsText = details.tags.map((tag) => tag.label).join("｜");
 
   elements.endingTitle.textContent = state.ending.title;
   elements.endingCopy.textContent = state.ending.body;
   elements.endingReport.innerHTML = `
     <section class="ending-rank-card ${rank?.tone ?? "steady"}">
       <span class="ending-rank-label">${rank?.label ?? "本月稱號：月底生還者"}</span>
+      ${tagsText ? `<p class="ending-tagline">${tagsText}</p>` : ""}
       <strong class="ending-job-name">${JOBS[state.jobLevel].name}</strong>
-      <p class="ending-evaluation">${getEndingEvaluation()}</p>
+      <p class="ending-evaluation">${details.advice || getEndingEvaluation()}</p>
     </section>
     <section class="ending-grid">
       <article class="ending-stat-card">
@@ -1453,9 +1447,28 @@ const renderEndingDialog = () => {
       </article>
     </section>
     <section class="ending-achievements">
+      <span class="ending-section-label">月底總評</span>
+      <ul class="ending-list">
+        ${(details.summaryLines ?? []).map((line) => `<li>${line}</li>`).join("")}
+      </ul>
+    </section>
+    <section class="ending-achievements">
       <span class="ending-section-label">本月紀錄</span>
-      <p>${achievementList}</p>
-      <p>留到月底的持續狀態：${activeConditionLabels}</p>
+      <ul class="ending-list">
+        ${(details.records ?? []).map((line) => `<li>${line}</li>`).join("")}
+      </ul>
+    </section>
+    <section class="ending-achievements">
+      <span class="ending-section-label">本月標籤</span>
+      <ul class="ending-list">
+        ${(details.tags ?? [])
+          .map((tag) => `<li><strong>${tag.label}</strong><br/>達成條件：${tag.conditionText}</li>`)
+          .join("")}
+      </ul>
+    </section>
+    <section class="ending-achievements">
+      <span class="ending-section-label">下次可以試試</span>
+      <p>${details.advice || "這輪撐得不錯，下次可以挑戰更高存款或更低壓力。"}</p>
     </section>
   `;
 
