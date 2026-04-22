@@ -439,8 +439,7 @@ export const ACTIONS = {
     description: "房東已經開始不耐煩了。今天先低頭處理，至少暫時不要讓事情變更糟。",
     intensity: "light",
     category: "utility",
-    special: "appeaseLandlord",
-    effects: { money: -400, mood: 4, stress: -10 },
+    special: "appeaseLandlordChoice",
   },
   network: {
     id: "network",

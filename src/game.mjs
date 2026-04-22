@@ -634,7 +634,7 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
     return { available: false, reason: "創業至少要先準備 6000。" };
   }
 
-  if (["workChoice", "rewardChoice", "stockTrade"].includes(action.special)) {
+  if (["workChoice", "rewardChoice", "appeaseLandlordChoice", "stockTrade"].includes(action.special)) {
     return { available: true, reason: "" };
   }
 
@@ -1042,6 +1042,28 @@ const openActionChoice = (state, actionId) => {
     return state;
   }
 
+  if (actionId === "appeaseLandlord") {
+    state.pendingActionChoice = {
+      actionId,
+      title: "怎麼安撫房東？",
+      description: "房東已經不太高興了。選一種方式處理，成功會解除「房東不爽」。",
+      options: [
+        {
+          id: "gift",
+          label: "買小禮物",
+          caption: "成功率 88%｜金錢 -300｜體力 -5｜心情 -2｜壓力 -12",
+        },
+        {
+          id: "apologize",
+          label: "口頭道歉",
+          caption: "成功率 68%｜體力 -6｜心情 -3｜壓力 -9",
+        },
+      ],
+    };
+    state.phase = PHASES.CHOICE;
+    return state;
+  }
+
   return state;
 };
 
@@ -1069,13 +1091,6 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
         effects: { money: -1500, stress: -6 },
         conditionChanges: { computerBroken: false },
         log: "你把設備問題處理掉了，之後學技能和接案終於能正常進行。",
-      };
-      break;
-    case "appeaseLandlord":
-      resolution = {
-        effects: { money: -400, mood: 4, stress: -10 },
-        conditionChanges: { landlordAngry: false },
-        log: "你把房東那邊暫時安撫下來，今天的壓力終於沒那麼貼著你。",
       };
       break;
     case "network":
@@ -1336,7 +1351,7 @@ const resolveAction = (state, actionId, rng) => {
     return maybeTriggerEventOrContinue(nextState, rng);
   }
 
-  const opensChoice = ["workChoice", "rewardChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(nextState));
+  const opensChoice = ["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(nextState));
   if (opensChoice) {
     return openActionChoice(nextState, action.id);
   }
@@ -1558,6 +1573,64 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
   }
 
   const { actionId } = nextState.pendingActionChoice;
+
+  if (actionId === "appeaseLandlord") {
+    const APPEASE_OPTION_CONFIG = {
+      gift: {
+        baseSuccessRate: 0.88,
+        luckFactor: 0.03,
+        minRate: 0.70,
+        maxRate: 0.95,
+        successEffects: { money: -300, energy: -5, mood: -2, stress: -12 },
+        failureEffects: { money: -300, energy: -5, mood: -8, stress: -3 },
+        successLog: "你帶著小禮物去道歉。房東念了幾句，但看你有誠意，暫時願意讓你緩一緩。",
+        failureLog: "房東收下禮物，但臉色沒有變好。你花了錢，事情卻還沒真正過去。",
+      },
+      apologize: {
+        baseSuccessRate: 0.68,
+        luckFactor: 0.05,
+        minRate: 0.45,
+        maxRate: 0.85,
+        successEffects: { energy: -6, mood: -3, stress: -9 },
+        failureEffects: { energy: -6, mood: -9, stress: -2 },
+        successLog: "你低頭解釋了半天。房東臉色還是不太好，但願意先不繼續逼你。",
+        failureLog: "你解釋了很久，房東只回一句：「我之前也聽過。」你沒有花錢，但心情更沉了。",
+      },
+    };
+
+    const optConfig = APPEASE_OPTION_CONFIG[optionId];
+    if (!optConfig) return nextState;
+
+    const luckBonus = (nextState.character.luck - 3) * optConfig.luckFactor;
+    const successRate = clampNumber(optConfig.baseSuccessRate + luckBonus, optConfig.minRate, optConfig.maxRate);
+    const isSuccess = rng() < successRate;
+    const effects = isSuccess ? optConfig.successEffects : optConfig.failureEffects;
+
+    if (!canSurviveEffects(nextState, effects)) return nextState;
+
+    const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
+    beginTurnLogIfNeeded(nextState);
+    nextState.turnLog.actionId = actionId;
+    recordUserAction(nextState, actionId, repeatPenalty);
+
+    appendResolution(nextState, {
+      effects,
+      conditionChanges: { landlordAngry: !isSuccess },
+      log: isSuccess ? optConfig.successLog : optConfig.failureLog,
+    });
+
+    nextState.pendingActionChoice = null;
+
+    const appeaseLandlordFailure = detectFailure(nextState);
+    if (appeaseLandlordFailure) {
+      setEnding(nextState, { type: "failure", ...appeaseLandlordFailure }, PHASES.GAME_OVER);
+      commitTurnLog(nextState);
+      return nextState;
+    }
+
+    return maybeTriggerEventOrContinue(nextState, rng, repeatPenalty);
+  }
+
   const options = actionId === "work" ? nextState.dailyWorkOptions : nextState.dailyRewardOptions;
   const selected = options.find((option) => option.id === optionId);
   if (!selected) {
