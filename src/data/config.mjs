@@ -12,6 +12,7 @@ export const DAILY_LIVING_COST = 280;
 export const RENT_AMOUNT = 4000;
 export const RENT_DAYS = [7, 14, 21, 28];
 export const MAX_LOG_ENTRIES = 8;
+export const MAX_DAY_START_EVENTS_PER_DAY = 3;
 
 export const STAT_BOUNDS = {
   energy: { min: 0, max: 100 },
@@ -194,6 +195,14 @@ export const JOBS = {
   },
 };
 
+export const PASSIVE_ACTION_EVENT_TAGS = {
+  attendanceWork: ["goOut", "work"],
+  attendanceLeave: [],
+  caseWork: ["computer", "freelance"],
+  landlordBlock: [],
+  sleep: [],
+};
+
 export const ACTIONS = {
   work: {
     id: "work",
@@ -203,6 +212,7 @@ export const ACTIONS = {
     intensity: "medium",
     category: "job",
     special: "workChoice",
+    eventTags: ["goOut", "work"],
   },
   resign: {
     id: "resign",
@@ -212,6 +222,7 @@ export const ACTIONS = {
     intensity: "light",
     category: "recovery",
     special: "resign",
+    eventTags: [],
   },
   overtime: {
     id: "overtime",
@@ -227,6 +238,7 @@ export const ACTIONS = {
     },
     incomeKey: "overtimeIncome",
     disabledReason: "你現在沒有能自由選的加班班表。",
+    eventTags: ["goOut", "work", "heavy"],
   },
   study: {
     id: "study",
@@ -243,6 +255,7 @@ export const ACTIONS = {
       stress: 5,
       skill: 10,
     },
+    eventTags: ["computer", "study"],
   },
   jobSearch: {
     id: "jobSearch",
@@ -252,6 +265,7 @@ export const ACTIONS = {
     intensity: "heavy",
     category: "growth",
     special: "jobSearch",
+    eventTags: ["goOut", "computer", "career"],
   },
   reward: {
     id: "reward",
@@ -261,6 +275,7 @@ export const ACTIONS = {
     intensity: "light",
     category: "recovery",
     special: "rewardChoice",
+    eventTags: ["goOut", "recovery"],
   },
   repairScooter: {
     id: "repairScooter",
@@ -271,6 +286,7 @@ export const ACTIONS = {
     category: "utility",
     special: "repairScooter",
     effects: { money: -1200, stress: -8 },
+    eventTags: ["goOut", "repair"],
   },
   repairComputer: {
     id: "repairComputer",
@@ -281,6 +297,7 @@ export const ACTIONS = {
     category: "utility",
     special: "repairComputer",
     effects: { money: -1500, stress: -6 },
+    eventTags: ["goOut", "repair"],
   },
   appeaseLandlord: {
     id: "appeaseLandlord",
@@ -290,6 +307,7 @@ export const ACTIONS = {
     intensity: "light",
     category: "utility",
     special: "appeaseLandlordChoice",
+    eventTags: ["goOut", "social"],
   },
   network: {
     id: "network",
@@ -299,6 +317,7 @@ export const ACTIONS = {
     intensity: "light",
     category: "social",
     special: "network",
+    eventTags: ["goOut", "social"],
   },
 };
 
