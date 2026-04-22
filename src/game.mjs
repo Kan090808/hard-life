@@ -24,10 +24,10 @@ import { EVENTS } from "./data/events.mjs";
 
 const cloneState = (state) => JSON.parse(JSON.stringify(state));
 
-const SLEEP_RECOVERY_BASE = 10;
-const SLEEP_RECOVERY_PER_PHYSIQUE = 3;
-const SLEEP_STRESS_RELIEF_BASE = 3;
-const SLEEP_STRESS_RELIEF_PER_PHYSIQUE = 1;
+const SLEEP_RECOVERY_BASE = 20;
+const SLEEP_RECOVERY_PER_PHYSIQUE = 7;
+const SLEEP_STRESS_RELIEF_BASE = 6;
+const SLEEP_STRESS_RELIEF_PER_PHYSIQUE = 3;
 
 const REPEAT_ENERGY_COST = 6;
 const REPEAT_MONEY_DROP = 0.2;
