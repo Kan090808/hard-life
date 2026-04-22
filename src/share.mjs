@@ -1,4 +1,4 @@
-import { CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES } from "./data/config.mjs";
+import { GAME_COPY, JOBS } from "./data/config.mjs";
 
 const SHARE_TITLE = GAME_COPY.title;
 const SHARE_IMAGE_SIZE = { width: 1200, height: 1600 };
@@ -86,14 +86,10 @@ const getEndingToneColors = (tone) => {
 const getShareSnapshot = (state, url) => {
   const ending = state.ending ?? { title: "月底結算", body: GAME_COPY.subtitle, type: "summary" };
   const rank = getEndingRank(ending);
-  const achievements =
-    state.unlockedMilestones.length > 0
-      ? state.unlockedMilestones.map((id) => MILESTONES.find((entry) => entry.id === id)?.title ?? id)
-      : ["本月尚未解鎖里程碑"];
-  const conditions =
-    Object.entries(state.conditions)
-      .filter(([, enabled]) => enabled)
-      .map(([id]) => CONDITION_CONFIG[id]?.label ?? id) || [];
+  const details = ending.details ?? { tags: [], summaryLines: [], records: [], advice: "" };
+
+  const records = details.records?.length > 0 ? details.records : ["本月尚未有特別紀錄"];
+  const tags = details.tags?.length > 0 ? details.tags.map((t) => t.label) : ["本月尚未獲得標籤"];
 
   return {
     title: ending.title,
@@ -109,8 +105,8 @@ const getShareSnapshot = (state, url) => {
       { label: "壓力", value: `${state.stress}` },
       { label: "技能", value: `${state.skill}` },
     ],
-    achievements,
-    activeConditions: conditions.length > 0 ? conditions : ["沒有持續問題留到月底"],
+    records,
+    tags,
     url,
   };
 };
@@ -313,8 +309,8 @@ const buildShareText = (state, url) => {
     snapshot.rankLabel,
     `工作 ${snapshot.jobName} ・ ${snapshot.jobBadge}`,
     snapshot.stats.map((entry) => `${entry.label} ${entry.value}`).join(" ・ "),
-    `本月紀錄：${snapshot.achievements.join("、")}`,
-    `持續狀態：${snapshot.activeConditions.join("、")}`,
+    `本月紀錄：${snapshot.records.join("、")}`,
+    `本月標籤：${snapshot.tags.join("、")}`,
     snapshot.url,
   ].filter(Boolean).join("\n");
 };
@@ -413,13 +409,13 @@ const renderShareImage = async (state, url, overrides = {}) => {
 
   ctx.fillStyle = "#181c26";
   ctx.font = `500 32px ${SHARE_FONT_STACK}`;
-  currentY = drawWrappedText(ctx, snapshot.achievements.join("、"), 112, 1148, width - 224, 44, 5);
+  currentY = drawWrappedText(ctx, snapshot.records.join("、"), 112, 1148, width - 224, 44, 5);
   ctx.fillStyle = "#5d5d6f";
   ctx.font = `700 24px ${SHARE_FONT_STACK}`;
-  ctx.fillText("留到月底的持續狀態", 112, currentY + 52);
+  ctx.fillText("本月標籤", 112, currentY + 52);
   ctx.fillStyle = "#181c26";
   ctx.font = `500 30px ${SHARE_FONT_STACK}`;
-  drawWrappedText(ctx, snapshot.activeConditions.join("、"), 112, currentY + 98, width - 224, 40, 4);
+  drawWrappedText(ctx, snapshot.tags.join("、"), 112, currentY + 98, width - 224, 40, 4);
 
   ctx.fillStyle = colors.accentDeep;
   ctx.font = `700 24px ${SHARE_FONT_STACK}`;
