@@ -243,6 +243,7 @@ export const DEFAULT_PLAYER_STATE = {
   businessLevel: 0,
   businessIncome: 0,
   unpaidRentCount: 0,
+  rentDebt: 0,
 };
 
 export const DEFAULT_CONDITIONS = {
@@ -411,14 +412,35 @@ export const ACTIONS = {
     category: "recovery",
     special: "rewardChoice",
   },
-  lifeAdmin: {
-    id: "lifeAdmin",
-    label: "處理雜事",
+  repairScooter: {
+    id: "repairScooter",
+    label: "修理機車",
     tag: "修問題",
-    description: "修車、處理設備、安撫房東或跑補助，今天很現實。",
+    description: "機車還沒修，通勤會一直被拖累。今天花錢處理掉，之後出門比較穩。",
     intensity: "light",
     category: "utility",
-    special: "lifeAdmin",
+    special: "repairScooter",
+    effects: { money: -1200, stress: -8 },
+  },
+  repairComputer: {
+    id: "repairComputer",
+    label: "修理電腦",
+    tag: "修問題",
+    description: "電腦不穩會拖慢學習和接案。今天把設備修好，之後做事比較順。",
+    intensity: "light",
+    category: "utility",
+    special: "repairComputer",
+    effects: { money: -1500, stress: -6 },
+  },
+  appeaseLandlord: {
+    id: "appeaseLandlord",
+    label: "安撫房東",
+    tag: "修問題",
+    description: "房東已經開始不耐煩了。今天先低頭處理，至少暫時不要讓事情變更糟。",
+    intensity: "light",
+    category: "utility",
+    special: "appeaseLandlord",
+    effects: { money: -400, mood: 4, stress: -10 },
   },
   network: {
     id: "network",
