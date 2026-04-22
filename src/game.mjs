@@ -826,11 +826,6 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
     return { available: true, reason: "" };
   }
 
-  const projected = getRepeatAdjustedProjectedEffects(state, action);
-  if (!canSurviveEffects(state, projected)) {
-    return { available: false, reason: "現在體力不夠，再做會直接倒下。" };
-  }
-
   return { available: true, reason: "" };
 };
 
@@ -1667,8 +1662,6 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
     const isSuccess = rng() < successRate;
     const effects = isSuccess ? optConfig.successEffects : optConfig.failureEffects;
 
-    if (!canSurviveEffects(nextState, effects)) return nextState;
-
     const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = actionId;
@@ -1704,10 +1697,6 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
 
   const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
   const adjustedEffects = applyRepeatPenaltyToEffects(selected.effects, repeatPenalty);
-  if (!canSurviveEffects(nextState, adjustedEffects)) {
-    return nextState;
-  }
-
   beginTurnLogIfNeeded(nextState);
   nextState.turnLog.actionId = actionId;
   pushLine(nextState, `你今天選了「${selected.label}」。`);
