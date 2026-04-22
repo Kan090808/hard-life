@@ -63,7 +63,7 @@ export const CONDITION_CONFIG = {
 export const DEFAULT_PLAYER_STATE = {
   day: 1,
   totalDays: TOTAL_DAYS,
-  money: 2000,
+  money: 4000,
   energy: 80,
   mood: 60,
   stress: 20,
