@@ -13,8 +13,6 @@ import {
   RENT_AMOUNT,
   RENT_DAYS,
   REWARD_ACTIVITIES,
-  STARTUP_FIXED_EVENTS,
-  STOCK_CATALOG,
   STAT_BOUNDS,
   SUCCESS_ENDINGS,
   WORK_GIGS,
@@ -108,16 +106,6 @@ const applyEffects = (state, effects = {}) => {
 
     if (key === "jobLevel") {
       state.jobLevel = Math.max(1, Math.min(4, state.jobLevel + value));
-      continue;
-    }
-
-    if (key === "businessLevel") {
-      state.businessLevel = Math.max(0, Math.min(2, state.businessLevel + value));
-      continue;
-    }
-
-    if (key === "businessIncome") {
-      state.businessIncome = Math.max(0, state.businessIncome + value);
       continue;
     }
 
@@ -359,99 +347,6 @@ const createDailyWorkOptions = (state, rng) =>
 
 const createDailyRewardOptions = (rng) => pickDistinct(REWARD_ACTIVITIES, 3, rng).map((entry) => ({ ...entry }));
 
-const createStockMarket = () =>
-  STOCK_CATALOG.map((stock) => ({
-    ...stock,
-    price: stock.basePrice,
-    previousPrice: stock.basePrice,
-    owned: 0,
-    averageCost: 0,
-    signals: [],
-  }));
-
-const updateStockMarket = (state, rng) => {
-  state.stocks = state.stocks.map((stock) => {
-    const activeSignalDrift = stock.signals.reduce((sum, signal) => sum + signal.drift, 0);
-    const marketEdge = state.character.intelligence * 0.01 + state.character.luck * 0.015;
-    const swing = (rng() * 2 - 1) * stock.volatility + (marketEdge - 0.04) + activeSignalDrift;
-    const nextPrice = Math.max(8, Math.round(stock.price * (1 + swing)));
-    return {
-      ...stock,
-      previousPrice: stock.price,
-      price: nextPrice,
-      signals: stock.signals
-        .map((signal) => ({ ...signal, daysRemaining: signal.daysRemaining - 1 }))
-        .filter((signal) => signal.daysRemaining > 0),
-    };
-  });
-};
-
-const STOCK_NEWS_HEADLINES = {
-  positive: [
-    "{name} 傳出拿下新訂單",
-    "{name} 被傳將與大客戶合作",
-    "{name} 產品熱度突然升高",
-    "{name} 傳有新資金準備進場",
-  ],
-  negative: [
-    "{name} 傳出成本失控",
-    "{name} 被爆產品進度延誤",
-    "{name} 傳核心團隊有人離開",
-    "{name} 市場謠傳訂單被抽掉",
-  ],
-};
-
-const STOCK_NEWS_BODIES = {
-  positive: [
-    "社群上開始流出利多消息，市場情緒被往上推。",
-    "幾個討論區突然都在傳同一個好消息，盤面開始躁動。",
-  ],
-  negative: [
-    "市場開始放大壞消息，賣壓和恐慌一起升上來。",
-    "同樣的負面傳聞被重複轉貼，氣氛明顯變差。",
-  ],
-};
-
-const applyImmediateStockNewsImpact = (stock, direction, rng) => {
-  const impulse = direction * (0.025 + rng() * 0.045);
-  stock.price = Math.max(8, Math.round(stock.price * (1 + impulse)));
-};
-
-const generateDailyStockNews = (state, rng) => {
-  const chosenStocks = pickDistinct(state.stocks, 2, rng);
-  const fakeIndex = rng() < 0.5 ? 0 : 1;
-  state.stockNews = chosenStocks.map((stock, index) => {
-    const direction = rng() < 0.5 ? 1 : -1;
-    const tone = direction > 0 ? "positive" : "negative";
-    const fake = index === fakeIndex;
-    const horizon = rng() < 0.55 ? "today" : "future";
-    const headlineTemplate = pickRandom(STOCK_NEWS_HEADLINES[tone], rng);
-    const body = pickRandom(STOCK_NEWS_BODIES[tone], rng);
-
-    if (!fake) {
-      if (horizon === "today") {
-        applyImmediateStockNewsImpact(stock, direction, rng);
-      } else {
-        stock.signals.push({
-          drift: direction * (0.012 + rng() * 0.03),
-          daysRemaining: 2 + Math.floor(rng() * 2),
-        });
-      }
-    }
-
-    return {
-      id: `${stock.id}-${state.day}-${index}`,
-      stockId: stock.id,
-      stockName: stock.name,
-      headline: headlineTemplate.replace("{name}", stock.name),
-      body,
-      horizon,
-      fake,
-      tone,
-    };
-  });
-};
-
 const generateDailyFreelanceOffer = (state, rng) => {
   const hasContact = state.conditions.hasFreelanceContact;
   const hasLead = state.conditions.clientLead;
@@ -478,19 +373,12 @@ const generateDailyFreelanceOffer = (state, rng) => {
 const refreshDailyBoards = (state, rng) => {
   state.dailyWorkOptions = createDailyWorkOptions(state, rng);
   state.dailyRewardOptions = createDailyRewardOptions(rng);
-  updateStockMarket(state, rng);
-  generateDailyStockNews(state, rng);
   state.dailyFreelanceOffer = generateDailyFreelanceOffer(state, rng);
 };
 
 const getHasScheduledJob = (state) => Boolean(getJob(state).requiresAttendance);
 
-const getActionLogLabel = (state, action) => {
-  if (action.id === "venture" && state.businessLevel > 0) {
-    return "經營事業";
-  }
-  return action.label;
-};
+const getActionLogLabel = (_state, action) => action.label;
 
 const getActionLogId = (_state, action) => action.id;
 
@@ -584,8 +472,6 @@ const getProjectedActionEffects = (state, action) => {
       };
     case "network":
       return { money: -180, mood: 12, stress: -6 };
-    case "venture":
-      return state.businessLevel > 0 ? { money: 500 + state.businessIncome, mood: 6, stress: -8 } : { money: -6000, energy: -14, mood: 12, stress: 14 };
     case "resign":
       return { mood: state.jobLevel === 3 ? 8 : 4, stress: state.jobLevel === 3 ? -10 : -6, money: state.jobLevel === 3 ? -600 : -250 };
     default: {
@@ -630,11 +516,7 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
     return { available: false, reason: "你現在沒有需要離掉的固定工作。" };
   }
 
-  if (action.id === "venture" && state.businessLevel === 0 && state.money < 6000) {
-    return { available: false, reason: "創業至少要先準備 6000。" };
-  }
-
-  if (["workChoice", "rewardChoice", "appeaseLandlordChoice", "stockTrade"].includes(action.special)) {
+  if (["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special)) {
     return { available: true, reason: "" };
   }
 
@@ -778,51 +660,6 @@ const resolveNetwork = (state, rng) => {
   };
 };
 
-const applyBusinessCycle = (state, rng) => {
-  if (state.businessLevel <= 0 || state.businessIncome <= 0) {
-    return;
-  }
-
-  beginTurnLogIfNeeded(state);
-  appendResolution(state, { effects: { money: state.businessIncome } });
-  pushLine(state, `你的事業今天帶來 ${state.businessIncome} 的被動收入。`);
-
-  const networkBonus = state.conditions.hasFreelanceContact ? 0.12 : 0;
-  const positiveWeight = clampNumber(
-    0.34 + state.character.intelligence * 0.04 + state.character.wealth * 0.04 + networkBonus,
-    0.25,
-    0.82
-  );
-
-  if (rng() < positiveWeight) {
-    const incomeLift = 60 + state.character.intelligence * 18 + (state.conditions.hasFreelanceContact ? 80 : 0);
-    const burst = 120 + state.character.wealth * 40;
-    appendResolution(state, {
-      effects: {
-        money: burst,
-        mood: 5,
-        stress: -4,
-        businessIncome: incomeLift,
-      },
-    });
-    pushLine(state, "創業今天接到新的單或合作，被動收入又往上墊了一層。");
-    return;
-  }
-
-  const loss = 180 + state.character.wealth * 25;
-  const drop = 50 + Math.max(0, 5 - state.character.intelligence) * 16;
-  appendResolution(state, {
-    effects: {
-      money: -loss,
-      mood: -4,
-      stress: 8,
-      businessIncome: -drop,
-    },
-  });
-  state.businessIncome = Math.max(80, state.businessIncome);
-  pushLine(state, "創業今天出了突發狀況，不是客訴就是成本上升，現金和被動收入一起被削了一刀。");
-};
-
 const resolveResignation = (state) => ({
   effects: {
     jobLevel: 1 - state.jobLevel,
@@ -832,50 +669,6 @@ const resolveResignation = (state) => ({
   },
   log: state.jobLevel === 3 ? "你把正職辭掉了，壓力先降了一點，但現金流也少了遮羞布。" : "你把兼職停掉了，至少明天睡醒不用先想著要不要去上班。",
 });
-
-const resolveVenture = (state, rng) => {
-  if (state.businessLevel > 0) {
-    return {
-      effects: {
-        businessLevel: -state.businessLevel,
-        money: 500 + state.businessIncome,
-        mood: 6,
-        stress: -8,
-        businessIncome: -state.businessIncome,
-      },
-      log: "你決定先把創業收掉，之後不再吃創業事件，但被動收入也一起停了。",
-    };
-  }
-
-  const startupChance = clampNumber(
-    0.22 + state.character.intelligence * 0.05 + state.character.wealth * 0.04 + (state.conditions.hasFreelanceContact ? 0.1 : 0) + state.skill * 0.003,
-    0.2,
-    0.82
-  );
-  const success = rng() < startupChance;
-
-  return success
-    ? {
-        effects: {
-          money: -6000,
-          energy: -14,
-          mood: 12,
-          stress: 14,
-          businessLevel: 1,
-          businessIncome: 400 + state.character.intelligence * 30 + state.character.wealth * 20 + (state.conditions.hasFreelanceContact ? 80 : 0),
-        },
-        log: "你真的把第一筆資金砸進去了，事業剛起步，壓力也跟著一起長出來。",
-      }
-    : {
-        effects: {
-          money: -3500,
-          energy: -10,
-          mood: -8,
-          stress: 16,
-        },
-        log: "你試著把點子推成生意，但今天只換到燒錢和更多不確定感。",
-      };
-};
 
 const getDynamicEventRate = (penalty) =>
   clampNumber(BASE_EVENT_TRIGGER_RATE + (penalty?.eventRiskBonus ?? 0), BASE_EVENT_TRIGGER_RATE, MAX_EVENT_TRIGGER_RATE);
@@ -944,7 +737,14 @@ const continueAfterAttendance = (state) => {
   return state;
 };
 
-const continueAfterStartupDecision = (state) => {
+const startDayFlow = (state) => {
+  const failure = detectFailure(state);
+  if (failure) {
+    setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
+    commitTurnLog(state);
+    return state;
+  }
+
   if (!getHasScheduledJob(state)) {
     return continueAfterAttendance(state);
   }
@@ -965,36 +765,6 @@ const continueAfterStartupDecision = (state) => {
   };
   state.phase = PHASES.ATTENDANCE;
   return state;
-};
-
-const startDayFlow = (state, rng) => {
-  applyBusinessCycle(state, rng);
-
-  const failure = detectFailure(state);
-  if (failure) {
-    setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
-    commitTurnLog(state);
-    return state;
-  }
-
-  if (state.businessLevel > 0) {
-    const event = pickRandom(STARTUP_FIXED_EVENTS, rng);
-    beginTurnLogIfNeeded(state);
-    state.pendingStartupDecision = {
-      id: event.id,
-      title: event.title,
-      description: event.description,
-      options: event.options.map((opt) => ({
-        id: opt.id,
-        text: opt.text,
-        caption: opt.caption,
-      })),
-    };
-    state.phase = PHASES.STARTUP_DECISION;
-    return state;
-  }
-
-  return continueAfterStartupDecision(state);
 };
 
 const openActionChoice = (state, actionId) => {
@@ -1095,9 +865,6 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
       break;
     case "network":
       resolution = resolveNetwork(state, rng);
-      break;
-    case "venture":
-      resolution = resolveVenture(state, rng);
       break;
     case "resign":
       resolution = resolveResignation(state);
@@ -1302,7 +1069,7 @@ const finalizeDay = (state, rng) => {
   refreshDailyBoards(state, rng);
   applySleepRecovery(state);
   unlockMilestones(state);
-  return startDayFlow(state, rng);
+  return startDayFlow(state);
 };
 
 const resolveSleep = (state, rng) => {
@@ -1406,16 +1173,13 @@ export const createInitialState = (rng = Math.random) => {
   const state = {
     ...getStartingState(character),
     character,
-    stocks: createStockMarket(),
     conditions: { ...DEFAULT_CONDITIONS },
     history: { ...DEFAULT_HISTORY },
     phase: PHASES.READY,
     pendingAttendance: null,
-    pendingStartupDecision: null,
     pendingActionChoice: null,
     pendingEvent: null,
     ending: null,
-    stockNews: [],
     activityLog: [],
     unlockedMilestones: [],
     latestAchievements: [],
@@ -1428,12 +1192,11 @@ export const createInitialState = (rng = Math.random) => {
   };
   initializeDayPlan(state);
   refreshDailyBoards(state, rng);
-  return startDayFlow(state, rng);
+  return startDayFlow(state);
 };
 
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
-    .filter((action) => !["stockTrade", "venture"].includes(action.id))
     .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
     .filter((action) => action.id !== "repairScooter" || state.conditions.scooterBroken)
@@ -1442,11 +1205,6 @@ export const getActionViewModels = (state) =>
     .map((action) => {
       const availability = getActionAvailability(state, action);
       const currentJob = getJob(state);
-      const dynamicLabel = action.id === "venture" && state.businessLevel > 0 ? "結束創業" : action.label;
-      const dynamicDescription =
-        action.id === "venture" && state.businessLevel > 0
-          ? "把現在的事業收掉，之後不再拿被動收入，也不再吃創業事件。"
-          : action.description;
       let tag = action.tag;
 
       if (action.id === "jobSearch") {
@@ -1456,10 +1214,6 @@ export const getActionViewModels = (state) =>
         )}% 成功率`;
       } else if (action.id === "study") {
         tag = `課程費 $${getStudyCost(state.skill)}`;
-      } else if (action.id === "venture" && state.businessLevel > 0) {
-        tag = state.businessLevel > 1 ? "擴張中" : "剛起步";
-      } else if (action.id === "stockTrade") {
-        tag = "高波動";
       } else if (action.incomeKey) {
         tag = `今日收入 $${currentJob[action.incomeKey]}`;
       }
@@ -1472,8 +1226,6 @@ export const getActionViewModels = (state) =>
       return {
         ...action,
         effects: dynamicEffects,
-        label: dynamicLabel,
-        description: dynamicDescription,
         tag,
         energyPreview,
         repeatPenaltyPreview: getRepeatPenaltyText(repeatPenalty),
@@ -1484,8 +1236,8 @@ export const getActionViewModels = (state) =>
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["resign", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network", "venture", "stockTrade"]
-        : ["work", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network", "venture", "stockTrade"];
+        ? ["resign", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
+        : ["work", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });
 
@@ -1497,7 +1249,6 @@ export const getStatusMeta = (state) => {
   const phaseCopy = {
     [PHASES.READY]: state.dayPlan.totalActions === 0 ? "準備安排今天" : "今天還能繼續做事，也可以直接睡覺",
     [PHASES.ATTENDANCE]: "先決定今天要不要去上班",
-    [PHASES.STARTUP_DECISION]: "先處理今天的創業決策",
     [PHASES.CHOICE]: "先選一個方案",
     [PHASES.EVENT]: "生活又臨時丟了一題給你",
     [PHASES.GAME_OVER]: "這個月先到這裡",
@@ -1512,19 +1263,6 @@ export const getStatusMeta = (state) => {
       icon: CONDITION_CONFIG[id]?.icon ?? "alert",
       description: CONDITION_CONFIG[id]?.description ?? "",
     }));
-
-  if (state.businessLevel > 0) {
-    activeConditions.push({
-      id: "business-running",
-      label: state.businessLevel > 1 ? "創業擴張中" : "創業起步中",
-      compactLabel: "創業",
-      icon: "briefcase",
-      description:
-        state.businessLevel > 1
-          ? `你的生意已經開始擴張，今日被動收入 ${state.businessIncome}。`
-          : `你已經把錢和壓力投進自己的生意了，今日被動收入 ${state.businessIncome}。`,
-    });
-  }
 
   if (state.activeCaseProject) {
     const p = state.activeCaseProject;
@@ -1698,75 +1436,5 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
 };
 
 export const dispatchEventChoice = (state, optionId, rng = Math.random) => resolveEvent(state, optionId, rng);
-
-export const dispatchStartupDecision = (state, optionId, rng = Math.random) => {
-  const nextState = cloneState(state);
-  if (nextState.phase !== PHASES.STARTUP_DECISION || !nextState.pendingStartupDecision) {
-    return nextState;
-  }
-
-  const event = STARTUP_FIXED_EVENTS.find((entry) => entry.id === nextState.pendingStartupDecision.id);
-  const option = event?.options.find((entry) => entry.id === optionId);
-  if (!option) {
-    return nextState;
-  }
-
-  appendResolution(nextState, { effects: option.effects, log: option.log });
-  nextState.pendingStartupDecision = null;
-
-  const failure = detectFailure(nextState);
-  if (failure) {
-    setEnding(nextState, { type: "failure", ...failure }, PHASES.GAME_OVER);
-    commitTurnLog(nextState);
-    return nextState;
-  }
-
-  return continueAfterStartupDecision(nextState, rng);
-};
-
-export const dispatchStockTrade = (state, stockId, side, quantity = 1, _rng = Math.random) => {
-  const nextState = cloneState(state);
-  if (nextState.phase !== PHASES.READY) {
-    return nextState;
-  }
-
-  const qty = Math.max(1, Math.floor(quantity));
-  const stock = nextState.stocks.find((entry) => entry.id === stockId);
-  if (!stock) {
-    return nextState;
-  }
-
-  if (side === "buy" && nextState.money < stock.price * qty) {
-    return nextState;
-  }
-
-  if (side === "sell" && stock.owned < qty) {
-    return nextState;
-  }
-
-  beginTurnLogIfNeeded(nextState);
-  nextState.turnLog.actionId = "stockTrade";
-  noteRecentAction(nextState, "stockTrade");
-
-  if (side === "buy") {
-    const nextOwned = stock.owned + qty;
-    const totalCostBasis = stock.averageCost * stock.owned + stock.price * qty;
-    stock.owned = nextOwned;
-    stock.averageCost = Math.round(totalCostBasis / nextOwned);
-    nextState.money -= stock.price * qty;
-    pushLine(nextState, `你買進 ${qty} 股 ${stock.name}，成交價 ${stock.price}，目前均價 ${stock.averageCost}。`);
-  } else if (side === "sell") {
-    stock.owned -= qty;
-    nextState.money += stock.price * qty;
-    if (stock.owned <= 0) {
-      stock.averageCost = 0;
-    }
-    pushLine(nextState, `你賣出 ${qty} 股 ${stock.name}，成交價 ${stock.price}，共回收 ${stock.price * qty}。`);
-  } else {
-    return nextState;
-  }
-
-  return nextState;
-};
 
 export { detectFailure, evaluateEnding };

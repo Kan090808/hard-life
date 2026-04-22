@@ -1,4 +1,4 @@
-import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, dispatchStartupDecision, dispatchStockTrade, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
+import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
 import { CHARACTER_STAT_DISPLAY, CONDITION_CONFIG, GAME_COPY, JOBS, MILESTONES, STAT_DISPLAY } from "./data/config.mjs";
 import { APP_VERSION } from "./version.mjs";
 import {
@@ -38,7 +38,6 @@ const uiState = {
   audioEnabled: true,
   detailsExpanded: false,
   expandedActionInfoId: null,
-  stockQuantities: {},
   endingShown: false,
   shareCapabilities: detectShareCapabilities(),
   shareActionState: { image: "idle", text: "idle" },
@@ -117,10 +116,6 @@ const elements = {
   attendanceTitle: document.querySelector("#attendance-title"),
   attendanceDescription: document.querySelector("#attendance-description"),
   attendanceOptions: document.querySelector("#attendance-options"),
-  startupDecisionDialog: document.querySelector("#startup-decision-dialog"),
-  startupDecisionTitle: document.querySelector("#startup-decision-title"),
-  startupDecisionDescription: document.querySelector("#startup-decision-description"),
-  startupDecisionOptions: document.querySelector("#startup-decision-options"),
   choiceDialog: document.querySelector("#choice-dialog"),
   choiceTitle: document.querySelector("#choice-title"),
   choiceDescription: document.querySelector("#choice-description"),
@@ -136,9 +131,6 @@ const elements = {
   eventTitle: document.querySelector("#event-title"),
   eventDescription: document.querySelector("#event-description"),
   eventOptions: document.querySelector("#event-options"),
-  stockDialog: document.querySelector("#stock-dialog"),
-  stockBody: document.querySelector("#stock-body"),
-  stockActions: document.querySelector("#stock-actions"),
   endingDialog: document.querySelector("#ending-dialog"),
   endingCapture: document.querySelector("#ending-capture"),
   endingTitle: document.querySelector("#ending-title"),
@@ -173,8 +165,6 @@ const ACTION_FLAVOR = {
   reward: { subtitle: "花錢止痛一下", risk: "回穩", tone: "recover" },
   lifeAdmin: { subtitle: "處理現實問題", risk: "修問題", tone: "recover" },
   network: { subtitle: "換機會，不保證立刻有錢", risk: "鋪路", tone: "growth" },
-  venture: { subtitle: "把自己的生意押下去", risk: "高壓", tone: "growth" },
-  stockTrade: { subtitle: "今天先看盤", risk: "波動", tone: "steady" },
   attendanceWork: { subtitle: "固定班先扛掉", risk: "日常消耗", tone: "steady" },
   attendanceLeave: { subtitle: "今天先請假", risk: "代價", tone: "recover" },
   sleep: { subtitle: "今天收工睡覺", risk: "跨日", tone: "recover" },
@@ -317,15 +307,12 @@ const normalizeSavedState = (savedState) => {
     },
     conditions: { ...baseline.conditions, ...(savedState.conditions ?? {}) },
     history: { ...baseline.history, ...(savedState.history ?? {}) },
-    stocks: Array.isArray(savedState.stocks) ? cloneSerializable(savedState.stocks) : baseline.stocks,
-    stockNews: Array.isArray(savedState.stockNews) ? cloneSerializable(savedState.stockNews) : baseline.stockNews,
     activityLog: Array.isArray(savedState.activityLog) ? cloneSerializable(savedState.activityLog) : baseline.activityLog,
     unlockedMilestones: Array.isArray(savedState.unlockedMilestones) ? [...savedState.unlockedMilestones] : baseline.unlockedMilestones,
     latestAchievements: Array.isArray(savedState.latestAchievements) ? cloneSerializable(savedState.latestAchievements) : baseline.latestAchievements,
     dailyWorkOptions: Array.isArray(savedState.dailyWorkOptions) ? cloneSerializable(savedState.dailyWorkOptions) : baseline.dailyWorkOptions,
     dailyRewardOptions: Array.isArray(savedState.dailyRewardOptions) ? cloneSerializable(savedState.dailyRewardOptions) : baseline.dailyRewardOptions,
     pendingAttendance: savedState.pendingAttendance ?? null,
-    pendingStartupDecision: savedState.pendingStartupDecision ?? null,
     pendingActionChoice: savedState.pendingActionChoice ?? null,
     pendingEvent: savedState.pendingEvent ?? null,
     ending: savedState.ending ?? null,
@@ -340,11 +327,11 @@ const resolveSavedMode = (savedMode, hasStarted, candidateState) => {
     return "intro";
   }
 
-  if (candidateState.pendingAttendance || candidateState.pendingStartupDecision || candidateState.pendingActionChoice || candidateState.pendingEvent || candidateState.ending) {
+  if (candidateState.pendingAttendance || candidateState.pendingActionChoice || candidateState.pendingEvent || candidateState.ending) {
     return "idle";
   }
 
-  if (["action-select", "action-result", "stock"].includes(savedMode)) {
+  if (["action-select", "action-result"].includes(savedMode)) {
     return savedMode;
   }
 
@@ -377,7 +364,6 @@ const loadSavedSession = () => {
     uiState.mode = resolveSavedMode(parsed.ui?.mode, uiState.hasStarted, nextState);
     uiState.detailsExpanded = parsed.ui?.detailsExpanded === true;
     uiState.expandedActionInfoId = typeof parsed.ui?.expandedActionInfoId === "string" ? parsed.ui.expandedActionInfoId : null;
-    uiState.stockQuantities = parsed.ui?.stockQuantities && typeof parsed.ui.stockQuantities === "object" ? { ...parsed.ui.stockQuantities } : {};
   } catch (error) {
     console.warn("[storage:load]", error);
   }
@@ -434,7 +420,6 @@ const saveSession = () => {
         mode: uiState.mode,
         detailsExpanded: uiState.detailsExpanded,
         expandedActionInfoId: uiState.expandedActionInfoId,
-        stockQuantities: uiState.stockQuantities,
       },
     };
     window.localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
@@ -547,8 +532,6 @@ const getActiveDialog = () => {
   if (state.pendingEvent) return "event";
   if (state.pendingActionChoice) return "choice";
   if (state.pendingAttendance) return "attendance";
-  if (state.pendingStartupDecision) return "startup";
-  if (isMode("stock")) return "stock";
   if (isMode("action-select")) return "action-select";
   if (isMode("action-result")) return "action-result";
   return null;
@@ -590,12 +573,6 @@ const focusDialogAction = () => {
     return;
     case "attendance":
     elements.attendanceOptions.querySelector("button")?.focus();
-    return;
-    case "startup":
-    elements.startupDecisionOptions.querySelector("button")?.focus();
-    return;
-    case "stock":
-    elements.stockBody.querySelector("button")?.focus();
     return;
     case "action-select":
     case "action-result":
@@ -828,16 +805,6 @@ const getActionPreview = (action) => {
     return preview;
   }
 
-  if (action.id === "venture") {
-    preview.push(action.label === "結束創業" ? "關掉被動收入" : "起步成本高", "智力、財力、人脈會影響創業日常");
-    return preview;
-  }
-
-  if (action.id === "stockTrade") {
-    preview.push("5 檔固定股票", "可多次進入買賣", "每次自訂股數", "不消耗體力");
-    return preview;
-  }
-
   if (action.tag) {
     preview.push(action.tag);
   }
@@ -886,12 +853,6 @@ const getActionContextHint = (action) => {
   }
   if (action.id === "reward") {
     return "只能止痛，不能真的解決月底壓力。";
-  }
-  if (action.id === "venture") {
-    return action.label === "結束創業" ? "按下去會把目前的事業直接收掉。" : "創業不是立刻賺錢，是先把錢和壓力押下去。";
-  }
-  if (action.id === "stockTrade") {
-    return "可以先看今天 5 檔價格，再決定是否買賣。";
   }
   return "";
 };
@@ -1026,13 +987,8 @@ const renderIntroDialog = () => {
 const handleActionChoice = (actionId) => {
   playSelectSfx();
   uiState.expandedActionInfoId = null;
-  if (actionId === "stockTrade") {
-    setMode("stock");
-    render();
-    return;
-  }
   state = dispatchAction(state, actionId);
-  if (state.pendingActionChoice || state.pendingAttendance || state.pendingStartupDecision || state.pendingEvent || state.ending) {
+  if (state.pendingActionChoice || state.pendingAttendance || state.pendingEvent || state.ending) {
     setMode("idle");
   } else {
     setMode(getLatestLog(state) ? "action-result" : "action-select");
@@ -1131,18 +1087,6 @@ const handleAttendanceDialogClick = (event) => {
   render();
 };
 
-const handleStartupDecisionClick = (event) => {
-  const button = event.target.closest("button");
-  if (!button || !elements.startupDecisionOptions.contains(button) || button.dataset.role !== "startup-option") {
-    return;
-  }
-
-  playSelectSfx();
-  state = dispatchStartupDecision(state, button.dataset.optionId);
-  setMode("idle");
-  render();
-};
-
 const handleEventDialogClick = (event) => {
   const button = event.target.closest("button");
   if (!button || !elements.eventOptions.contains(button) || button.dataset.role !== "event-option") {
@@ -1156,48 +1100,6 @@ const handleEventDialogClick = (event) => {
   } else {
     setMode("idle");
   }
-  render();
-};
-
-const handleStockDialogClick = (event) => {
-  const button = event.target.closest("button");
-  if (!button) {
-    return;
-  }
-
-  if (elements.stockBody.contains(button)) {
-    const role = button.dataset.role;
-    if (role === "qty-step") {
-      const { stockId, action } = button.dataset;
-      const current = getStockQty(stockId);
-      setStockQty(stockId, action === "plus" ? current + 1 : current - 1);
-      render();
-      return;
-    }
-
-    if (role === "stock-trade") {
-      playSelectSfx();
-      const qty = getStockQty(button.dataset.stockId);
-      state = dispatchStockTrade(state, button.dataset.stockId, button.dataset.tradeType, qty);
-      render();
-    }
-    return;
-  }
-
-  if (elements.stockActions.contains(button) && button.dataset.role === "close-stock-dialog") {
-    playClickSfx();
-    setMode("action-result");
-    render();
-  }
-};
-
-const handleStockQtyChange = (event) => {
-  const input = event.target.closest(".qty-input");
-  if (!input || !elements.stockBody.contains(input)) {
-    return;
-  }
-
-  setStockQty(input.dataset.stockId, Number(input.value));
   render();
 };
 
@@ -1345,10 +1247,8 @@ const renderActionDialog = () => {
   if (
     isMode("intro") ||
     (!isMode("action-select") && !isMode("action-result")) ||
-    isMode("stock") ||
     state.pendingActionChoice ||
     state.pendingAttendance ||
-    state.pendingStartupDecision ||
     state.pendingEvent ||
     state.ending
   ) {
@@ -1424,32 +1324,6 @@ const renderAttendanceDialog = () => {
   setVisibility(elements.attendanceDialog, true);
 };
 
-const renderStartupDecisionDialog = () => {
-  if (!state.pendingStartupDecision || isMode("intro")) {
-    setVisibility(elements.startupDecisionDialog, false);
-    return;
-  }
-
-  elements.startupDecisionTitle.textContent = state.pendingStartupDecision.title;
-  elements.startupDecisionDescription.textContent = state.pendingStartupDecision.description;
-  elements.startupDecisionOptions.innerHTML = "";
-
-  for (const option of state.pendingStartupDecision.options) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "event-button event-choice";
-    button.dataset.role = "startup-option";
-    button.dataset.optionId = option.id;
-    button.innerHTML = `
-      <span class="event-choice-text">${option.text}</span>
-      <span class="event-choice-caption">${option.caption}</span>
-    `;
-    elements.startupDecisionOptions.append(button);
-  }
-
-  setVisibility(elements.startupDecisionDialog, true);
-};
-
 const renderEventDialog = () => {
   if (!state.pendingEvent || isMode("intro")) {
     setVisibility(elements.eventDialog, false);
@@ -1476,85 +1350,6 @@ const renderEventDialog = () => {
   }
 
   setVisibility(elements.eventDialog, true);
-};
-
-const getStockQty = (stockId) => uiState.stockQuantities[stockId] ?? 1;
-
-const setStockQty = (stockId, value) => {
-  uiState.stockQuantities[stockId] = Math.max(1, Math.floor(value) || 1);
-};
-
-const renderStockDialog = () => {
-  if (!isMode("stock") || isMode("intro")) {
-    setVisibility(elements.stockDialog, false);
-    return;
-  }
-
-  elements.stockBody.innerHTML = `
-    <section class="stock-news-board">
-      <div class="section-kicker">今日新聞</div>
-      <div class="stock-news-list">
-        ${state.stockNews
-          .map(
-            (news) => `
-              <article class="stock-news-card">
-                <div class="stock-news-top">
-                  <strong>${news.headline}</strong>
-                  <span class="stock-news-horizon">${news.horizon === "today" ? "今日" : "後續"}</span>
-                </div>
-                <p>${news.body}</p>
-              </article>
-            `
-          )
-          .join("")}
-      </div>
-    </section>
-    <div class="stock-list">
-      ${state.stocks
-        .map((stock) => {
-          const delta = stock.price - stock.previousPrice;
-          const deltaText = delta >= 0 ? `+${delta}` : `${delta}`;
-          const deltaClass = delta < 0 ? "loss" : "gain";
-          const qty = getStockQty(stock.id);
-          const canBuy = state.money >= stock.price * qty;
-          const canSell = stock.owned >= qty;
-          return `
-            <article class="stock-card">
-              <div class="stock-head">
-                <strong>${stock.name}</strong>
-                <span class="stock-price">$${stock.price}</span>
-              </div>
-              <div class="stock-meta">
-                <span class="stock-delta ${deltaClass}">${deltaText}</span>
-                <span>持有 ${stock.owned} 股</span>
-              </div>
-              ${stock.owned > 0 ? `<div class="stock-meta"><span>買入均價 $${stock.averageCost}</span></div>` : ""}
-              <div class="stock-qty-row">
-                <button class="qty-btn" data-role="qty-step" data-stock-id="${stock.id}" data-action="minus" aria-label="減少股數">−</button>
-                <input class="qty-input" type="number" min="1" value="${qty}" data-stock-id="${stock.id}" aria-label="${stock.name} 股數" />
-                <button class="qty-btn" data-role="qty-step" data-stock-id="${stock.id}" data-action="plus" aria-label="增加股數">+</button>
-                <span class="qty-cost">≈ $${(stock.price * qty).toLocaleString()}</span>
-              </div>
-              <div class="stock-controls">
-                <button class="stock-trade-btn stock-buy" data-role="stock-trade" data-trade-type="buy" data-stock-id="${stock.id}" ${!canBuy ? "disabled" : ""}>買入 ${qty} 股</button>
-                <button class="stock-trade-btn stock-sell" data-role="stock-trade" data-trade-type="sell" data-stock-id="${stock.id}" ${!canSell ? "disabled" : ""}>賣出 ${qty} 股</button>
-              </div>
-            </article>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-  elements.stockActions.innerHTML = "";
-
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
-  closeButton.className = "dialog-close";
-  closeButton.textContent = "先返回";
-  closeButton.dataset.role = "close-stock-dialog";
-  elements.stockActions.append(closeButton);
-
-  setVisibility(elements.stockDialog, true);
 };
 
 const getEndingRank = () => {
@@ -1858,7 +1653,6 @@ const resetGame = () => {
   setMode("intro");
   uiState.detailsExpanded = false;
   uiState.expandedActionInfoId = null;
-  uiState.stockQuantities = {};
   uiState.endingShown = false;
   uiState.achievementToastVisible = false;
   uiState.achievementSignature = "";
@@ -1894,10 +1688,8 @@ const performRender = () => {
   renderIntroDialog();
   renderChoiceDialog();
   renderAttendanceDialog();
-  renderStartupDecisionDialog();
   renderActionDialog();
   renderEventDialog();
-  renderStockDialog();
   renderEndingDialog();
   renderAchievementToast();
   renderShareToast();
@@ -2018,10 +1810,6 @@ assertRequiredElements(
   "attendanceTitle",
   "attendanceDescription",
   "attendanceOptions",
-  "startupDecisionDialog",
-  "startupDecisionTitle",
-  "startupDecisionDescription",
-  "startupDecisionOptions",
   "choiceDialog",
   "choiceTitle",
   "choiceDescription",
@@ -2037,9 +1825,6 @@ assertRequiredElements(
   "eventTitle",
   "eventDescription",
   "eventOptions",
-  "stockDialog",
-  "stockBody",
-  "stockActions",
   "endingDialog",
   "endingCapture",
   "endingTitle",
@@ -2065,11 +1850,7 @@ void bootstrapAnalytics();
 bindClick(elements.actionDialog, handleActionDialogClick);
 bindClick(elements.choiceOptions, handleChoiceDialogClick);
 bindClick(elements.attendanceOptions, handleAttendanceDialogClick);
-bindClick(elements.startupDecisionOptions, handleStartupDecisionClick);
 bindClick(elements.eventOptions, handleEventDialogClick);
-bindClick(elements.stockBody, handleStockDialogClick);
-bindClick(elements.stockActions, handleStockDialogClick);
-elements.stockBody.addEventListener("change", handleStockQtyChange);
 
 bindClick(elements.startButton, async () => {
   const isFreshStart = !uiState.hasStarted;
