@@ -1,4 +1,17 @@
-import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
+import {
+  createInitialState,
+  dispatchAction,
+  dispatchActionChoice,
+  dispatchAttendanceChoice,
+  dispatchCancelActionChoice,
+  dispatchEventChoice,
+  getActionRequiredCash,
+  getActionViewModels,
+  getLatestLog,
+  getPendingActionChoiceRequiredCash,
+  getPendingEventChoiceRequiredCash,
+  getStatusMeta,
+} from "./game.mjs";
 import { CHARACTER_STAT_DISPLAY, GAME_COPY, JOBS, RENT_AMOUNT, RENT_DAYS, STAT_DISPLAY } from "./data/config.mjs";
 import { APP_VERSION } from "./version.mjs";
 import {
@@ -23,7 +36,7 @@ import {
 } from "./analytics.mjs";
 import { SHARE_TITLE, buildShareText, detectShareCapabilities, getShareButtonLabels, renderShareImage, shareImage, shareText } from "./share.mjs";
 const SAVE_KEY = "hard-life-save-v1";
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 const STATS_KEY = "hard-life-player-stats";
 
 let state = createInitialState();
@@ -53,6 +66,7 @@ const uiState = {
   analyticsSummaryStatus: "同步中",
   analyticsDialogVisible: false,
   confirmDialog: null,
+  insufficientCashDialog: null,
 };
 let renderSnapshot = null;
 let renderQueued = false;
@@ -76,6 +90,9 @@ const elements = {
   confirmDialogCopy: document.querySelector("#confirm-dialog-copy"),
   confirmDialogConfirmButton: document.querySelector("#confirm-dialog-confirm-button"),
   confirmDialogCancelButton: document.querySelector("#confirm-dialog-cancel-button"),
+  insufficientCashDialog: document.querySelector("#insufficient-cash-dialog"),
+  insufficientCashCopy: document.querySelector("#insufficient-cash-copy"),
+  insufficientCashCloseButton: document.querySelector("#insufficient-cash-close-button"),
   analyticsDialog: document.querySelector("#analytics-dialog"),
   analyticsDialogStatus: document.querySelector("#analytics-dialog-status"),
   analyticsDialogGrid: document.querySelector("#analytics-dialog-grid"),
@@ -294,7 +311,7 @@ const normalizeSavedState = (savedState) => {
     return baseline;
   }
 
-  return {
+  const normalized = {
     ...baseline,
     ...savedState,
     character: { ...baseline.character, ...(savedState.character ?? {}) },
@@ -326,6 +343,12 @@ const normalizeSavedState = (savedState) => {
     dailyFreelanceOffer: savedState.dailyFreelanceOffer ?? null,
     activeCaseProject: savedState.activeCaseProject ?? null,
   };
+
+  normalized.money = Math.max(0, normalized.money);
+  normalized.summaryStats.minMoney = Math.max(0, normalized.summaryStats.minMoney);
+  normalized.summaryStats.maxMoney = Math.max(normalized.summaryStats.maxMoney, normalized.money);
+
+  return normalized;
 };
 
 const resolveSavedMode = (savedMode, hasStarted, candidateState) => {
@@ -528,7 +551,15 @@ const logShareWarnings = (channel, warnings) => {
   });
 };
 
+const showInsufficientCashDialog = (requiredCash) => {
+  uiState.insufficientCashDialog = {
+    requiredCash,
+    copy: `這次至少要 $${requiredCash}，但你現在只有 $${state.money}，只能先放棄。`,
+  };
+};
+
 const getActiveDialog = () => {
+  if (uiState.insufficientCashDialog) return "insufficient-cash";
   if (uiState.confirmDialog) return "confirm";
   if (uiState.analyticsDialogVisible) return "analytics";
   if (isMode("share-image")) return "share-image";
@@ -553,6 +584,9 @@ const setBodyOverlayState = () => {
 
 const focusDialogAction = () => {
   switch (getActiveDialog()) {
+    case "insufficient-cash":
+    elements.insufficientCashCloseButton.focus();
+    return;
     case "confirm":
     elements.confirmDialogCancelButton.focus();
     return;
@@ -634,8 +668,8 @@ const getRenderDiff = () => {
 };
 
 const getWalletCaption = () => {
-  if (state.money < 0) {
-    return "現金流已經翻負，再拖下去只會更難收拾。";
+  if (state.money === 0) {
+    return "現金見底了，現在每一步都得靠硬撐。";
   }
   if (state.money < 3000) {
     return "這點錢還不夠你安心，只夠你繼續想辦法。";
@@ -680,6 +714,13 @@ const renderConfirmDialog = () => {
   elements.confirmDialogTitle.textContent = uiState.confirmDialog.title;
   elements.confirmDialogCopy.textContent = uiState.confirmDialog.copy;
   elements.confirmDialogConfirmButton.textContent = uiState.confirmDialog.confirmLabel ?? "確定";
+};
+
+const renderInsufficientCashDialog = () => {
+  const active = uiState.insufficientCashDialog !== null;
+  setVisibility(elements.insufficientCashDialog, active);
+  if (!active) return;
+  elements.insufficientCashCopy.textContent = uiState.insufficientCashDialog.copy;
 };
 
 const renderAnalyticsDialog = () => {
@@ -1098,6 +1139,57 @@ const renderIntroDialog = () => {
   elements.introTotalBurnouts.textContent = formatAnalyticsValue(stats.totalBurnouts);
 };
 
+const attemptActionChoice = (actionId) => {
+  const requiredCash = getActionRequiredCash(state, actionId);
+  if (requiredCash > 0 && state.money < requiredCash) {
+    playClickSfx();
+    showInsufficientCashDialog(requiredCash);
+    render();
+    return;
+  }
+
+  handleActionChoice(actionId);
+};
+
+const attemptChoiceOption = (optionId) => {
+  const requiredCash = getPendingActionChoiceRequiredCash(state, optionId);
+  if (requiredCash > 0 && state.money < requiredCash) {
+    playClickSfx();
+    showInsufficientCashDialog(requiredCash);
+    render();
+    return;
+  }
+
+  playSelectSfx();
+  state = dispatchActionChoice(state, optionId);
+  if (!state.pendingEvent && !state.ending) {
+    setMode("action-result");
+  } else {
+    setMode("idle");
+  }
+  render();
+};
+
+const attemptEventOption = (optionId) => {
+  const requiredCash = getPendingEventChoiceRequiredCash(state, optionId);
+  if (requiredCash > 0 && state.money < requiredCash) {
+    playClickSfx();
+    showInsufficientCashDialog(requiredCash);
+    render();
+    return;
+  }
+
+  playSelectSfx();
+  const closesIntoStandaloneDialog = state.pendingEvent?._trigger === "jobResult";
+  state = dispatchEventChoice(state, optionId);
+  if (!state.ending) {
+    setMode(closesIntoStandaloneDialog ? "idle" : "action-result");
+  } else {
+    setMode("idle");
+  }
+  render();
+};
+
 const handleActionChoice = (actionId) => {
   playSelectSfx();
   uiState.expandedActionInfoId = null;
@@ -1125,17 +1217,16 @@ const handleActionDialogClick = (event) => {
     const actionId = button.dataset.actionId;
     if (actionId === "resign") {
       playClickSfx();
-      setMode("idle");
       uiState.confirmDialog = {
         title: "確定要離職？",
         copy: "離職後明天開始不再被固定工作打斷日初流程。",
         confirmLabel: "離職",
-        onConfirm: () => handleActionChoice("resign"),
+        onConfirm: () => attemptActionChoice("resign"),
       };
       render();
       return;
     }
-    handleActionChoice(actionId);
+    attemptActionChoice(actionId);
     return;
   }
 
@@ -1183,14 +1274,7 @@ const handleChoiceDialogClick = (event) => {
 
   const role = button.dataset.role;
   if (role === "choice-option") {
-    playSelectSfx();
-    state = dispatchActionChoice(state, button.dataset.optionId);
-    if (!state.pendingEvent && !state.ending) {
-      setMode("action-result");
-    } else {
-      setMode("idle");
-    }
-    render();
+    attemptChoiceOption(button.dataset.optionId);
     return;
   }
 
@@ -1220,15 +1304,7 @@ const handleEventDialogClick = (event) => {
     return;
   }
 
-  playSelectSfx();
-  const closesIntoStandaloneDialog = state.pendingEvent?._trigger === "jobResult";
-  state = dispatchEventChoice(state, button.dataset.optionId);
-  if (!state.ending) {
-    setMode(closesIntoStandaloneDialog ? "idle" : "action-result");
-  } else {
-    setMode("idle");
-  }
-  render();
+  attemptEventOption(button.dataset.optionId);
 };
 
 const renderActionSelection = () => {
@@ -1817,6 +1893,7 @@ const performRender = () => {
 
   renderAnalyticsPanel();
   renderAnalyticsDialog();
+  renderInsufficientCashDialog();
   renderConfirmDialog();
   renderWeekProgress();
   renderCurrentStats(diff.changedStats);
@@ -1901,6 +1978,9 @@ const bootstrapAnalytics = async () => {
 
 assertRequiredElements(
   "overlay",
+  "insufficientCashDialog",
+  "insufficientCashCopy",
+  "insufficientCashCloseButton",
   "confirmDialog",
   "confirmDialogTitle",
   "confirmDialogCopy",
@@ -2051,6 +2131,12 @@ bindClick(elements.confirmDialogConfirmButton, () => {
 bindClick(elements.confirmDialogCancelButton, () => {
   playClickSfx();
   uiState.confirmDialog = null;
+  render();
+});
+
+bindClick(elements.insufficientCashCloseButton, () => {
+  playClickSfx();
+  uiState.insufficientCashDialog = null;
   render();
 });
 

@@ -339,10 +339,6 @@ export const REWARD_ACTIVITIES = [
 ];
 
 export const FAILURE_ENDINGS = {
-  debt: {
-    title: "破產結局",
-    body: "你不是不努力，只是生活的成本比努力跑得更快。",
-  },
   collapse: {
     title: "過勞結局",
     body: "你想多賺一點，結果身體先替你按下暫停鍵。",

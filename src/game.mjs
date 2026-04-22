@@ -36,8 +36,72 @@ const REPEAT_EVENT_RISK = 0.16;
 const BASE_EVENT_TRIGGER_RATE = 0.28;
 const MAX_EVENT_TRIGGER_RATE = 0.82;
 const DAY_START_EVENT_RATE = 0.5;
+const HUNGER_DIALOG = {
+  title: "昨天餓了一天，身體疲憊不堪",
+  description: "今天再不吃會餓死吧。",
+  optionText: "只能硬撐",
+  optionCaption: "體力 -18、心情 -12、壓力 +16。",
+  resolution: {
+    effects: { energy: -18, mood: -12, stress: 16 },
+    log: "昨天那頓根本沒有著落，今天一醒來身體就在討債。",
+  },
+};
 
 const cloneEffects = (effects = {}) => ({ ...effects });
+const getRequiredCashFromEffects = (effects = {}) => ((effects.money ?? 0) < 0 ? Math.abs(effects.money) : 0);
+const getPendingOptionById = (options, optionId) => (Array.isArray(options) ? options.find((option) => option.id === optionId) ?? null : null);
+const getPendingOptionRequiredCash = (option) => (Number.isFinite(option?.requiredCash) ? option.requiredCash : 0);
+const canAffordRequiredCash = (state, requiredCash = 0) => state.money >= requiredCash;
+const getJobSearchSuccessRate = (state) =>
+  Math.min(
+    1,
+    0.12 + state.skill * 0.006 + state.character.intelligence * 0.025 + state.character.luck * 0.008 + (state.conditions.hasFreelanceContact ? 0.04 : 0)
+  );
+const materializePendingOption = (option, state, rng) => {
+  const prepared = option.prepare?.(state, rng) ?? {};
+  const resolution = prepared.resolution ?? null;
+  const requiredCash = Number.isFinite(prepared.requiredCash)
+    ? prepared.requiredCash
+    : Number.isFinite(option.requiredCash)
+      ? option.requiredCash
+      : getRequiredCashFromEffects(resolution?.effects);
+
+  return {
+    id: option.id,
+    text: prepared.text ?? option.text,
+    caption: prepared.caption ?? option.caption ?? "",
+    requiredCash,
+    resolution,
+  };
+};
+const createPendingEventState = (event, state, rng, trigger) => ({
+  id: event.id,
+  title: event.title,
+  category: event.category,
+  description: event.description,
+  options: event.options.map((option) => materializePendingOption(option, state, rng)),
+  _trigger: trigger,
+});
+const openHungerDialog = (state) => {
+  state.pendingEvent = {
+    id: "missed-living-cost",
+    title: HUNGER_DIALOG.title,
+    category: "健康警訊",
+    description: HUNGER_DIALOG.description,
+    options: [
+      {
+        id: "confirm",
+        text: HUNGER_DIALOG.optionText,
+        caption: HUNGER_DIALOG.optionCaption,
+        requiredCash: 0,
+        resolution: HUNGER_DIALOG.resolution,
+      },
+    ],
+    _trigger: "missedLivingCost",
+  };
+  state.phase = PHASES.EVENT;
+  return state;
+};
 
 const clampStat = (key, value) => {
   const bounds = STAT_BOUNDS[key];
@@ -294,8 +358,13 @@ const applyEffects = (state, effects = {}) => {
       continue;
     }
 
-    state[key] = clampStat(key, (state[key] ?? 0) + value);
-    deltaLines.push(describeDelta(key, value));
+    const currentValue = state[key] ?? 0;
+    const nextValue = key === "money" ? Math.max(0, currentValue + value) : clampStat(key, currentValue + value);
+    const appliedDelta = nextValue - currentValue;
+    state[key] = nextValue;
+    if (appliedDelta !== 0) {
+      deltaLines.push(describeDelta(key, appliedDelta));
+    }
   }
 
   return deltaLines;
@@ -331,10 +400,6 @@ const getNextRentDay = (day) => RENT_DAYS.find((rentDay) => rentDay >= day) ?? n
 const detectFailure = (state) => {
   if (state.unpaidRentCount >= 2) {
     return { id: "eviction", ...FAILURE_ENDINGS.eviction };
-  }
-
-  if (state.money <= -3000) {
-    return { id: "debt", ...FAILURE_ENDINGS.debt };
   }
 
   if (state.energy <= 0) {
@@ -376,9 +441,9 @@ const buildEndingSummaryLines = (state) => {
         ? "金錢：還有一筆存款，至少月底不用慌。"
         : state.money >= 8000
           ? "金錢：有撐住，但離安心還有距離。"
-          : state.money >= 0
+          : state.money > 0
             ? "金錢：沒破產，但幾乎沒什麼餘裕。"
-            : "金錢：你是靠透支撐到最後。";
+            : "金錢：現金見底，你幾乎是靠最後一口氣撐完。";
   const energyLine =
     state.energy >= 70
       ? "體力：身體狀態還不錯，沒有完全燃燒自己。"
@@ -794,6 +859,20 @@ const getProjectedActionEffects = (state, action) => {
   }
 };
 
+const getActionRequiredCash = (state, actionId) => {
+  const action = ACTIONS[actionId];
+  if (!action || actionId === "sleep") {
+    return 0;
+  }
+
+  const opensChoice = ["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(state));
+  if (opensChoice) {
+    return 0;
+  }
+
+  return getRequiredCashFromEffects(getRepeatAdjustedProjectedEffects(state, action));
+};
+
 const getRepeatAdjustedProjectedEffects = (state, action) => {
   const effects = getProjectedActionEffects(state, action);
   return applyRepeatPenaltyToEffects(effects, getRepeatPenalty(getRepeatIndex(state, action.id)));
@@ -912,10 +991,7 @@ const JOB_RESULT_COPY = {
 };
 
 const resolveJobSearch = (state, rng) => {
-  const successRate = Math.min(
-    1,
-    0.12 + state.skill * 0.006 + state.character.intelligence * 0.025 + state.character.luck * 0.008 + (state.conditions.hasFreelanceContact ? 0.04 : 0)
-  );
+  const successRate = getJobSearchSuccessRate(state);
   const success = rng() < successRate;
 
   if (!success) {
@@ -1192,18 +1268,7 @@ const maybeTriggerDayStartEvent = (state, rng) => {
     return maybeTriggerDayStartEvent(state, rng);
   }
 
-  state.pendingEvent = {
-    id: event.id,
-    title: event.title,
-    category: event.category,
-    description: event.description,
-    options: event.options.map((option) => ({
-      id: option.id,
-      text: option.text,
-      caption: option.caption ?? "",
-    })),
-    _trigger: "dayStart",
-  };
+  state.pendingEvent = createPendingEventState(event, state, rng, "dayStart");
   state.phase = PHASES.EVENT;
   return state;
 };
@@ -1226,6 +1291,11 @@ const startDayFlow = (state, rng) => {
     setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
     commitTurnLog(state);
     return state;
+  }
+
+  if (state.missedLivingCost) {
+    state.missedLivingCost = false;
+    return openHungerDialog(state);
   }
 
   if (!getHasScheduledJob(state)) {
@@ -1268,6 +1338,7 @@ const openActionChoice = (state, actionId) => {
           id: option.id,
           label: option.label,
           caption: `+$${adjusted.money ?? 0} / 體力 ${adjusted.energy ?? 0}`,
+          requiredCash: getRequiredCashFromEffects(adjusted),
         };
       }),
     };
@@ -1289,6 +1360,7 @@ const openActionChoice = (state, actionId) => {
           id: option.id,
           label: option.label,
           caption: `$${Math.abs(adjusted.money ?? option.effects.money)} / 心情 ${adjusted.mood > 0 ? `+${adjusted.mood}` : adjusted.mood ?? 0}`,
+          requiredCash: getRequiredCashFromEffects(adjusted),
         };
       }),
     };
@@ -1306,11 +1378,13 @@ const openActionChoice = (state, actionId) => {
           id: "gift",
           label: "買小禮物",
           caption: "成功率 88%｜金錢 -300｜體力 -5｜心情 -2｜壓力 -12",
+          requiredCash: 300,
         },
         {
           id: "apologize",
           label: "口頭道歉",
           caption: "成功率 68%｜體力 -6｜心情 -3｜壓力 -9",
+          requiredCash: 0,
         },
       ],
     };
@@ -1388,8 +1462,13 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
 
 const applyRecurringCosts = (state, rng) => {
   const livingCost = DAILY_LIVING_COST + Math.floor((rng() - 0.5) * 100);
-  appendResolution(state, { effects: { money: -livingCost } });
-  pushLine(state, `今天結束，生活費自動扣了 ${livingCost}。`);
+  if (state.money >= livingCost) {
+    appendResolution(state, { effects: { money: -livingCost } });
+    pushLine(state, `今天結束，生活費自動扣了 ${livingCost}。`);
+  } else {
+    state.missedLivingCost = true;
+    pushLine(state, `今天結束，生活費要 ${livingCost}，但你拿不出來，只能餓著先睡。`);
+  }
 
   if (!RENT_DAYS.includes(state.day)) {
     return;
@@ -1489,10 +1568,10 @@ const maybeTriggerEventOrContinue = (state, rng, repeatPenalty = null) => {
         category: "接案機會",
         description: `對方急件出 $${offer.income1}（${incomeHint}）。1 天衝完總收最高，天數越多總收越低但每天壓力越輕。`,
         options: [
-          { id: "1day", text: "接 1 天", caption: `完工 $${offer.income1}・體力 -${e1}・高強度` },
-          { id: "2day", text: "接 2 天", caption: `完工 $${offer.income2}・體力 -${e2}/天` },
-          { id: "3day", text: "接 3 天", caption: `完工 $${offer.income3}・體力 -${e3}/天・節奏穩` },
-          { id: "decline", text: "婉拒", caption: "今天精力留給其他事。" },
+          { id: "1day", text: "接 1 天", caption: `完工 $${offer.income1}・體力 -${e1}・高強度`, requiredCash: 0 },
+          { id: "2day", text: "接 2 天", caption: `完工 $${offer.income2}・體力 -${e2}/天`, requiredCash: 0 },
+          { id: "3day", text: "接 3 天", caption: `完工 $${offer.income3}・體力 -${e3}/天・節奏穩`, requiredCash: 0 },
+          { id: "decline", text: "婉拒", caption: "今天精力留給其他事。", requiredCash: 0 },
         ],
         _offer: offer,
       };
@@ -1517,17 +1596,7 @@ const maybeTriggerEventOrContinue = (state, rng, repeatPenalty = null) => {
           return state;
         }
       } else {
-        state.pendingEvent = {
-          id: event.id,
-          title: event.title,
-          category: event.category,
-          description: event.description,
-          options: event.options.map((option) => ({
-            id: option.id,
-            text: option.text,
-            caption: option.caption ?? "",
-          })),
-        };
+        state.pendingEvent = createPendingEventState(event, state, rng, "afterAction");
         state.phase = PHASES.EVENT;
         return state;
       }
@@ -1593,6 +1662,10 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
+  if (!canAffordRequiredCash(nextState, getActionRequiredCash(nextState, actionId))) {
+    return nextState;
+  }
+
   if (nextState.conditions.landlordAngry && LANDLORD_BLOCKED_ACTIONS.has(actionId) && rng() < getLandlordBlockRate(nextState)) {
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = "landlordBlock";
@@ -1640,7 +1713,7 @@ const resolveAction = (state, actionId, rng) => {
       title: jobResult.title,
       category: jobResult.category,
       description: jobResult.description,
-      options: [{ id: "confirm", text: jobResult.buttonText, caption: "" }],
+      options: [{ id: "confirm", text: jobResult.buttonText, caption: "", requiredCash: 0 }],
       _trigger: "jobResult",
     };
     nextState.phase = PHASES.EVENT;
@@ -1657,19 +1730,25 @@ const resolveEvent = (state, optionId, rng) => {
   }
 
   const trigger = nextState.pendingEvent._trigger;
+  const pendingOption = getPendingOptionById(nextState.pendingEvent.options, optionId);
 
   if (trigger === "jobResult") {
     nextState.pendingEvent = null;
     return maybeTriggerEventOrContinue(nextState, rng, nextState.dayPlan.lastRepeatPenalty);
   }
 
-  const event = EVENTS.find((entry) => entry.id === nextState.pendingEvent.id);
-  const option = event?.options.find((entry) => entry.id === optionId);
-  if (!option) {
+  if (!canAffordRequiredCash(nextState, getPendingOptionRequiredCash(pendingOption))) {
     return nextState;
   }
 
-  appendResolution(nextState, option.resolve(nextState, rng));
+  const event = EVENTS.find((entry) => entry.id === nextState.pendingEvent.id);
+  const option = event?.options.find((entry) => entry.id === optionId);
+  const resolution = pendingOption?.resolution ?? option?.resolve?.(nextState, rng);
+  if (!resolution) {
+    return nextState;
+  }
+
+  appendResolution(nextState, resolution);
   if (nextState.pendingEvent.id === "freelance-offer" && optionId !== "decline") {
     incrementSummaryStat(nextState, "freelanceAcceptedTimes");
   }
@@ -1684,6 +1763,10 @@ const resolveEvent = (state, optionId, rng) => {
 
   if (trigger === "dayStart") {
     return maybeTriggerDayStartEvent(nextState, rng);
+  }
+
+  if (trigger === "missedLivingCost") {
+    return startDayFlow(nextState, rng);
   }
 
   nextState.phase = PHASES.READY;
@@ -1711,6 +1794,7 @@ export const createInitialState = (rng = Math.random) => {
     dailyRewardOptions: [],
     dailyFreelanceOffer: null,
     activeCaseProject: null,
+    missedLivingCost: false,
     dayPlan: null,
     summaryStats: {
       ...DEFAULT_SUMMARY_STATS,
@@ -1738,10 +1822,7 @@ export const getActionViewModels = (state) =>
       let tag = action.tag;
 
       if (action.id === "jobSearch") {
-        tag = `${Math.round(
-          Math.min(1, 0.2 + state.skill * 0.008 + state.character.intelligence * 0.03 + state.character.luck * 0.01 + (state.conditions.hasFreelanceContact ? 0.05 : 0)) *
-            100
-        )}% 成功率`;
+        tag = `${Math.round(getJobSearchSuccessRate(state) * 100)}% 成功率`;
       } else if (action.id === "study") {
         const skillRange = state.conditions.computerBroken ? "技能 +1~14（電腦故障）" : "技能 +6~14";
         tag = `課程費 $${getStudyCost(state.skill)} · ${skillRange}`;
@@ -1840,6 +1921,10 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
   }
 
   const { actionId } = nextState.pendingActionChoice;
+  const pendingOption = getPendingOptionById(nextState.pendingActionChoice.options, optionId);
+  if (!canAffordRequiredCash(nextState, getPendingOptionRequiredCash(pendingOption))) {
+    return nextState;
+  }
 
   if (actionId === "appeaseLandlord") {
     const APPEASE_OPTION_CONFIG = {
@@ -1993,4 +2078,10 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
 
 export const dispatchEventChoice = (state, optionId, rng = Math.random) => resolveEvent(state, optionId, rng);
 
-export { detectFailure, evaluateEnding };
+export const getPendingActionChoiceRequiredCash = (state, optionId) =>
+  getPendingOptionRequiredCash(getPendingOptionById(state.pendingActionChoice?.options, optionId));
+
+export const getPendingEventChoiceRequiredCash = (state, optionId) =>
+  getPendingOptionRequiredCash(getPendingOptionById(state.pendingEvent?.options, optionId));
+
+export { detectFailure, evaluateEnding, getActionRequiredCash };

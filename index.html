@@ -384,6 +384,27 @@
 
     <section
       class="dialog hidden"
+      id="insufficient-cash-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="insufficient-cash-title"
+      aria-describedby="insufficient-cash-copy"
+    >
+      <div class="dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <h3 id="insufficient-cash-title">現金不足，只好放棄</h3>
+          </div>
+        </div>
+        <p class="dialog-copy" id="insufficient-cash-copy"></p>
+        <div class="dialog-actions">
+          <button class="primary-button" id="insufficient-cash-close-button" type="button">知道了</button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="dialog hidden"
       id="confirm-dialog"
       role="alertdialog"
       aria-modal="true"

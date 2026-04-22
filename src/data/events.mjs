@@ -30,7 +30,7 @@ export const EVENTS = [
       {
         id: "slow-down",
         text: "收手，今天先保命",
-        caption: "體力 +16、心情 +4、壓力 -10，解除過勞風險。",
+        caption: "體力 +16、心情 +4、壓力 -10，減少過勞風險。",
         resolve: () =>
           withLog(
             {
@@ -45,7 +45,7 @@ export const EVENTS = [
       {
         id: "push-through",
         text: "再硬撐一下",
-        caption: "金錢 +400，但新增過勞風險；55% 機率體力 -18、壓力 +18、心情 -14。",
+        caption: "金錢 +400，但增加過勞風險；55% 機率體力 -18、壓力 +18、心情 -14。",
         resolve: (_state, rng) => {
           const gotHit = rng() < 0.55;
           return withLog(
@@ -80,6 +80,7 @@ export const EVENTS = [
         id: "repair-now",
         text: "當場修掉",
         caption: "金錢 -1100、壓力 -4，避免進入「機車待修」。",
+        requiredCash: 1100,
         resolve: () =>
           withLog(
             {
@@ -118,6 +119,7 @@ export const EVENTS = [
         id: "back-up",
         text: "先花錢救資料",
         caption: "金錢 -500、壓力 -2，避免進入「電腦故障」。",
+        requiredCash: 500,
         resolve: () =>
           withLog(
             {
@@ -310,6 +312,7 @@ export const EVENTS = [
         id: "go",
         text: "去一下",
         caption: "金錢 -350、心情 +15、壓力 -6。",
+        requiredCash: 350,
         resolve: () =>
           withLog(
             {
@@ -365,6 +368,17 @@ export const EVENTS = [
         id: "splurge",
         text: "就花一次",
         caption: "金錢 -300~-600（隨機）、心情 +16、壓力 -12。",
+        prepare: (_state, rng) => {
+          const spent = 300 + Math.floor(rng() * 300);
+          return {
+            caption: `金錢 -${spent}、心情 +16、壓力 -12。`,
+            requiredCash: spent,
+            resolution: withLog(
+              { money: -spent, mood: 16, stress: -12 },
+              `你花了 $${spent} 讓自己好一點，那個當下是真的有用。`
+            ),
+          };
+        },
         resolve: (_state, rng) => {
           const spent = 300 + Math.floor(rng() * 300);
           return withLog(
@@ -398,6 +412,7 @@ export const EVENTS = [
         id: "buy",
         text: "買下來",
         caption: "金錢 -900、技能 +18。",
+        requiredCash: 900,
         resolve: () =>
           withLog(
             {
@@ -434,6 +449,7 @@ export const EVENTS = [
         id: "slow-day",
         text: "今天先放慢",
         caption: "金錢 -200、體力 +10、壓力 -8。",
+        requiredCash: 200,
         resolve: () =>
           withLog(
             { money: -200, energy: 10, stress: -8 },
@@ -441,13 +457,13 @@ export const EVENTS = [
           ),
       },
       {
-        id: "coffee-push",
-        text: "喝咖啡硬撐",
-        caption: "金錢 -80、體力 +6、壓力 +10，新增過勞風險。",
+        id: "barely-standing",
+        text: "空著肚子硬撐",
+        caption: "體力 -8、心情 -6、壓力 +10，增加過勞風險。",
         resolve: () =>
           withLog(
-            { money: -80, energy: 6, stress: 10 },
-            "咖啡讓你勉強撐起來了，但睡眠債沒有消失，只是暫時被壓著。",
+            { energy: -8, mood: -6, stress: 10 },
+            "你什麼都沒補，只能靠意志把身體拖起來。今天還沒開始，就已經在透支。",
             { conditionChanges: { burnoutRisk: true } }
           ),
       },
@@ -466,6 +482,7 @@ export const EVENTS = [
         id: "buy-medicine",
         text: "買藥休息",
         caption: "金錢 -250、體力 +12、壓力 -4。",
+        requiredCash: 250,
         resolve: () =>
           withLog(
             { money: -250, energy: 12, stress: -4 },
@@ -528,6 +545,7 @@ export const EVENTS = [
         id: "send-money",
         text: "匯一點回去",
         caption: "金錢 -1000、心情 +8、壓力 +4。",
+        requiredCash: 1000,
         resolve: () =>
           withLog(
             { money: -1000, mood: 8, stress: 4 },
@@ -622,6 +640,7 @@ export const EVENTS = [
         id: "attend-event",
         text: "去認識人",
         caption: "金錢 -200、體力 -8；60% 機率新增「有接案人脈」。",
+        requiredCash: 200,
         resolve: (_state, rng) => {
           const madeContact = rng() < 0.6;
           return withLog(

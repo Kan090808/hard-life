@@ -117,6 +117,25 @@ const assertVisible = async (locator, description) => {
   console.log(`PASS ${description}`);
 };
 
+const patchSavedRun = async (page, patch) => {
+  await page.evaluate((nextPatch) => {
+    const raw = window.localStorage.getItem("hard-life-save-v1");
+    if (!raw) {
+      throw new Error("missing saved run");
+    }
+    const payload = JSON.parse(raw);
+    payload.state = {
+      ...payload.state,
+      ...nextPatch,
+    };
+    payload.ui = {
+      ...payload.ui,
+      mode: "idle",
+    };
+    window.localStorage.setItem("hard-life-save-v1", JSON.stringify(payload));
+  }, patch);
+};
+
 const runStartFlowSmoke = async (page) => {
   const introDialog = page.locator("#intro-dialog");
   const startButton = page.locator("#start-button");
@@ -176,6 +195,119 @@ const runJobSearchResultSmoke = async (page) => {
   console.log("PASS job search event dialog closes after confirmation");
   assert.equal(await actionDialog.isVisible(), false, "job search result should not reopen the daily result dialog");
   console.log("PASS job search result does not fall through to the daily result dialog");
+};
+
+const runInsufficientCashSmoke = async (page, origin) => {
+  await patchSavedRun(page, {
+    money: 0,
+    jobLevel: 1,
+    phase: "ready-for-action",
+    pendingAttendance: null,
+    pendingActionChoice: null,
+    pendingEvent: null,
+    ending: null,
+  });
+  await page.goto(origin, { waitUntil: "networkidle" });
+
+  const takeActionButton = page.locator("#take-action-button");
+  const actionDialog = page.locator("#action-dialog");
+  const choiceDialog = page.locator("#choice-dialog");
+  const insufficientCashDialog = page.locator("#insufficient-cash-dialog");
+  const insufficientCashCloseButton = page.locator("#insufficient-cash-close-button");
+  const studyButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="study"]');
+  const rewardButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="reward"]');
+  const rewardChoiceButton = page.locator('#choice-options button[data-role="choice-option"]').first();
+  const choiceBackButton = page.locator('#choice-options button[data-role="choice-back"]');
+
+  await clickAndWait(page, takeActionButton, "take action button opens action dialog for low-cash run");
+  await clickAndWait(page, studyButton, "study action button responds with zero cash");
+  await assertVisible(insufficientCashDialog, "insufficient cash dialog is visible for direct paid action");
+  await clickAndWait(page, insufficientCashCloseButton, "insufficient cash dialog closes for direct paid action");
+  await assertVisible(actionDialog, "action dialog remains visible after direct paid action is blocked");
+
+  await clickAndWait(page, rewardButton, "reward action button opens choice dialog with zero cash");
+  await assertVisible(choiceDialog, "reward choice dialog is visible with zero cash");
+  await clickAndWait(page, rewardChoiceButton, "reward option button responds with zero cash");
+  await assertVisible(insufficientCashDialog, "insufficient cash dialog is visible for reward choice");
+  await clickAndWait(page, insufficientCashCloseButton, "insufficient cash dialog closes for reward choice");
+  await assertVisible(choiceDialog, "reward choice dialog remains visible after blocked purchase");
+  await clickAndWait(page, choiceBackButton, "choice back button responds after blocked reward purchase");
+  assert.equal(await choiceDialog.isVisible(), false, "choice dialog should close after backing out of zero-cash reward flow");
+  console.log("PASS reward flow can still exit after insufficient cash");
+};
+
+const runBadSleepFreeOptionSmoke = async (page, origin) => {
+  await patchSavedRun(page, {
+    money: 0,
+    jobLevel: 1,
+    phase: "resolving-event",
+    pendingAttendance: null,
+    pendingActionChoice: null,
+    pendingEvent: {
+      id: "bad-sleep",
+      title: "睡眠品質很差",
+      category: "健康警訊",
+      description: "昨晚翻了一整晚，天快亮才睡著，今天醒來感覺比沒睡更累。",
+      options: [
+        { id: "slow-day", text: "今天先放慢", caption: "體力 +10、壓力 -8。", requiredCash: 0 },
+        { id: "barely-standing", text: "空著肚子硬撐", caption: "體力 -8、心情 -6、壓力 +10，新增過勞風險。", requiredCash: 0 },
+      ],
+      _trigger: "dayStart",
+    },
+    ending: null,
+  });
+  await page.goto(origin, { waitUntil: "networkidle" });
+
+  const eventDialog = page.locator("#event-dialog");
+  const actionDialog = page.locator("#action-dialog");
+  const freeOptionButton = page.locator('#event-options button[data-role="event-option"][data-option-id="barely-standing"]');
+  const resultConfirmButton = page.locator('#action-dialog button[data-role="confirm-action-result"]');
+  const takeActionButton = page.locator("#take-action-button");
+
+  await assertVisible(eventDialog, "bad sleep event dialog is visible for zero-cash run");
+  await clickAndWait(page, freeOptionButton, "free bad sleep option responds with zero cash");
+  assert.equal(await eventDialog.isVisible(), false, "bad sleep event dialog should close after taking the free option");
+  console.log("PASS bad sleep event can resolve without cash");
+  await assertVisible(actionDialog, "bad sleep resolution still surfaces in the result dialog");
+  await clickAndWait(page, resultConfirmButton, "bad sleep result dialog can be confirmed");
+  assert.equal(await takeActionButton.isDisabled(), false, "take action remains available after resolving zero-cash bad sleep event");
+  console.log("PASS zero-cash bad sleep flow does not soft-lock the run");
+};
+
+const runLivingCostShortfallSmoke = async (page, origin) => {
+  await patchSavedRun(page, {
+    money: 0,
+    jobLevel: 1,
+    phase: "ready-for-action",
+    pendingAttendance: null,
+    pendingActionChoice: null,
+    pendingEvent: null,
+    ending: null,
+    missedLivingCost: false,
+  });
+  await page.goto(origin, { waitUntil: "networkidle" });
+
+  const sleepButton = page.locator("#sleep-button");
+  const confirmDialogConfirmButton = page.locator("#confirm-dialog-confirm-button");
+  const eventDialog = page.locator("#event-dialog");
+  const eventTitle = page.locator("#event-title");
+  const eventConfirmButton = page.locator('#event-options button[data-role="event-option"][data-option-id="confirm"]');
+  const actionDialog = page.locator("#action-dialog");
+  const resultConfirmButton = page.locator('#action-dialog button[data-role="confirm-action-result"]');
+  const takeActionButton = page.locator("#take-action-button");
+
+  await clickAndWait(page, sleepButton, "sleep button opens confirm dialog for zero-cash run");
+  await clickAndWait(page, confirmDialogConfirmButton, "sleep confirmation responds for zero-cash run");
+  await assertVisible(eventDialog, "hunger dialog is visible after missing living cost");
+  assert.equal(await eventTitle.textContent(), "昨天餓了一天，身體疲憊不堪", "hunger dialog should show the expected title");
+  console.log("PASS hunger dialog title matches expected copy");
+  await clickAndWait(page, eventConfirmButton, "hunger dialog confirm button responds");
+  assert.equal(await eventDialog.isVisible(), false, "hunger dialog should close after confirmation");
+  console.log("PASS hunger dialog closes after confirmation");
+  await assertVisible(actionDialog, "hunger penalty still appears in the result dialog");
+  await clickAndWait(page, resultConfirmButton, "hunger result dialog can be confirmed");
+  assert.equal(await takeActionButton.isDisabled(), false, "take action should be available after resolving hunger dialog");
+  console.log("PASS run continues after missed living cost penalty");
 };
 
 const runPersistenceReloadSmoke = async (page, origin) => {
@@ -253,6 +385,9 @@ const main = async () => {
     await runPersistenceReloadSmoke(page, server.origin);
     await runDirectActionSmoke(page);
     await runJobSearchResultSmoke(page);
+    await runInsufficientCashSmoke(page, server.origin);
+    await runBadSleepFreeOptionSmoke(page, server.origin);
+    await runLivingCostShortfallSmoke(page, server.origin);
     await runResetSmoke(page);
     await runReloadSmoke(page, server.origin);
     assert.deepEqual(errors, [], `unexpected browser errors:\n${errors.join("\n")}`);
