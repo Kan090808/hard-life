@@ -1221,9 +1221,10 @@ const handleEventDialogClick = (event) => {
   }
 
   playSelectSfx();
+  const closesIntoStandaloneDialog = state.pendingEvent?._trigger === "jobResult";
   state = dispatchEventChoice(state, button.dataset.optionId);
   if (!state.ending) {
-    setMode("action-result");
+    setMode(closesIntoStandaloneDialog ? "idle" : "action-result");
   } else {
     setMode("idle");
   }

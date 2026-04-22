@@ -161,6 +161,23 @@ const runDirectActionSmoke = async (page) => {
   console.log("PASS direct action result closes correctly");
 };
 
+const runJobSearchResultSmoke = async (page) => {
+  const takeActionButton = page.locator("#take-action-button");
+  const actionDialog = page.locator("#action-dialog");
+  const eventDialog = page.locator("#event-dialog");
+  const jobSearchButton = page.locator('#action-dialog button[data-role="action-choice"][data-action-id="jobSearch"]');
+  const eventConfirmButton = page.locator('#event-options button[data-role="event-option"][data-option-id="confirm"]');
+
+  await clickAndWait(page, takeActionButton, "take action button opens action dialog for job search");
+  await clickAndWait(page, jobSearchButton, "job search action button responds");
+  await assertVisible(eventDialog, "job search result opens the event dialog");
+  await clickAndWait(page, eventConfirmButton, "job search result can be confirmed");
+  assert.equal(await eventDialog.isVisible(), false, "job search event dialog should close after confirmation");
+  console.log("PASS job search event dialog closes after confirmation");
+  assert.equal(await actionDialog.isVisible(), false, "job search result should not reopen the daily result dialog");
+  console.log("PASS job search result does not fall through to the daily result dialog");
+};
+
 const runPersistenceReloadSmoke = async (page, origin) => {
   const introDialog = page.locator("#intro-dialog");
   const takeActionButton = page.locator("#take-action-button");
@@ -235,6 +252,7 @@ const main = async () => {
     await runStartFlowSmoke(page);
     await runPersistenceReloadSmoke(page, server.origin);
     await runDirectActionSmoke(page);
+    await runJobSearchResultSmoke(page);
     await runResetSmoke(page);
     await runReloadSmoke(page, server.origin);
     assert.deepEqual(errors, [], `unexpected browser errors:\n${errors.join("\n")}`);
