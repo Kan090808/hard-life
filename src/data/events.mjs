@@ -19,7 +19,7 @@ export const EVENTS = [
       {
         id: "slow-down",
         text: "收手，今天先保命",
-        caption: "少賺一點，但把人先留住。",
+        caption: "體力 +16、心情 +4、壓力 -10，解除過勞風險。",
         resolve: () =>
           withLog(
             {
@@ -34,7 +34,7 @@ export const EVENTS = [
       {
         id: "push-through",
         text: "再硬撐一下",
-        caption: "今天先過去，代價晚點再說。",
+        caption: "金錢 +400，但新增過勞風險；55% 機率體力 -18、壓力 +18、心情 -14。",
         resolve: (_state, rng) => {
           const gotHit = rng() < 0.55;
           return withLog(
@@ -67,7 +67,7 @@ export const EVENTS = [
       {
         id: "repair-now",
         text: "當場修掉",
-        caption: "先痛一次，免得後面每天都痛。",
+        caption: "金錢 -1100、壓力 -4，避免進入「機車待修」。",
         resolve: () =>
           withLog(
             {
@@ -80,7 +80,7 @@ export const EVENTS = [
       {
         id: "delay-repair",
         text: "先拖著",
-        caption: "把問題踢給明天的自己。",
+        caption: "壓力 +8，新增「機車待修」；之後通勤行動額外耗體、加壓。",
         resolve: () =>
           withLog(
             {
@@ -104,7 +104,7 @@ export const EVENTS = [
       {
         id: "back-up",
         text: "先花錢救資料",
-        caption: "先把災情壓住。",
+        caption: "金錢 -500、壓力 -2，避免進入「電腦故障」。",
         resolve: () =>
           withLog(
             {
@@ -117,7 +117,7 @@ export const EVENTS = [
       {
         id: "ignore",
         text: "先當沒看到",
-        caption: "希望它能自己撐過去。",
+        caption: "壓力 +6，新增「電腦故障」；之後學習和接案動作會更卡。",
         resolve: () =>
           withLog(
             {
@@ -140,7 +140,7 @@ export const EVENTS = [
       {
         id: "reply-politely",
         text: "先低頭安撫",
-        caption: "把今天的尊嚴換成一點時間。",
+        caption: "心情 -9、壓力 -6，解除「房東不爽」。",
         resolve: () =>
           withLog(
             {
@@ -154,7 +154,7 @@ export const EVENTS = [
       {
         id: "leave-read",
         text: "先已讀不回",
-        caption: "問題沒消失，但你今天不想面對。",
+        caption: "壓力 +12、心情 -14，新增或維持「房東不爽」。",
         resolve: () =>
           withLog(
             {
@@ -182,7 +182,7 @@ export const EVENTS = [
       {
         id: "take-lead",
         text: "先接下來",
-        caption: "把這個機會留到之後變現。",
+        caption: "新增「手上有案源」，之後接案保底出現、收益更高。",
         resolve: () =>
           withLog(
             {},
@@ -193,7 +193,7 @@ export const EVENTS = [
       {
         id: "pass-lead",
         text: "先婉拒",
-        caption: "今天沒那個餘裕。",
+        caption: "心情 -6，放掉這次接案機會。",
         resolve: () =>
           withLog(
             {
@@ -215,7 +215,7 @@ export const EVENTS = [
       {
         id: "1day",
         text: "接 1 天",
-        caption: "一天衝完，日薪最高但消耗最大。",
+        caption: "一天衝完，日薪最高；體力消耗 1.5 倍，壓力最大。",
         resolve: (state) => {
           const { income1 = 600, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
           const energy1 = Math.round(energyCostPerDay * 1.5);
@@ -232,7 +232,7 @@ export const EVENTS = [
       {
         id: "2day",
         text: "接 2 天",
-        caption: "總收益較高，節奏比一天輕一點。",
+        caption: "分兩天，每天體力消耗 1.1 倍；完成後一次收款。",
         resolve: (state) => {
           const { income2 = 530, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
           const energy2 = Math.round(energyCostPerDay * 1.1);
@@ -248,7 +248,7 @@ export const EVENTS = [
       {
         id: "3day",
         text: "接 3 天",
-        caption: "總收益最高，分三天跑，每天消耗最低。",
+        caption: "分三天，每天體力消耗最低（0.8 倍）；總收益最高。",
         resolve: (state) => {
           const { income3 = 450, energyCostPerDay = 12, fromLead = false } = state.pendingEvent?._offer ?? {};
           const energy3 = Math.round(energyCostPerDay * 0.8);
@@ -264,7 +264,7 @@ export const EVENTS = [
       {
         id: "decline",
         text: "婉拒",
-        caption: "今天精力留給其他事。",
+        caption: "心情 -8、壓力 +3；若有案源或人脈，連帶消失。",
         resolve: (state) => {
           const { fromLead = false } = state.pendingEvent?._offer ?? {};
           const conditionChanges = {};
@@ -292,7 +292,7 @@ export const EVENTS = [
       {
         id: "go",
         text: "去一下",
-        caption: "至少今晚像在過生活。",
+        caption: "金錢 -350、心情 +15、壓力 -6。",
         resolve: () =>
           withLog(
             {
@@ -306,7 +306,7 @@ export const EVENTS = [
       {
         id: "skip",
         text: "先不去",
-        caption: "月底前還是現實先贏。",
+        caption: "心情 -10、壓力 +3；若有接案人脈，人脈會消失。",
         resolve: (state) => {
           const conditionChanges = {};
           if (state.conditions.hasFreelanceContact) conditionChanges.hasFreelanceContact = false;
@@ -414,7 +414,7 @@ export const EVENTS = [
       {
         id: "splurge",
         text: "就花一次",
-        caption: "先把今晚過好再說。",
+        caption: "金錢 -300~-600（隨機）、心情 +16、壓力 -12。",
         resolve: (_state, rng) => {
           const spent = 300 + Math.floor(rng() * 300);
           return withLog(
@@ -426,7 +426,7 @@ export const EVENTS = [
       {
         id: "resist",
         text: "忍住不花",
-        caption: "帳戶不能再少了。",
+        caption: "壓力 +8、心情 -8。",
         resolve: () =>
           withLog(
             { stress: 8, mood: -8 },
@@ -446,7 +446,7 @@ export const EVENTS = [
       {
         id: "buy",
         text: "買下來",
-        caption: "今天窮一點，換明天多一點可能。",
+        caption: "金錢 -900、技能 +18。",
         resolve: () =>
           withLog(
             {
@@ -459,13 +459,260 @@ export const EVENTS = [
       {
         id: "pass",
         text: "先略過",
-        caption: "這次先守住現金。",
+        caption: "壓力 +2。",
         resolve: () =>
           withLog(
             {
               stress: 2,
             },
             "你把頁面關掉了，理智贏了，但也不是很快樂。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "bad-sleep",
+    tier: "urgent",
+    category: "健康警訊",
+    title: "睡眠品質很差",
+    description: "昨晚翻了一整晚，天快亮才睡著，今天醒來感覺比沒睡更累。",
+    condition: (state) => state.stress >= 70 || state.energy < 35,
+    options: [
+      {
+        id: "slow-day",
+        text: "今天先放慢",
+        caption: "金錢 -200、體力 +10、壓力 -8。",
+        resolve: () =>
+          withLog(
+            { money: -200, energy: 10, stress: -8 },
+            "你決定今天輕鬆一點，不逼自己，身體稍微有了喘息的空間。"
+          ),
+      },
+      {
+        id: "coffee-push",
+        text: "喝咖啡硬撐",
+        caption: "金錢 -80、體力 +6、壓力 +10，新增過勞風險。",
+        resolve: () =>
+          withLog(
+            { money: -80, energy: 6, stress: 10 },
+            "咖啡讓你勉強撐起來了，但睡眠債沒有消失，只是暫時被壓著。",
+            { conditionChanges: { burnoutRisk: true } }
+          ),
+      },
+    ],
+  },
+  {
+    id: "cold-symptom",
+    tier: "urgent",
+    category: "健康警訊",
+    title: "感冒前兆",
+    description: "喉嚨有點痛，鼻子也開始不對勁，你知道這是身體在發訊號。",
+    condition: (state) => state.energy < 40 || state.history.consecutiveHeavyDays >= 2,
+    options: [
+      {
+        id: "buy-medicine",
+        text: "買藥休息",
+        caption: "金錢 -250、體力 +12、壓力 -4。",
+        resolve: () =>
+          withLog(
+            { money: -250, energy: 12, stress: -4 },
+            "你去藥局買了感冒藥，今天提早休息，身體至少沒有繼續往下走。"
+          ),
+      },
+      {
+        id: "ignore-it",
+        text: "不管它",
+        caption: "體力 -12、心情 -6、壓力 +8。",
+        resolve: () =>
+          withLog(
+            { energy: -12, mood: -6, stress: 8 },
+            "你假裝沒事繼續撐，但身體沒有說謊，下午整個人都很難受。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "rainy-commute",
+    tier: "ambient",
+    category: "生活事件",
+    title: "雨天通勤",
+    description: "出門才發現下大雨，衣服淋了一半，心情也跟著壞掉。",
+    condition: (state) =>
+      lastActionIs(state, ["work", "attendanceWork", "overtime", "jobSearch"]),
+    options: [
+      {
+        id: "take-it-slow",
+        text: "慢慢來",
+        caption: "體力 -4、壓力 -2。",
+        resolve: () =>
+          withLog(
+            { energy: -4, stress: -2 },
+            "你沒有跟雨搶時間，雖然晚了一點，但心情沒有更差。"
+          ),
+      },
+      {
+        id: "rush-through",
+        text: "趕時間硬衝",
+        caption: "體力 -10、壓力 +8。",
+        resolve: () =>
+          withLog(
+            { energy: -10, stress: 8 },
+            "你在大雨裡跑了一段，到了之後整個人又濕又累，今天一開始就輸了。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "phone-bill",
+    tier: "state",
+    category: "帳單壓力",
+    title: "電信帳單來了",
+    description: "電信帳單扣款通知跳出來，這個月也沒少花。",
+    condition: (state) => state.day >= 5 && state.money < 5000,
+    options: [
+      {
+        id: "pay-now",
+        text: "直接繳掉",
+        caption: "金錢 -650、壓力 -4。",
+        resolve: () =>
+          withLog(
+            { money: -650, stress: -4 },
+            "你把帳單結掉，雖然帳戶又少了一截，至少這件事不用再掛心。"
+          ),
+      },
+      {
+        id: "delay-pay",
+        text: "延後繳",
+        caption: "壓力 +10、心情 -5。",
+        resolve: () =>
+          withLog(
+            { stress: 10, mood: -5 },
+            "你把帳單先擱著，但通知一直掛在那裡，壓力沒有因此消失。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "family-help",
+    tier: "state",
+    category: "帳單壓力",
+    title: "家人臨時需要支援",
+    description: "家人傳來訊息，說這個月有點緊，問你能不能匯一點過去。",
+    condition: (state) => state.money >= 1000,
+    options: [
+      {
+        id: "send-money",
+        text: "匯一點回去",
+        caption: "金錢 -1000、心情 +8、壓力 +4。",
+        resolve: () =>
+          withLog(
+            { money: -1000, mood: 8, stress: 4 },
+            "你把錢匯過去了，帳戶少了一截，但至少那邊暫時不用擔心了。"
+          ),
+      },
+      {
+        id: "decline-family",
+        text: "這次先拒絕",
+        caption: "心情 -10、壓力 +6。",
+        resolve: () =>
+          withLog(
+            { mood: -10, stress: 6 },
+            "你說了抱歉，對方說沒關係，但你知道那個沒關係不是真的沒關係。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "cover-shift",
+    tier: "opportunity",
+    category: "生活事件",
+    title: "老闆臨時拜託代班",
+    description: "老闆說有人今天臨時請假，問你願不願意多留一段，有加班費。",
+    condition: (state) => state.jobLevel === 2 || state.jobLevel === 3,
+    options: [
+      {
+        id: "accept-shift",
+        text: "接下代班",
+        caption: "金錢 +500、體力 -16、壓力 +8。",
+        resolve: () =>
+          withLog(
+            { money: 500, energy: -16, stress: 8 },
+            "你把那段班接下來了，加班費入帳，但今天整個人榨得差不多了。"
+          ),
+      },
+      {
+        id: "decline-shift",
+        text: "拒絕",
+        caption: "心情 +4、壓力 -4。",
+        resolve: () =>
+          withLog(
+            { mood: 4, stress: -4 },
+            "你說今天不行，老闆說好，你把那個時間留給自己，難得輕鬆一點。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "free-workshop",
+    tier: "opportunity",
+    category: "轉機",
+    title: "免費講座",
+    description: "網路上有人辦免費技能講座，主題剛好是你想補強的方向。",
+    condition: (state) => state.skill < 60 && state.energy >= 25,
+    options: [
+      {
+        id: "attend-workshop",
+        text: "去聽看看",
+        caption: "體力 -10、技能 +8、心情 +3。",
+        resolve: () =>
+          withLog(
+            { energy: -10, skill: 8, mood: 3 },
+            "你去聽了，講者說的有幾個點很實用，你邊聽邊做筆記，感覺沒白去。"
+          ),
+      },
+      {
+        id: "stay-rest",
+        text: "留在家休息",
+        caption: "體力 +6、壓力 -3。",
+        resolve: () =>
+          withLog(
+            { energy: 6, stress: -3 },
+            "你把那個時間留給自己，什麼都不做，反而比做了什麼更像在充電。"
+          ),
+      },
+    ],
+  },
+  {
+    id: "community-event",
+    tier: "opportunity",
+    category: "轉機",
+    title: "朋友介紹社群活動",
+    description: "朋友說有個小型社群聚會，都是跟你一樣在接案的人，問你要不要去認識看看。",
+    condition: (state) => !state.conditions.hasFreelanceContact && state.mood >= 35,
+    options: [
+      {
+        id: "attend-event",
+        text: "去認識人",
+        caption: "金錢 -200、體力 -8；60% 機率新增「有接案人脈」。",
+        resolve: (_state, rng) => {
+          const madeContact = rng() < 0.6;
+          return withLog(
+            { money: -200, energy: -8 },
+            madeContact
+              ? "你在聚會上認識了幾個接案的人，其中一個說之後可以互相介紹案源。"
+              : "你去了，聊了聊，大家都很忙，沒有特別深入，但至少出門了。",
+            madeContact ? { conditionChanges: { hasFreelanceContact: true } } : {}
+          );
+        },
+      },
+      {
+        id: "skip-event",
+        text: "先不去",
+        caption: "壓力 -2，錯過這次機會。",
+        resolve: () =>
+          withLog(
+            { stress: -2 },
+            "你留在家裡，今天不想應酬，人脈這件事就繼續等吧。"
           ),
       },
     ],
