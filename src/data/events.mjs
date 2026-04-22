@@ -448,11 +448,10 @@ export const EVENTS = [
       {
         id: "slow-day",
         text: "今天先放慢",
-        caption: "金錢 -200、體力 +10、壓力 -8。",
-        requiredCash: 200,
+        caption: "體力 +10、壓力 -8。",
         resolve: () =>
           withLog(
-            { money: -200, energy: 10, stress: -8 },
+            { energy: 10, stress: -8 },
             "你決定今天輕鬆一點，不逼自己，身體稍微有了喘息的空間。"
           ),
       },
