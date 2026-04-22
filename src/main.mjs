@@ -1,5 +1,5 @@
 import { createInitialState, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchCancelActionChoice, dispatchEventChoice, getActionViewModels, getLatestLog, getStatusMeta } from "./game.mjs";
-import { CHARACTER_STAT_DISPLAY, GAME_COPY, JOBS, STAT_DISPLAY } from "./data/config.mjs";
+import { CHARACTER_STAT_DISPLAY, GAME_COPY, JOBS, RENT_AMOUNT, RENT_DAYS, STAT_DISPLAY } from "./data/config.mjs";
 import { APP_VERSION } from "./version.mjs";
 import {
   isAudioSupported,
@@ -750,39 +750,139 @@ const getDangerLine = () => {
   return "先看房租、體力和壓力，再決定今天要把哪裡拿去換。";
 };
 
+const getNextRentDay = (day) => RENT_DAYS.find((rentDay) => rentDay >= day) ?? null;
+
+const isRentComingSoon = (targetState) => {
+  const nextRentDay = getNextRentDay(targetState.day);
+  if (nextRentDay === null) {
+    return false;
+  }
+  return nextRentDay - targetState.day <= 2;
+};
+
 const getGoalHint = () => {
-  if (state.conditions.scooterBroken || state.conditions.computerBroken || state.conditions.landlordAngry) {
-    return {
-      title: "先處理卡住你的問題",
-      copy: "有些麻煩拖著不管，明天不會變小，只會變成新的懲罰。",
-    };
-  }
+  const goals = [
+    {
+      id: "landlord-looking",
+      priority: 100,
+      matches: () => state.conditions.landlordAngry,
+      getCopy: () => ({
+        title: "房東在找你",
+        copy: "沒錢交房租的話，先去安撫一下房東吧。",
+      }),
+    },
+    {
+      id: "rent-coming",
+      priority: 95,
+      matches: () => isRentComingSoon(state),
+      getCopy: () => ({
+        title: "要交房租了",
+        copy: state.money >= RENT_AMOUNT ? "過幾天就要交租了，省著點花。" : "過幾天就要交租了，快去賺錢。",
+      }),
+    },
+    {
+      id: "wallet-empty",
+      priority: 90,
+      matches: () => state.money < 500,
+      getCopy: () => ({
+        title: "錢包空空",
+        copy: "手上現金太少，先想辦法賺點錢吧。",
+      }),
+    },
+    {
+      id: "escape-death",
+      priority: 85,
+      matches: () => state.conditions.burnoutRisk,
+      getCopy: () => ({
+        title: "逃離死神",
+        copy: "身體已經快不行了，多休息吧。",
+      }),
+    },
+    {
+      id: "rest-early",
+      priority: 80,
+      matches: () => state.energy < 30,
+      getCopy: () => ({
+        title: "早點休息吧",
+        copy: "人生還很長，別把自己累壞了。",
+      }),
+    },
+    {
+      id: "stress-high",
+      priority: 75,
+      matches: () => state.stress > 70,
+      getCopy: () => ({
+        title: "壓力山大",
+        copy: "對自己好一點，別再逼自己了。",
+      }),
+    },
+    {
+      id: "mood-low",
+      priority: 70,
+      matches: () => state.mood < 30,
+      getCopy: () => ({
+        title: "心態快崩了",
+        copy: "去做點讓自己開心的事吧。",
+      }),
+    },
+    {
+      id: "save-scooter",
+      priority: 65,
+      matches: () => state.conditions.scooterBroken,
+      getCopy: () => ({
+        title: "拯救戰馬",
+        copy: "機車不修，出門賺錢都會變得更累。",
+      }),
+    },
+    {
+      id: "fix-computer",
+      priority: 60,
+      matches: () => state.conditions.computerBroken,
+      getCopy: () => ({
+        title: "修理電腦",
+        copy: "工欲善其事，必先利其器。",
+      }),
+    },
+    {
+      id: "better-job",
+      priority: 50,
+      matches: () => state.skill >= 30 && state.jobLevel < 2,
+      getCopy: () => ({
+        title: "找個體面的工作",
+        copy: "你媽說，人家孩子不是醫生就是律師。",
+      }),
+    },
+    {
+      id: "make-friends",
+      priority: 45,
+      matches: () => state.skill >= 25 && !state.conditions.hasFreelanceContact,
+      getCopy: () => ({
+        title: "出外靠朋友",
+        copy: "多認識一點人，機會才不會永遠只靠運氣。",
+      }),
+    },
+    {
+      id: "some-network",
+      priority: 40,
+      matches: () => state.conditions.hasFreelanceContact && !state.conditions.clientLead,
+      getCopy: () => ({
+        title: "有點人脈",
+        copy: "朋友都認識了，接下來就看有沒有機會變成收入。",
+      }),
+    },
+    {
+      id: "study-needed",
+      priority: 30,
+      matches: () => state.skill < 30,
+      getCopy: () => ({
+        title: "少時不讀書",
+        copy: "不讀書，長大會很辛苦喔。",
+      }),
+    },
+  ];
 
-  if (state.conditions.clientLead) {
-    return {
-      title: "案源可以變現了",
-      copy: "手上已經有一條線，今天安排接案會比平常更划算。",
-    };
-  }
-
-  if (!state.conditions.hasFreelanceContact && state.skill >= 25) {
-    return {
-      title: "可以開始鋪人脈",
-      copy: "你已經不是完全零基礎了，現在去換一條路，比晚一點才做更有價值。",
-    };
-  }
-
-  if (state.dayPlan.lastRepeatPenalty?.repeatIndex > 1) {
-    return {
-      title: "今天別再硬刷同一件事",
-      copy: "同一招今天再做只會越來越虧，現在換個方向或乾脆睡覺通常更合理。",
-    };
-  }
-
-  return {
-    title: "先守住節奏",
-    copy: "這個月不是拚一次大成功，而是別讓自己先被連鎖問題拖下去。",
-  };
+  const matchedGoal = goals.filter((goal) => goal.matches()).sort((a, b) => b.priority - a.priority)[0];
+  return matchedGoal?.getCopy() ?? null;
 };
 
 const getActionPreview = (action) => {
@@ -943,6 +1043,7 @@ const renderConditions = (conditions) => {
 const renderMeta = ({ moneyChanged, rentChanged }) => {
   const meta = getStatusMeta(state);
   const goalHint = getGoalHint();
+  const goalCard = elements.goalTitle.closest(".goal-card");
   elements.walletAmount.textContent = `$${state.money.toLocaleString()}`;
   elements.rentCountdown.textContent = meta.rentCountdown;
   elements.jobIdentityCard.dataset.tone = meta.currentJob.tone;
@@ -952,8 +1053,15 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
   elements.actionSummary.textContent = meta.actionSummary;
-  elements.goalTitle.textContent = goalHint.title;
-  elements.goalCopy.textContent = meta.repeatWarning || goalHint.copy;
+  if (goalHint) {
+    elements.goalTitle.textContent = goalHint.title;
+    elements.goalCopy.textContent = goalHint.copy;
+    goalCard?.classList.remove("hidden");
+  } else {
+    elements.goalTitle.textContent = "";
+    elements.goalCopy.textContent = "";
+    goalCard?.classList.add("hidden");
+  }
   elements.statusPanel.classList.toggle("details-expanded", uiState.detailsExpanded);
   elements.detailsToggle.setAttribute("aria-expanded", String(uiState.detailsExpanded));
   elements.detailsToggle.querySelector(".toggle-text").textContent = uiState.detailsExpanded ? "收起" : "詳情";
