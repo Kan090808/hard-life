@@ -9,7 +9,7 @@ export const PHASES = {
 
 export const TOTAL_DAYS = 30;
 export const DAILY_LIVING_COST = 400;
-export const RENT_AMOUNT = 4000;
+export const RENT_AMOUNT = 3000;
 export const RENT_DAYS = [7, 14, 21, 28];
 export const MAX_LOG_ENTRIES = 8;
 export const MAX_DAY_START_EVENTS_PER_DAY = 3;
