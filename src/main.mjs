@@ -100,7 +100,6 @@ const elements = {
   rentStrikes: document.querySelector("#rent-strikes"),
   phaseLabel: document.querySelector("#phase-label"),
   actionSummary: document.querySelector("#action-summary"),
-  sleepRecoveryPreview: document.querySelector("#sleep-recovery-preview"),
   conditionStrip: document.querySelector("#condition-strip"),
   goalTitle: document.querySelector("#goal-title"),
   goalCopy: document.querySelector("#goal-copy"),
@@ -988,7 +987,6 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
   elements.actionSummary.textContent = meta.actionSummary;
-  elements.sleepRecoveryPreview.textContent = meta.sleepRecoveryPreview;
   elements.goalTitle.textContent = goalHint.title;
   elements.goalCopy.textContent = meta.repeatWarning || goalHint.copy;
   elements.statusPanel.classList.toggle("details-expanded", uiState.detailsExpanded);
@@ -1208,7 +1206,7 @@ const renderActionSelection = () => {
   const meta = getStatusMeta(state);
   elements.actionDialogKicker.textContent = "回合選單";
   elements.actionDialogTitle.textContent = "今天還要安排什麼";
-  elements.actionDialogCopy.textContent = `${meta.actionSummary} · ${meta.sleepRecoveryPreview}`;
+  elements.actionDialogCopy.textContent = meta.actionSummary;
   elements.actionDialogBody.innerHTML = "";
   elements.actionDialogActions.innerHTML = "";
 
