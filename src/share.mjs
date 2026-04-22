@@ -314,8 +314,7 @@ const buildShareText = (state, url) => {
     `工作 ${snapshot.jobName} ・ ${snapshot.jobBadge}`,
     snapshot.stats.map((entry) => `${entry.label} ${entry.value}`).join(" ・ "),
     `本月紀錄：${snapshot.records.join("、")}`,
-    `本月標籤：${snapshot.tagsText}`,
-    `下次建議：${snapshot.advice}`,
+    `本月標籤：${snapshot.tags.join("、")}`,
     snapshot.url,
   ].filter(Boolean).join("\n");
 };
