@@ -974,25 +974,56 @@ const resolveResignation = (state) => ({
 const getDynamicEventRate = (penalty) =>
   clampNumber(BASE_EVENT_TRIGGER_RATE + (penalty?.eventRiskBonus ?? 0), BASE_EVENT_TRIGGER_RATE, MAX_EVENT_TRIGGER_RATE);
 
-const applyAttendanceOutcome = (state, choice) => {
-  const job = getJob(state);
-  const working = choice === "work";
-  beginTurnLogIfNeeded(state);
-  state.turnLog.actionId = working ? "attendanceWork" : "attendanceLeave";
-  recordPassiveAction(state, working ? "attendanceWork" : "attendanceLeave");
+const getLeaveSuccessRate = (state) => {
+  const requestedTimes = state.summaryStats.leaveRequestedTimes ?? 0;
+  return clampNumber(0.8 - requestedTimes * 0.1, 0.3, 0.8);
+};
 
-  appendResolution(state, {
-    effects: working ? job.attendanceEffects : job.leaveEffects,
-  });
-  if (working) {
-    incrementSummaryStat(state, "jobsWorked");
+const getAttendanceDescription = (state) => {
+  if (state.stress > 70) {
+    return "你已經快要崩潰了，理智勸你請個假。";
   }
-  pushLine(
-    state,
-    working
-      ? `你今天還是去上了 ${job.name}，先把固定班扛完。`
-      : `你今天向 ${job.name} 請假了，保住一點體力，但代價也留下來了。`
-  );
+  if (state.energy < 30) {
+    return "你全身疲憊地躺在床上，思考要不要請假。";
+  }
+  if (state.mood < 30) {
+    return "你眼神呆滯地看著手機，思考要不要請假。";
+  }
+  return "起床才想起要上班，去嗎？";
+};
+
+const applyWorkAttendanceOutcome = (state) => {
+  const job = getJob(state);
+  beginTurnLogIfNeeded(state);
+  state.turnLog.actionId = "attendanceWork";
+  recordPassiveAction(state, "attendanceWork");
+  appendResolution(state, { effects: job.attendanceEffects });
+  incrementSummaryStat(state, "jobsWorked");
+  pushLine(state, `你今天還是去上了 ${job.name}，先把固定班扛完。`);
+};
+
+const applyLeaveSuccessOutcome = (state) => {
+  beginTurnLogIfNeeded(state);
+  state.turnLog.actionId = "attendanceLeave";
+  recordPassiveAction(state, "attendanceLeave");
+  pushLine(state, "老闆同意了，今天不用去上班。");
+};
+
+const applyLeaveFailureOutcome = (state) => {
+  const job = getJob(state);
+  const failedLeavePenalty = job.level === 3 ? { mood: -6, stress: 8 } : { mood: -4, stress: 6 };
+  beginTurnLogIfNeeded(state);
+  state.turnLog.actionId = "attendanceWork";
+  recordPassiveAction(state, "attendanceWork");
+  appendResolution(state, {
+    effects: {
+      ...job.attendanceEffects,
+      mood: (job.attendanceEffects.mood ?? 0) + failedLeavePenalty.mood,
+      stress: (job.attendanceEffects.stress ?? 0) + failedLeavePenalty.stress,
+    },
+  });
+  incrementSummaryStat(state, "jobsWorked");
+  pushLine(state, "老闆不同意，你只好硬著頭皮去上班。");
 };
 
 const applyActiveCaseWork = (state) => {
@@ -1054,17 +1085,18 @@ const startDayFlow = (state) => {
   }
 
   const job = getJob(state);
-  const lowEnergyCopy =
-    state.energy < job.leaveThreshold
-      ? `你目前體力只有 ${state.energy}，今天照常去上班，成本會直接落在自己身上。`
-      : `你今天睡醒後還得先決定要不要去上 ${job.name}。`;
+  const leaveSuccessRate = getLeaveSuccessRate(state);
 
   state.pendingAttendance = {
     title: `${job.name} 今天要不要去`,
-    description: lowEnergyCopy,
+    description: getAttendanceDescription(state),
     options: [
-      { id: "work", text: "去上班", caption: "先保住現金流，但今天會更硬。" },
-      { id: "leave", text: "今天請假", caption: "先保體力，但錢和壓力都會反噬。" },
+      { id: "work", text: "去上班", caption: "沒辦法，錢還是得賺。" },
+      {
+        id: "leave",
+        text: "請假",
+        caption: `成功率 ${Math.round(leaveSuccessRate * 100)}%｜不知道老闆同不同意。`,
+      },
     ],
   };
   state.phase = PHASES.ATTENDANCE;
@@ -1742,7 +1774,32 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
     return continueAfterAttendance(nextState);
   }
 
-  applyAttendanceOutcome(nextState, choice);
+  if (choice === "leave") {
+    const successRate = getLeaveSuccessRate(nextState);
+    incrementSummaryStat(nextState, "leaveRequestedTimes");
+
+    const success = rng() < successRate;
+    if (success) {
+      incrementSummaryStat(nextState, "leaveSuccessTimes");
+      applyLeaveSuccessOutcome(nextState);
+    } else {
+      incrementSummaryStat(nextState, "leaveFailedTimes");
+      applyLeaveFailureOutcome(nextState);
+    }
+
+    nextState.pendingAttendance = null;
+
+    const leaveFailure = detectFailure(nextState);
+    if (leaveFailure) {
+      setEnding(nextState, { type: "failure", ...leaveFailure }, PHASES.GAME_OVER);
+      commitTurnLog(nextState);
+      return nextState;
+    }
+
+    return continueAfterAttendance(nextState, rng);
+  }
+
+  applyWorkAttendanceOutcome(nextState);
   nextState.pendingAttendance = null;
 
   const failure = detectFailure(nextState);
