@@ -1,8 +1,6 @@
 import { GAME_COPY, JOBS } from "./data/config.mjs";
 
 const SHARE_TITLE = GAME_COPY.title;
-const SHARE_IMAGE_SIZE = { width: 1200, height: 1600 };
-const SHARE_FONT_STACK = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
 const IN_APP_BROWSER_PATTERN = /FBAN|FBAV|Instagram|Line|MicroMessenger|Messenger/i;
 
 /**
@@ -70,19 +68,6 @@ const getEndingRank = (ending) => {
   return rankMap[ending.id] ?? { label: "本月稱號：月底生還者", tone: "steady" };
 };
 
-const getEndingToneColors = (tone) => {
-  switch (tone) {
-    case "danger":
-      return { background: "#ffe0d7", accent: "#ff6565", accentDeep: "#b93333" };
-    case "growth":
-      return { background: "#dbf7e9", accent: "#13b56e", accentDeep: "#0d7c4d" };
-    case "warning":
-      return { background: "#fff0cf", accent: "#ffc53d", accentDeep: "#c57f14" };
-    default:
-      return { background: "#f6f1ff", accent: "#6f61ff", accentDeep: "#3d2eb6" };
-  }
-};
-
 const getShareSnapshot = (state, url) => {
   const ending = state.ending ?? { title: "月底結算", body: GAME_COPY.subtitle, type: "summary" };
   const rank = getEndingRank(ending);
@@ -122,54 +107,6 @@ const waitForFonts = async (documentLike) => {
   ]);
 };
 
-const wrapCanvasText = (ctx, text, maxWidth) => {
-  const paragraphs = String(text).split("\n");
-  const lines = [];
-
-  for (const paragraph of paragraphs) {
-    if (!paragraph) {
-      lines.push("");
-      continue;
-    }
-
-    let current = "";
-    for (const char of paragraph) {
-      const next = current + char;
-      if (ctx.measureText(next).width <= maxWidth || current.length === 0) {
-        current = next;
-        continue;
-      }
-      lines.push(current);
-      current = char;
-    }
-    lines.push(current);
-  }
-
-  return lines;
-};
-
-const drawWrappedText = (ctx, text, x, y, maxWidth, lineHeight, maxLines = Number.POSITIVE_INFINITY) => {
-  const lines = wrapCanvasText(ctx, text, maxWidth).slice(0, maxLines);
-  lines.forEach((line, index) => {
-    ctx.fillText(line, x, y + lineHeight * index);
-  });
-  return y + lineHeight * Math.max(lines.length, 1);
-};
-
-const drawRoundedRect = (ctx, x, y, width, height, radius) => {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-};
-
 const createCanvas = (width, height, documentLike) => {
   if (documentLike?.createElement) {
     const canvas = documentLike.createElement("canvas");
@@ -203,6 +140,41 @@ const canvasToBlob = async (canvas) => {
   }
 
   throw new Error("blob-unsupported");
+};
+
+const extractCssText = (documentLike) => {
+  if (!documentLike?.styleSheets) {
+    return "";
+  }
+
+  const chunks = [];
+  for (const sheet of documentLike.styleSheets) {
+    try {
+      if (!sheet?.cssRules) {
+        continue;
+      }
+      for (const rule of sheet.cssRules) {
+        chunks.push(rule.cssText);
+      }
+    } catch {}
+  }
+  return chunks.join("\n");
+};
+
+const escapeSvgText = (value) =>
+  String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const loadImageElement = async (src, documentLike) => {
+  const image = documentLike?.createElement ? documentLike.createElement("img") : new Image();
+  await new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("image-load-failed"));
+    image.src = src;
+  });
+  return image;
 };
 
 const triggerBlobDownload = (filename, blob, documentLike, urlApi) => {
@@ -315,121 +287,61 @@ const buildShareText = (state, url) => {
   ].filter(Boolean).join("\n");
 };
 
-const renderShareImage = async (state, url, overrides = {}) => {
-  const { document } = getRuntime(overrides);
+const renderShareImage = async (captureElement, state, url, overrides = {}) => {
+  const { document, URL: urlApi } = getRuntime(overrides);
+  if (!captureElement) {
+    throw new Error("capture-element-missing");
+  }
+  if (typeof urlApi?.createObjectURL !== "function") {
+    throw new Error("svg-object-url-unavailable");
+  }
+
   await waitForFonts(document);
 
   const snapshot = getShareSnapshot(state, url);
-  const { width, height } = SHARE_IMAGE_SIZE;
-  const canvas = createCanvas(width, height, document);
+  const rect = captureElement.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const scale = Math.max(2, Math.ceil(globalThis.devicePixelRatio || 1));
+  const outputWidth = width * scale;
+  const outputHeight = height * scale;
+
+  const clonedNode = captureElement.cloneNode(true);
+  clonedNode.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  clonedNode.style.margin = "0";
+  clonedNode.style.width = `${width}px`;
+  clonedNode.style.minHeight = `${height}px`;
+  clonedNode.style.boxSizing = "border-box";
+
+  const cssText = extractCssText(document);
+  const serializer = new XMLSerializer();
+  const serializedNode = serializer.serializeToString(clonedNode);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${width} ${height}">
+      <foreignObject x="0" y="0" width="${width}" height="${height}">
+        <style>${escapeSvgText(cssText)}</style>
+        ${serializedNode}
+      </foreignObject>
+    </svg>
+  `;
+  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = urlApi.createObjectURL(svgBlob);
+  const image = await loadImageElement(svgUrl, document);
+
+  const canvas = createCanvas(outputWidth, outputHeight, document);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("2d-context-unavailable");
   }
-
-  const colors = getEndingToneColors(snapshot.tone);
-  ctx.fillStyle = colors.background;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.fillStyle = colors.accent;
-  ctx.fillRect(0, 0, width, 28);
-
-  ctx.fillStyle = "rgba(24, 28, 38, 0.06)";
-  ctx.font = `900 168px ${SHARE_FONT_STACK}`;
-  ctx.textAlign = "center";
-  ctx.fillText(snapshot.tone === "danger" ? "失敗" : "通關", width / 2, 260);
-  ctx.textAlign = "left";
-
-  drawRoundedRect(ctx, 72, 100, width - 144, 300, 34);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-  ctx.fill();
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = colors.accent;
-  ctx.stroke();
-
-  ctx.fillStyle = colors.accentDeep;
-  ctx.font = `700 34px ${SHARE_FONT_STACK}`;
-  ctx.fillText("月底結算", 112, 164);
-
-  ctx.fillStyle = "#181c26";
-  ctx.font = `800 78px ${SHARE_FONT_STACK}`;
-  let currentY = drawWrappedText(ctx, snapshot.title, 112, 246, width - 224, 92, 2);
-
-  ctx.fillStyle = "#5d5d6f";
-  ctx.font = `400 34px ${SHARE_FONT_STACK}`;
-  currentY = drawWrappedText(ctx, snapshot.body, 112, currentY + 42, width - 224, 48, 4);
-
-  drawRoundedRect(ctx, 72, 440, width - 144, 140, 28);
-  ctx.fillStyle = "#fffdf6";
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = "#181c26";
-  ctx.stroke();
-  ctx.fillStyle = "#181c26";
-  ctx.font = `700 32px ${SHARE_FONT_STACK}`;
-  ctx.fillText(snapshot.rankLabel, 112, 500);
-  ctx.fillStyle = "#5d5d6f";
-  ctx.font = `500 30px ${SHARE_FONT_STACK}`;
-  ctx.fillText(`目前工作：${snapshot.jobName} ・ ${snapshot.jobBadge}`, 112, 548);
-
-  const cardWidth = (width - 144 - 24) / 2;
-  const statBoxes = [
-    { ...snapshot.stats[0], x: 72, y: 626, width: cardWidth, height: 180 },
-    { label: "體力 / 心情", value: `${state.energy} / ${state.mood}`, x: 72 + cardWidth + 24, y: 626, width: cardWidth, height: 180 },
-    { label: "壓力 / 技能", value: `${state.stress} / ${state.skill}`, x: 72, y: 830, width: cardWidth, height: 180 },
-    { label: "工作等級", value: snapshot.jobBadge, x: 72 + cardWidth + 24, y: 830, width: cardWidth, height: 180 },
-  ];
-
-  for (const box of statBoxes) {
-    drawRoundedRect(ctx, box.x, box.y, box.width, box.height, 26);
-    ctx.fillStyle = "#fffdf6";
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "#181c26";
-    ctx.stroke();
-
-    ctx.fillStyle = "#5d5d6f";
-    ctx.font = `700 24px ${SHARE_FONT_STACK}`;
-    ctx.fillText(box.label, box.x + 34, box.y + 54);
-    ctx.fillStyle = "#181c26";
-    ctx.font = `800 54px ${SHARE_FONT_STACK}`;
-    drawWrappedText(ctx, box.value, box.x + 34, box.y + 118, box.width - 68, 62, 2);
-  }
-
-  drawRoundedRect(ctx, 72, 1044, width - 144, 338, 26);
-  ctx.fillStyle = "rgba(255, 253, 246, 0.96)";
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = "#181c26";
-  ctx.stroke();
-
-  ctx.fillStyle = "#5d5d6f";
-  ctx.font = `700 24px ${SHARE_FONT_STACK}`;
-  ctx.fillText("本月紀錄", 112, 1098);
-
-  ctx.fillStyle = "#181c26";
-  ctx.font = `500 32px ${SHARE_FONT_STACK}`;
-  currentY = drawWrappedText(ctx, snapshot.records.join("、"), 112, 1148, width - 224, 44, 5);
-  ctx.fillStyle = "#5d5d6f";
-  ctx.font = `700 24px ${SHARE_FONT_STACK}`;
-  ctx.fillText("本月標籤", 112, currentY + 52);
-  ctx.fillStyle = "#181c26";
-  ctx.font = `500 30px ${SHARE_FONT_STACK}`;
-  drawWrappedText(ctx, snapshot.tags.join("、"), 112, currentY + 98, width - 224, 40, 4);
-
-  ctx.fillStyle = colors.accentDeep;
-  ctx.font = `700 24px ${SHARE_FONT_STACK}`;
-  ctx.fillText(snapshot.url, 72, 1508, width - 144);
-  ctx.fillStyle = "#5d5d6f";
-  ctx.font = `500 22px ${SHARE_FONT_STACK}`;
-  ctx.fillText("打工人生：月底前活下去", 72, 1552);
+  ctx.drawImage(image, 0, 0, outputWidth, outputHeight);
 
   const blob = await canvasToBlob(canvas);
+  urlApi.revokeObjectURL(svgUrl);
 
   return {
     blob,
-    width,
-    height,
+    width: outputWidth,
+    height: outputHeight,
     filename: "打工人生結果.png",
     alt: `${snapshot.title}｜${snapshot.rankLabel}`,
   };
