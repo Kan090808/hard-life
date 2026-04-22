@@ -1494,7 +1494,6 @@ export const getStatusMeta = (state) => {
   const dueRent = RENT_AMOUNT + (state.rentDebt ?? 0);
   const rentCountdown =
     nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${dueRent}` : `${nextRent - state.day} 天後・$${dueRent}`;
-  const recovery = getSleepRecovery(state);
   const phaseCopy = {
     [PHASES.READY]: state.dayPlan.totalActions === 0 ? "準備安排今天" : "今天還能繼續做事，也可以直接睡覺",
     [PHASES.ATTENDANCE]: "先決定今天要不要去上班",
@@ -1543,7 +1542,6 @@ export const getStatusMeta = (state) => {
     phaseLabel: phaseCopy[state.phase],
     currentJob: getJob(state),
     actionSummary: `今天已做 ${state.dayPlan.totalActions} 件事`,
-    sleepRecoveryPreview: `睡醒預估：體力 +${recovery.energy} / 壓力 ${recovery.stress}`,
     repeatWarning:
       state.dayPlan.lastRepeatPenalty?.repeatIndex > 1
         ? `再做同一件會更累、賺更少、風險更高。上次是第 ${state.dayPlan.lastRepeatPenalty.repeatIndex} 次。`
