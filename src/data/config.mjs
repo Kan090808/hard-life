@@ -331,15 +331,15 @@ export const ACTIONS = {
 };
 
 export const WORK_GIGS = [
-  { id: "breakfast-prep", label: "早餐店備料", timeSlot: "morning", minEnergy: 20, type: "physical", effects: { money: 480, energy: -16, mood: -3, stress: 4 } },
-  { id: "market-carry", label: "菜市場搬貨", timeSlot: "morning", minEnergy: 35, type: "physical", effects: { money: 620, energy: -24, mood: -5, stress: 6 } },
-  { id: "commute-flyer", label: "通勤口發傳單", timeSlot: "morning", minEnergy: 10, type: "social", effects: { money: 450, energy: -14, mood: -2, stress: 5 } },
-  { id: "lunch-rush", label: "便當店午餐尖峰", timeSlot: "afternoon", minEnergy: 20, type: "physical", effects: { money: 650, energy: -22, mood: -6, stress: 8 } },
-  { id: "warehouse-sort", label: "倉庫理貨", timeSlot: "afternoon", minEnergy: 35, type: "physical", effects: { money: 780, energy: -28, mood: -7, stress: 9 } },
-  { id: "dishwash", label: "餐廳洗碗", timeSlot: "afternoon", minEnergy: 20, type: "physical", effects: { money: 600, energy: -24, mood: -8, stress: 8 } },
-  { id: "night-market", label: "夜市攤位", timeSlot: "evening", minEnergy: 20, type: "social", effects: { money: 700, energy: -20, mood: -4, stress: 8 } },
-  { id: "dinner-delivery", label: "晚餐外送", timeSlot: "evening", minEnergy: 20, type: "mixed", effects: { money: 760, energy: -22, mood: -5, stress: 10 } },
-  { id: "event-strike", label: "活動撤場", timeSlot: "evening", minEnergy: 35, type: "physical", effects: { money: 850, energy: -30, mood: -8, stress: 12 } },
+  { id: "breakfast-prep", label: "早餐店備料", timeSlot: "morning", minEnergy: 20, type: "physical", effects: { money: 480, energy: -20, mood: -3, stress: 4 } },
+  { id: "market-carry", label: "菜市場搬貨", timeSlot: "morning", minEnergy: 35, type: "physical", effects: { money: 620, energy: -30, mood: -5, stress: 6 } },
+  { id: "commute-flyer", label: "通勤口發傳單", timeSlot: "morning", minEnergy: 10, type: "social", effects: { money: 450, energy: -18, mood: -2, stress: 5 } },
+  { id: "lunch-rush", label: "便當店午餐尖峰", timeSlot: "afternoon", minEnergy: 20, type: "physical", effects: { money: 650, energy: -28, mood: -6, stress: 8 } },
+  { id: "warehouse-sort", label: "倉庫理貨", timeSlot: "afternoon", minEnergy: 35, type: "physical", effects: { money: 780, energy: -34, mood: -7, stress: 9 } },
+  { id: "dishwash", label: "餐廳洗碗", timeSlot: "afternoon", minEnergy: 20, type: "physical", effects: { money: 600, energy: -30, mood: -8, stress: 8 } },
+  { id: "night-market", label: "夜市攤位", timeSlot: "evening", minEnergy: 20, type: "social", effects: { money: 700, energy: -25, mood: -4, stress: 8 } },
+  { id: "dinner-delivery", label: "晚餐外送", timeSlot: "evening", minEnergy: 20, type: "mixed", effects: { money: 760, energy: -28, mood: -5, stress: 10 } },
+  { id: "event-strike", label: "活動撤場", timeSlot: "evening", minEnergy: 35, type: "physical", effects: { money: 850, energy: -36, mood: -8, stress: 12 } },
 ];
 
 export const REWARD_ACTIVITIES = [
