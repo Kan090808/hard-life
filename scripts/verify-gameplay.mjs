@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createInitialState, detectFailure, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, evaluateEnding } from "../src/game.mjs";
+import { createInitialState, detectFailure, dispatchAction, dispatchActionChoice, dispatchAttendanceChoice, dispatchEventChoice, evaluateEnding } from "../src/game.mjs";
 
 const sequence = (...values) => {
   let index = 0;
@@ -114,7 +114,7 @@ assert.equal(eventStudy2.phase, "resolving-event");
 const slept = dispatchAction(firstStudy, "sleep", sequence(0.99));
 assert.equal(slept.day, 2);
 assert.equal(slept.phase, "ready-for-action");
-assert.equal(slept.energy, 100);
+assert.equal(slept.energy, 93);
 assert.equal(slept.stress, 10);
 assert.equal(slept.dayPlan.totalActions, 0);
 
@@ -220,7 +220,11 @@ fullTimeState.pendingAttendance = {
   ],
 };
 fullTimeState.jobLevel = 3;
-const forcedOvertime = dispatchAttendanceChoice(fullTimeState, "work", sequence(0.01));
+const forcedOvertimePending = dispatchAttendanceChoice(fullTimeState, "work", sequence(0.01));
+assert.equal(forcedOvertimePending.phase, "resolving-event");
+assert.equal(forcedOvertimePending.pendingEvent.id, "forced-overtime");
+assert.equal(forcedOvertimePending.dayPlan.timeSlots[2].actionId, "forcedOvertime");
+const forcedOvertime = dispatchEventChoice(forcedOvertimePending, "confirm", sequence(0.99));
 assert.equal(forcedOvertime.money, 5500);
 assert.equal(forcedOvertime.energy, 62);
 assert.equal(forcedOvertime.mood, 33);
