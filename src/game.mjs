@@ -29,6 +29,7 @@ const SLEEP_RECOVERY_PER_PHYSIQUE = 7;
 const SLEEP_MOOD_BASE = 3;
 const SLEEP_STRESS_RELIEF_BASE = 6;
 const SLEEP_STRESS_RELIEF_PER_PHYSIQUE = 3;
+const POOR_SLEEP_STRESS_THRESHOLD = 65;
 
 const REPEAT_ENERGY_COST = 6;
 const REPEAT_MONEY_DROP = 0.2;
@@ -54,6 +55,33 @@ const FORCED_OVERTIME_DIALOG = {
   optionText: "哦，好的…",
   optionCaption: "金錢 +450、體力 -8、心情 -15、壓力 +20",
 };
+const POOR_SLEEP_DIALOG = {
+  title: "昨晚睡眠品質很差",
+  description: "你翻來覆去睡得很淺，醒來頭很重。今天怎麼撐過去？",
+  options: [
+    {
+      id: "rest",
+      text: "今天多休息",
+      caption: "花一個時段・壓力 -8・心情 +8",
+      requiredCash: 0,
+      resolution: {
+        effects: { stress: -8, mood: 8 },
+        log: "你決定早上慢慢來，不硬趕行程。身體稍微鬆開一點。",
+      },
+    },
+    {
+      id: "coffee",
+      text: "喝咖啡續命",
+      caption: "$120・壓力 +8・心情 +8",
+      requiredCash: 120,
+      resolution: {
+        effects: { money: -120, stress: 8, mood: 8 },
+        log: "你灌下一杯咖啡，提神效果立刻出現，但身體其實還是繃著的。",
+      },
+    },
+  ],
+};
+
 const HUNGER_DIALOG = {
   title: "昨天餓了一天，身體疲憊不堪",
   description: "今天再不吃會餓死吧。",
@@ -116,6 +144,19 @@ const openHungerDialog = (state) => {
       },
     ],
     _trigger: "missedLivingCost",
+  };
+  state.phase = PHASES.EVENT;
+  return state;
+};
+
+const openPoorSleepDialog = (state) => {
+  state.pendingEvent = {
+    id: "poor-sleep",
+    title: POOR_SLEEP_DIALOG.title,
+    category: "健康警訊",
+    description: POOR_SLEEP_DIALOG.description,
+    options: POOR_SLEEP_DIALOG.options,
+    _trigger: "poorSleep",
   };
   state.phase = PHASES.EVENT;
   return state;
@@ -687,10 +728,18 @@ const getSleepRecovery = (state) => {
 };
 
 const applySleepRecovery = (state) => {
+  const poorSleep = state.stress >= POOR_SLEEP_STRESS_THRESHOLD || state.conditions.burnoutRisk;
+
   beginTurnLogIfNeeded(state);
   const recovery = getSleepRecovery(state);
   applyEffects(state, recovery).forEach((line) => pushLine(state, line));
-  pushLine(state, "你睡醒了，身體回來一點，至少今天不是昨天那個殘血版本。");
+
+  if (poorSleep) {
+    pushLine(state, "昨晚睡得很淺，翻來覆去，醒來頭還是很重。");
+    state.pendingPoorSleep = true;
+  } else {
+    pushLine(state, "你睡醒了，身體回來一點，至少今天不是昨天那個殘血版本。");
+  }
 
   if (state.stress <= 60 && state.conditions.burnoutRisk) {
     applyConditionChanges(state, { burnoutRisk: false }).forEach((line) => pushLine(state, line));
@@ -1459,6 +1508,11 @@ const startDayFlow = (state, rng) => {
     return openHungerDialog(state);
   }
 
+  if (state.pendingPoorSleep) {
+    state.pendingPoorSleep = false;
+    return openPoorSleepDialog(state);
+  }
+
   if (!getHasScheduledJob(state)) {
     return continueAfterAttendance(state, rng);
   }
@@ -1939,6 +1993,13 @@ const resolveEvent = (state, optionId, rng) => {
     return startDayFlow(nextState, rng);
   }
 
+  if (trigger === "poorSleep") {
+    if (optionId === "rest") {
+      consumeTimeSlots(nextState, 1, "poorSleepRest", "補眠休息");
+    }
+    return startDayFlow(nextState, rng);
+  }
+
   if (trigger === "forcedOvertime") {
     incrementSummaryStat(nextState, "forcedOvertimeTimes");
     incrementSummaryStat(nextState, "overtimeTimes");
@@ -1980,6 +2041,7 @@ export const createInitialState = (rng = Math.random) => {
     dailyFreelanceOffer: null,
     activeCaseProject: null,
     missedLivingCost: false,
+    pendingPoorSleep: false,
     dayPlan: null,
     summaryStats: {
       ...DEFAULT_SUMMARY_STATS,
