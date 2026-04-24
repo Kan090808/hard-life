@@ -653,6 +653,7 @@ const createDayPlan = (state) => ({
   lastRepeatIndex: 0,
   lastRepeatPenalty: null,
   dayStartEventsTriggeredToday: 0,
+  dayStartEventIdsTriggeredToday: [],
 });
 
 const initializeDayPlan = (state) => {
@@ -1235,15 +1236,24 @@ const lastActionHasTag = (state, tag) =>
 const canTriggerMoreDayStartEventsToday = (state) =>
   (state.dayPlan.dayStartEventsTriggeredToday ?? 0) < MAX_DAY_START_EVENTS_PER_DAY;
 
-const recordDayStartEventTriggeredToday = (state) => {
+const recordDayStartEventTriggeredToday = (state, eventId) => {
   state.dayPlan.dayStartEventsTriggeredToday =
     (state.dayPlan.dayStartEventsTriggeredToday ?? 0) + 1;
+  if (eventId) {
+    state.dayPlan.dayStartEventIdsTriggeredToday =
+      [...(state.dayPlan.dayStartEventIdsTriggeredToday ?? []), eventId];
+  }
 };
 
-const getDayStartEvents = (state) =>
-  EVENTS.filter(
-    (event) => event.trigger === "dayStart" && (!event.condition || event.condition(state))
+const getDayStartEvents = (state) => {
+  const triggeredToday = new Set(state.dayPlan.dayStartEventIdsTriggeredToday ?? []);
+  return EVENTS.filter(
+    (event) =>
+      event.trigger === "dayStart" &&
+      !triggeredToday.has(event.id) &&
+      (!event.condition || event.condition(state))
   );
+};
 
 const getStudyCost = (skill) => 400 + Math.floor(skill / 10) * 80;
 
@@ -1466,7 +1476,7 @@ const maybeTriggerDayStartEvent = (state, rng) => {
     return state;
   }
 
-  recordDayStartEventTriggeredToday(state);
+  recordDayStartEventTriggeredToday(state, event.id);
   beginTurnLogIfNeeded(state);
   pushLine(state, `今天一開始就有件事找上你：${event.title}`);
 
