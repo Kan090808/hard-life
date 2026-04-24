@@ -1976,6 +1976,9 @@ const resolveEvent = (state, optionId, rng) => {
   }
 
   appendResolution(nextState, resolution);
+  if (resolution.slotCost) {
+    consumeTimeSlots(nextState, resolution.slotCost, optionId, resolution.slotLabel ?? optionId);
+  }
   if (nextState.pendingEvent.id === "freelance-offer" && optionId !== "decline") {
     incrementSummaryStat(nextState, "freelanceAcceptedTimes");
   }

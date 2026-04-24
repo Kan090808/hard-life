@@ -607,11 +607,12 @@ export const EVENTS = [
       {
         id: "attend-workshop",
         text: "去聽看看",
-        caption: "體力 -10、技能 +8、心情 +3。",
+        caption: "花一個時段・體力 -10、技能 +8、心情 +3。",
         resolve: () =>
           withLog(
             { energy: -10, skill: 8, mood: 3 },
-            "你去聽了，講者說的有幾個點很實用，你邊聽邊做筆記，感覺沒白去。"
+            "你去聽了，講者說的有幾個點很實用，你邊聽邊做筆記，感覺沒白去。",
+            { slotCost: 1, slotLabel: "去聽講座" }
           ),
       },
       {
