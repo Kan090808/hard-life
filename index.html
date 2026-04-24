@@ -16,7 +16,7 @@
   <body class="dialog-open" data-app-boot="booting">
     <div class="backdrop backdrop-a"></div>
     <div class="backdrop backdrop-b"></div>
-    <button class="analytics-panel" id="analytics-panel" type="button">
+    <button class="analytics-panel" id="analytics-panel" type="button" hidden>
       <span class="analytics-label">大家已經玩了</span>
       <strong class="analytics-value" id="analytics-total-starts">--</strong>
       <span class="analytics-label">次</span>
@@ -174,7 +174,7 @@
           《打工人生：月底前活下去》是一款 30 天生存決策遊戲。一天能做多少事只看你還剩多少體力，但房租、工作與突發事件會讓你很快想睡也睡不安穩。
         </p>
         <p class="boot-status" id="boot-status" hidden aria-live="polite"></p>
-        <div class="intro-stats" id="intro-stats">
+        <div class="intro-stats" id="intro-stats" hidden>
           <div class="intro-stat-item">
             <span>我的累計人生</span>
             <strong id="intro-total-starts">--</strong>
