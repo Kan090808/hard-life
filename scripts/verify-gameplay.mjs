@@ -109,8 +109,8 @@ assert.equal(eventStudy2.phase, "resolving-event");
 const slept = dispatchAction(firstStudy, "sleep", sequence(0.99));
 assert.equal(slept.day, 2);
 assert.equal(slept.phase, "ready-for-action");
-assert.equal(slept.energy, 92);
-assert.equal(slept.stress, 18);
+assert.equal(slept.energy, 85);
+assert.equal(slept.stress, 19);
 assert.equal(slept.dayPlan.totalActions, 0);
 
 const rentPressure = createStableState();
@@ -147,8 +147,8 @@ caseState.activeCaseProject = { totalIncome: 900, daysLeft: 1, energyCostPerDay:
 const caseAfterSleep = dispatchAction(caseState, "sleep", sequence(0.99));
 assert.equal(caseAfterSleep.phase, "ready-for-action");
 assert.equal(caseAfterSleep.activeCaseProject, null);
-assert.equal(caseAfterSleep.energy, 88);
-assert.equal(caseAfterSleep.money, 4071);
+assert.equal(caseAfterSleep.energy, 87);
+assert.equal(caseAfterSleep.money, 3951);
 
 const collapseState = createStableState();
 collapseState.phase = "attendance-decision";
@@ -166,9 +166,9 @@ const collapseResult = dispatchAttendanceChoice(collapseState, "work", sequence(
 assert.equal(collapseResult.phase, "game-over");
 assert.equal(collapseResult.ending.id, "collapse");
 
-const debtFailure = createStableState();
-debtFailure.money = -3200;
-assert.equal(detectFailure(debtFailure)?.id, "debt");
+const evictionFailure = createStableState();
+evictionFailure.unpaidRentCount = 2;
+assert.equal(detectFailure(evictionFailure)?.id, "eviction");
 
 const endingState = createStableState();
 endingState.day = 30;

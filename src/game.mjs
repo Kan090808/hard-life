@@ -33,9 +33,9 @@ const REPEAT_ENERGY_COST = 6;
 const REPEAT_MONEY_DROP = 0.2;
 const REPEAT_WELLBEING_DROP = 0.15;
 const REPEAT_EVENT_RISK = 0.16;
-const BASE_EVENT_TRIGGER_RATE = 0.28;
+const BASE_EVENT_TRIGGER_RATE = 0.22;
 const MAX_EVENT_TRIGGER_RATE = 0.82;
-const DAY_START_EVENT_RATE = 0.5;
+const DAY_START_EVENT_RATE = 0.38;
 const HUNGER_DIALOG = {
   title: "昨天餓了一天，身體疲憊不堪",
   description: "今天再不吃會餓死吧。",
@@ -596,6 +596,11 @@ const applySleepRecovery = (state) => {
 
   if (state.stress <= 60 && state.conditions.burnoutRisk) {
     applyConditionChanges(state, { burnoutRisk: false }).forEach((line) => pushLine(state, line));
+  }
+
+  if (state.mood < 40) {
+    applyEffects(state, { mood: 5 }).forEach((line) => pushLine(state, line));
+    pushLine(state, "你終於睡了一覺，低落的情緒稍微鬆開一點。");
   }
 };
 
@@ -1496,8 +1501,8 @@ const applyRecurringCosts = (state, rng) => {
   incrementSummaryStat(state, "rentMissedTimes");
   appendResolution(state, {
     effects: {
-      stress: 30,
-      mood: -20,
+      stress: 20,
+      mood: -12,
     },
     conditionChanges: {
       landlordAngry: true,

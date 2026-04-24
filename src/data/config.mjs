@@ -322,12 +322,12 @@ export const ACTIONS = {
 };
 
 export const WORK_GIGS = [
-  { id: "flyer", label: "發傳單", type: "physical", effects: { money: 480, energy: -12, mood: -3, stress: 4 } },
-  { id: "dishwash", label: "洗碗支援", type: "physical", effects: { money: 650, energy: -20, mood: -6, stress: 7 } },
-  { id: "warehouse", label: "倉庫搬貨", type: "physical", effects: { money: 900, energy: -28, mood: -8, stress: 10 } },
-  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 700, energy: -10, mood: 2, stress: 5 } },
-  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 650, energy: -18, mood: -4, stress: 8 } },
-  { id: "promoter", label: "商場活動工讀", type: "social", effects: { money: 620, energy: -14, mood: 1, stress: 5 } },
+  { id: "flyer", label: "發傳單", type: "physical", effects: { money: 552, energy: -12, mood: -3, stress: 4 } },
+  { id: "dishwash", label: "洗碗支援", type: "physical", effects: { money: 748, energy: -20, mood: -6, stress: 7 } },
+  { id: "warehouse", label: "倉庫搬貨", type: "physical", effects: { money: 1035, energy: -28, mood: -8, stress: 10 } },
+  { id: "tutor", label: "家教代班", type: "mental", effects: { money: 805, energy: -10, mood: 2, stress: 5 } },
+  { id: "delivery", label: "跑單外送", type: "mixed", effects: { money: 748, energy: -18, mood: -4, stress: 8 } },
+  { id: "promoter", label: "商場活動工讀", type: "social", effects: { money: 713, energy: -14, mood: 1, stress: 5 } },
 ];
 
 export const REWARD_ACTIVITIES = [
