@@ -24,8 +24,9 @@ import { EVENTS } from "./data/events.mjs";
 
 const cloneState = (state) => JSON.parse(JSON.stringify(state));
 
-const SLEEP_RECOVERY_BASE = 20;
+const SLEEP_RECOVERY_BASE = 6;
 const SLEEP_RECOVERY_PER_PHYSIQUE = 7;
+const SLEEP_MOOD_BASE = 3;
 const SLEEP_STRESS_RELIEF_BASE = 6;
 const SLEEP_STRESS_RELIEF_PER_PHYSIQUE = 3;
 
@@ -47,6 +48,12 @@ const FORCED_OVERTIME_RATE = {
   3: 0.25,
 };
 const FORCED_OVERTIME_EFFECTS = { money: 450, energy: -8, mood: -15, stress: 20 };
+const FORCED_OVERTIME_DIALOG = {
+  title: "老闆要求加班",
+  description: "今天有個事情要麻煩你加個班",
+  optionText: "哦，好的…",
+  optionCaption: "金錢 +450、體力 -8、心情 -15、壓力 +20",
+};
 const HUNGER_DIALOG = {
   title: "昨天餓了一天，身體疲憊不堪",
   description: "今天再不吃會餓死吧。",
@@ -109,6 +116,30 @@ const openHungerDialog = (state) => {
       },
     ],
     _trigger: "missedLivingCost",
+  };
+  state.phase = PHASES.EVENT;
+  return state;
+};
+
+const openForcedOvertimeDialog = (state) => {
+  state.pendingEvent = {
+    id: "forced-overtime",
+    title: FORCED_OVERTIME_DIALOG.title,
+    category: "工作",
+    description: FORCED_OVERTIME_DIALOG.description,
+    options: [
+      {
+        id: "confirm",
+        text: FORCED_OVERTIME_DIALOG.optionText,
+        caption: FORCED_OVERTIME_DIALOG.optionCaption,
+        requiredCash: 0,
+        resolution: {
+          effects: FORCED_OVERTIME_EFFECTS,
+          log: "主管臨時丟來訊息：「今天案子要收，晚點再走。」晚上被加班吃掉了，你沒有真的拒絕空間。",
+        },
+      },
+    ],
+    _trigger: "forcedOvertime",
   };
   state.phase = PHASES.EVENT;
   return state;
@@ -647,8 +678,10 @@ const beginTurnLogIfNeeded = (state) => {
 
 const getSleepRecovery = (state) => {
   const physique = state.character.physique;
+  const intelligence = state.character.intelligence;
   return {
     energy: SLEEP_RECOVERY_BASE + SLEEP_RECOVERY_PER_PHYSIQUE * physique,
+    mood: SLEEP_MOOD_BASE + intelligence,
     stress: -(SLEEP_STRESS_RELIEF_BASE + SLEEP_STRESS_RELIEF_PER_PHYSIQUE * physique),
   };
 };
@@ -1314,16 +1347,7 @@ const maybeApplyForcedOvertime = (state, rng) => {
 
   consumeTimeSlots(state, 1, "forcedOvertime", "被迫加班");
   recordPassiveAction(state, "forcedOvertime");
-  appendResolution(state, {
-    effects: FORCED_OVERTIME_EFFECTS,
-  });
-  incrementSummaryStat(state, "forcedOvertimeTimes");
-  incrementSummaryStat(state, "overtimeTimes");
-  pushLine(state, "主管臨時丟來訊息：「今天案子要收，晚點再走。」晚上被加班吃掉了，你沒有真的拒絕空間。");
-
-  if (!state.conditions.burnoutRisk && (state.stress >= 72 || state.history.consecutiveHeavyDays >= 1)) {
-    applyConditionChanges(state, { burnoutRisk: true }).forEach((line) => pushLine(state, line));
-  }
+  openForcedOvertimeDialog(state);
 };
 
 const applyActiveCaseWork = (state) => {
@@ -1915,6 +1939,21 @@ const resolveEvent = (state, optionId, rng) => {
     return startDayFlow(nextState, rng);
   }
 
+  if (trigger === "forcedOvertime") {
+    incrementSummaryStat(nextState, "forcedOvertimeTimes");
+    incrementSummaryStat(nextState, "overtimeTimes");
+    if (!nextState.conditions.burnoutRisk && (nextState.stress >= 72 || nextState.history.consecutiveHeavyDays >= 1)) {
+      applyConditionChanges(nextState, { burnoutRisk: true }).forEach((line) => pushLine(nextState, line));
+    }
+    const overtimeFailure = detectFailure(nextState);
+    if (overtimeFailure) {
+      setEnding(nextState, { type: "failure", ...overtimeFailure }, PHASES.GAME_OVER);
+      commitTurnLog(nextState);
+      return nextState;
+    }
+    return continueAfterAttendance(nextState, rng);
+  }
+
   nextState.phase = PHASES.READY;
   return nextState;
 };
@@ -2223,6 +2262,10 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
 
     nextState.pendingAttendance = null;
 
+    if (nextState.phase === PHASES.EVENT) {
+      return nextState;
+    }
+
     const leaveFailure = detectFailure(nextState);
     if (leaveFailure) {
       setEnding(nextState, { type: "failure", ...leaveFailure }, PHASES.GAME_OVER);
@@ -2236,6 +2279,10 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
   applyWorkAttendanceOutcome(nextState);
   maybeApplyForcedOvertime(nextState, rng);
   nextState.pendingAttendance = null;
+
+  if (nextState.phase === PHASES.EVENT) {
+    return nextState;
+  }
 
   const failure = detectFailure(nextState);
   if (failure) {
