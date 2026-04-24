@@ -256,7 +256,7 @@ export const ACTIONS = {
     special: "study",
     effects: {
       money: -400,
-      energy: -14,
+      energy: -20,
       mood: -4,
       stress: 5,
       skill: 10,
