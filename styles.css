@@ -597,6 +597,87 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.time-progress-card {
+  background: #fffdf6;
+}
+
+.time-slot-meter {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.26rem;
+  width: 100%;
+  margin-top: 0.34rem;
+  padding: 0.28rem;
+  border: 3px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: #fffdf6;
+  box-shadow: 4px 4px 0 rgba(24, 28, 38, 0.14);
+}
+
+.time-slot-meter.compact {
+  margin-top: 0.3rem;
+}
+
+.time-slot-cell {
+  position: relative;
+  min-width: 0;
+  height: 1.05rem;
+  border: 2px solid var(--line-strong);
+  border-radius: 0.42rem;
+  background: #fff0cf;
+  box-shadow: inset 0 0 0 2px rgba(255, 253, 246, 0.72);
+}
+
+.time-slot-cell.available.current {
+  background: var(--warning);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 253, 246, 0.72),
+    0 3px 0 rgba(24, 28, 38, 0.24);
+}
+
+.time-slot-cell.used {
+  background: #b9b6ad;
+  box-shadow: inset 0 0 0 2px rgba(255, 253, 246, 0.32);
+}
+
+.time-slot-cell.used::after {
+  content: "";
+  position: absolute;
+  inset: 0.22rem;
+  border-radius: 0.24rem;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(24, 28, 38, 0.14) 0,
+    rgba(24, 28, 38, 0.14) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  pointer-events: none;
+}
+
+.dialog-copy .time-slot-meter {
+  max-width: 18rem;
+  margin-top: 0.24rem;
+}
+
+.time-slot-dialog-block {
+  display: grid;
+  gap: 0.2rem;
+  max-width: 18rem;
+  margin-top: 0.35rem;
+}
+
+.time-slot-dialog-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
 .condition-strip {
   display: grid;
   gap: 0.45rem;

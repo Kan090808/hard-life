@@ -124,10 +124,28 @@ const patchSavedRun = async (page, patch) => {
       throw new Error("missing saved run");
     }
     const payload = JSON.parse(raw);
+    const createFreshDayPlan = (energy) => ({
+      startingEnergy: energy,
+      timeSlots: [
+        { id: "morning", label: "早上", actionId: null, actionLabel: "" },
+        { id: "afternoon", label: "下午", actionId: null, actionLabel: "" },
+        { id: "evening", label: "晚上", actionId: null, actionLabel: "" },
+      ],
+      actionsTaken: [],
+      actionCounts: {},
+      totalActions: 0,
+      lastRepeatActionId: null,
+      lastRepeatIndex: 0,
+      lastRepeatPenalty: null,
+      dayStartEventsTriggeredToday: 0,
+    });
     payload.state = {
       ...payload.state,
       ...nextPatch,
     };
+    if (!nextPatch.dayPlan) {
+      payload.state.dayPlan = createFreshDayPlan(payload.state.energy);
+    }
     payload.ui = {
       ...payload.ui,
       mode: "idle",

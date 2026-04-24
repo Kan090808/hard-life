@@ -1083,6 +1083,35 @@ const renderConditions = (conditions) => {
   }
 };
 
+const renderTimeSlotMeter = (timeSlots = [], { compact = false } = {}) => {
+  const slots = timeSlots.length > 0 ? timeSlots : [];
+  const nextAvailableIndex = slots.findIndex((slot) => !slot.used);
+  const slotCells = slots
+    .map(
+      (slot, index) => `
+        <span
+          class="time-slot-cell ${slot.used ? "used" : "available"} ${!slot.used && index === nextAvailableIndex ? "current" : ""}"
+          title="${slot.label}${slot.actionLabel ? `：${slot.actionLabel}` : slot.used ? "：已用" : "：可安排"}"
+          aria-label="${slot.label}${slot.actionLabel ? `：${slot.actionLabel}` : slot.used ? "：已用" : index === nextAvailableIndex ? "：下一個可安排時段" : "：可安排"}"
+        ></span>
+      `
+    )
+    .join("");
+
+  return `
+    <span class="time-slot-meter ${compact ? "compact" : ""}" aria-label="今日時段">
+      ${slotCells}
+    </span>
+  `;
+};
+
+const renderTimeSlotBlock = (timeSlots = []) => `
+  <span class="time-slot-dialog-block">
+    <span class="time-slot-dialog-label">時段</span>
+    ${renderTimeSlotMeter(timeSlots)}
+  </span>
+`;
+
 const renderMeta = ({ moneyChanged, rentChanged }) => {
   const meta = getStatusMeta(state);
   const goalHint = getGoalHint();
@@ -1095,7 +1124,8 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
   elements.jobLabel.textContent = meta.currentJob.name;
   elements.rentStrikes.textContent = `${state.unpaidRentCount} 次`;
   elements.phaseLabel.textContent = meta.phaseLabel;
-  elements.actionSummary.textContent = meta.actionSummary;
+  elements.actionSummary.closest(".meta-pill")?.classList.add("time-progress-card");
+  elements.actionSummary.innerHTML = renderTimeSlotMeter(meta.timeSlots, { compact: true });
   if (goalHint) {
     elements.goalTitle.textContent = goalHint.title;
     elements.goalCopy.textContent = goalHint.copy;
@@ -1121,9 +1151,11 @@ const renderMeta = ({ moneyChanged, rentChanged }) => {
 };
 
 const renderMainButtons = () => {
+  const meta = getStatusMeta(state);
   const disabled = hasBlockingDialog() || state.phase !== "ready-for-action";
   elements.takeActionButton.disabled = disabled;
-  elements.takeActionButton.textContent = state.dayPlan.totalActions === 0 ? "採取行動" : "繼續做事";
+  elements.takeActionButton.disabled = disabled || !meta.canAct;
+  elements.takeActionButton.textContent = !meta.canAct ? "時段用完" : state.dayPlan.totalActions === 0 ? "採取行動" : "繼續做事";
   elements.sleepButton.disabled = disabled;
   elements.resetButton.disabled = isMode("intro");
   elements.soundToggle.textContent = uiState.audioEnabled ? AUDIO_COPY.on : AUDIO_COPY.off;
@@ -1312,7 +1344,7 @@ const renderActionSelection = () => {
   const meta = getStatusMeta(state);
   elements.actionDialogKicker.textContent = "回合選單";
   elements.actionDialogTitle.textContent = "今天還要安排什麼";
-  elements.actionDialogCopy.textContent = meta.actionSummary;
+  elements.actionDialogCopy.innerHTML = renderTimeSlotBlock(meta.timeSlots);
   elements.actionDialogBody.innerHTML = "";
   elements.actionDialogActions.innerHTML = "";
 
@@ -1485,6 +1517,7 @@ const renderChoiceDialog = () => {
     button.className = "event-button event-choice";
     button.dataset.role = "choice-option";
     button.dataset.optionId = option.id;
+    button.disabled = option.disabled === true;
     button.innerHTML = `
       <span class="event-choice-text">${option.label}</span>
       <span class="event-choice-caption">${option.caption}</span>

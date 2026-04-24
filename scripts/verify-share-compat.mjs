@@ -18,7 +18,18 @@ const FakeFile = class FakeFile extends Blob {
 };
 
 const baseState = {
-  ending: { id: "stable-life", type: "success", title: "穩定生活", body: "日子還是辛苦，但你已經能穩穩過下去。" },
+  ending: {
+    id: "stable-life",
+    type: "success",
+    title: "穩定生活",
+    body: "日子還是辛苦，但你已經能穩穩過下去。",
+    details: {
+      records: ["撐過第一週", "技能到 30"],
+      tags: [{ label: "持續狀態：有接案人脈" }],
+      summaryLines: [],
+      advice: "",
+    },
+  },
   money: 16888,
   energy: 64,
   mood: 58,

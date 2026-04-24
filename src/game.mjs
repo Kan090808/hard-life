@@ -36,6 +36,17 @@ const REPEAT_EVENT_RISK = 0.16;
 const BASE_EVENT_TRIGGER_RATE = 0.22;
 const MAX_EVENT_TRIGGER_RATE = 0.82;
 const DAY_START_EVENT_RATE = 0.38;
+const TIME_SLOTS = [
+  { id: "morning", label: "早上" },
+  { id: "afternoon", label: "下午" },
+  { id: "evening", label: "晚上" },
+];
+const DEFAULT_ACTION_SLOT_COST = 1;
+const SCHEDULED_JOB_SLOT_COST = 2;
+const FORCED_OVERTIME_RATE = {
+  3: 0.25,
+};
+const FORCED_OVERTIME_EFFECTS = { money: 450, energy: -8, mood: -15, stress: 20 };
 const HUNGER_DIALOG = {
   title: "昨天餓了一天，身體疲憊不堪",
   description: "今天再不吃會餓死吧。",
@@ -484,7 +495,12 @@ const buildEndingRecords = (state) => {
   append(summaryStats.maxStress > 0, `本月最高壓力 ${summaryStats.maxStress}`);
   append(summaryStats.minMoney < DEFAULT_PLAYER_STATE.money, `本月最低金錢 $${summaryStats.minMoney}`);
   append(summaryStats.jobsWorked > 0, `工作 ${summaryStats.jobsWorked} 次`);
-  append(summaryStats.overtimeTimes > 0, `加班 ${summaryStats.overtimeTimes} 次`);
+  append(summaryStats.gigWorkTimes > 0, `臨時打工 ${summaryStats.gigWorkTimes} 次`);
+  append(summaryStats.partTimeAttendanceTimes > 0, `兼職出勤 ${summaryStats.partTimeAttendanceTimes} 次`);
+  append(summaryStats.fullTimeAttendanceTimes > 0, `正職出勤 ${summaryStats.fullTimeAttendanceTimes} 次`);
+  append(summaryStats.forcedOvertimeTimes > 0, `被迫加班 ${summaryStats.forcedOvertimeTimes} 次`);
+  append(summaryStats.lowEnergyWorkTimes > 0, `低體力硬撐打工 ${summaryStats.lowEnergyWorkTimes} 次`);
+  append(summaryStats.overtimeTimes > (summaryStats.forcedOvertimeTimes ?? 0), `自願加班 ${summaryStats.overtimeTimes - (summaryStats.forcedOvertimeTimes ?? 0)} 次`);
   append(summaryStats.freelanceAcceptedTimes > 0, `接案 ${summaryStats.freelanceAcceptedTimes} 次`);
   append(summaryStats.studyTimes > 0, `學技能 ${summaryStats.studyTimes} 次，月底技能 ${state.skill}`);
   append(summaryStats.scooterRepairedTimes > 0, `修過 ${summaryStats.scooterRepairedTimes} 次機車`);
@@ -557,6 +573,7 @@ const unlockMilestones = (state) => {
 
 const createDayPlan = (state) => ({
   startingEnergy: state.energy,
+  timeSlots: TIME_SLOTS.map((slot) => ({ ...slot, actionId: null, actionLabel: "" })),
   actionsTaken: [],
   actionCounts: {},
   totalActions: 0,
@@ -568,6 +585,54 @@ const createDayPlan = (state) => ({
 
 const initializeDayPlan = (state) => {
   state.dayPlan = createDayPlan(state);
+};
+
+const ensureDayPlanTimeSlots = (state) => {
+  if (!state.dayPlan) {
+    initializeDayPlan(state);
+    return;
+  }
+
+  if (!Array.isArray(state.dayPlan.timeSlots)) {
+    state.dayPlan.timeSlots = TIME_SLOTS.map((slot) => ({ ...slot, actionId: null, actionLabel: "" }));
+    return;
+  }
+
+  state.dayPlan.timeSlots = TIME_SLOTS.map((slot) => {
+    const existing = state.dayPlan.timeSlots.find((entry) => entry.id === slot.id);
+    return existing ? { ...slot, actionId: existing.actionId ?? null, actionLabel: existing.actionLabel ?? "" } : { ...slot, actionId: null, actionLabel: "" };
+  });
+};
+
+const getAvailableTimeSlots = (state) => {
+  ensureDayPlanTimeSlots(state);
+  return state.dayPlan.timeSlots.filter((slot) => !slot.actionId);
+};
+
+const getNextAvailableTimeSlot = (state) => getAvailableTimeSlots(state)[0] ?? null;
+
+const getActionSlotCost = (action) => action?.slotCost ?? DEFAULT_ACTION_SLOT_COST;
+
+const hasEnoughTimeSlots = (state, count) => getAvailableTimeSlots(state).length >= count;
+
+const consumeTimeSlots = (state, count, actionId, actionLabel) => {
+  ensureDayPlanTimeSlots(state);
+  let remaining = count;
+  for (const slot of state.dayPlan.timeSlots) {
+    if (slot.actionId || remaining <= 0) {
+      continue;
+    }
+    slot.actionId = actionId;
+    slot.actionLabel = actionLabel;
+    remaining -= 1;
+  }
+};
+
+const getTimeSlotSummary = (state) => {
+  ensureDayPlanTimeSlots(state);
+  return state.dayPlan.timeSlots
+    .map((slot) => `${slot.label}${slot.actionId ? "已用" : "可用"}`)
+    .join(" / ");
 };
 
 const noteRecentAction = (state, actionId) => {
@@ -605,7 +670,7 @@ const applySleepRecovery = (state) => {
 };
 
 const updateHistoryAtEndOfDay = (state) => {
-  const heavyToday = state.dayPlan.actionsTaken.some((actionId) => ACTIONS[actionId]?.intensity === "heavy");
+  const heavyToday = state.dayPlan.actionsTaken.some((actionId) => actionId === "forcedOvertime" || ACTIONS[actionId]?.intensity === "heavy");
 
   state.history.daysSinceFullSleep = 0;
   state.history.consecutiveHeavyDays = heavyToday ? state.history.consecutiveHeavyDays + 1 : 0;
@@ -679,8 +744,8 @@ const pickDistinct = (items, count, rng) => {
   return picked;
 };
 
-const createDailyWorkOptions = (state, rng) =>
-  pickDistinct(WORK_GIGS, 3, rng).map((gig) => {
+const createDailyWorkOptions = (state, _rng) =>
+  WORK_GIGS.map((gig) => {
     const { intelligence, physique, luck, wealth } = state.character;
     const wealthStressReduction = (wealth - 1) * 2;
     let moneyBonus = 0;
@@ -689,17 +754,17 @@ const createDailyWorkOptions = (state, rng) =>
     let moodBonus = 0;
 
     if (gig.type === "physical") {
-      moneyBonus = (physique - 1) * 60 + (luck - 1) * 20;
+      moneyBonus = (physique - 1) * 25 + (luck - 1) * 10;
       energyBonus = (physique - 1) * 2;
     } else if (gig.type === "mental") {
-      moneyBonus = (intelligence - 1) * 100 + (luck - 1) * 20 + Math.floor(state.skill * 4);
+      moneyBonus = (intelligence - 1) * 40 + (luck - 1) * 10 + Math.floor(state.skill * 2);
       moodBonus = (intelligence - 1) * 3;
       stressBonus -= (intelligence - 1) * 2;
     } else if (gig.type === "mixed") {
-      moneyBonus = (physique - 1) * 40 + (luck - 1) * 40;
+      moneyBonus = (physique - 1) * 20 + (luck - 1) * 20;
       energyBonus = (physique - 1) * 2;
     } else if (gig.type === "social") {
-      moneyBonus = (luck - 1) * 60 + (intelligence - 1) * 20;
+      moneyBonus = (luck - 1) * 25 + (intelligence - 1) * 10;
       moodBonus = (luck - 1) * 3;
     }
 
@@ -777,18 +842,18 @@ const getRepeatPenalty = (repeatIndex) => {
 const getRepeatPenaltyText = (penalty) =>
   penalty.repeatIndex <= 1
     ? "第 1 次，不加重。"
-    : `第 ${penalty.repeatIndex} 次：額外耗體 ${penalty.extraEnergyCost}、收益打折、事件風險 +${Math.round(
+    : `第 ${penalty.repeatIndex} 次：額外耗體 ${penalty.extraEnergyCost}、效果打折、事件風險 +${Math.round(
         penalty.eventRiskBonus * 100
       )}%。`;
 
-const applyRepeatPenaltyToEffects = (effects = {}, penalty) => {
+const applyRepeatPenaltyToEffects = (effects = {}, penalty, { preserveIncome = false } = {}) => {
   const adjusted = cloneEffects(effects);
 
   if (penalty.extraEnergyCost > 0) {
     adjusted.energy = (adjusted.energy ?? 0) - penalty.extraEnergyCost;
   }
 
-  if ((adjusted.money ?? 0) > 0) {
+  if (!preserveIncome && (adjusted.money ?? 0) > 0) {
     adjusted.money = Math.max(0, Math.round(adjusted.money * penalty.moneyMultiplier));
   }
 
@@ -800,6 +865,37 @@ const applyRepeatPenaltyToEffects = (effects = {}, penalty) => {
     adjusted.skill = Math.max(0, Math.round(adjusted.skill * penalty.wellbeingMultiplier));
   }
 
+  return adjusted;
+};
+
+const getWorkFatigueEffects = (state, repeatIndex) => {
+  const effects = {};
+  if (repeatIndex === 2) {
+    effects.energy = -6;
+    effects.stress = 2;
+  } else if (repeatIndex >= 3) {
+    effects.energy = -14;
+    effects.mood = -4;
+    effects.stress = 6;
+  }
+
+  if (state.energy < 25) {
+    effects.energy = (effects.energy ?? 0) - 6;
+    effects.mood = (effects.mood ?? 0) - 5;
+    effects.stress = (effects.stress ?? 0) + 6;
+  } else if (state.energy < 40) {
+    effects.stress = (effects.stress ?? 0) + 3;
+  }
+
+  return effects;
+};
+
+const applyWorkFatigueToEffects = (state, effects, repeatIndex) => {
+  const adjusted = cloneEffects(effects);
+  const fatigue = getWorkFatigueEffects(state, repeatIndex);
+  for (const [key, value] of Object.entries(fatigue)) {
+    adjusted[key] = (adjusted[key] ?? 0) + value;
+  }
   return adjusted;
 };
 
@@ -823,7 +919,10 @@ const recordUserAction = (state, actionId, penalty) => {
 };
 
 const updateSummaryActionCounts = (state, actionId) => {
-  if (actionId === "work") incrementSummaryStat(state, "jobsWorked");
+  if (actionId === "work") {
+    incrementSummaryStat(state, "jobsWorked");
+    incrementSummaryStat(state, "gigWorkTimes");
+  }
   if (actionId === "overtime") incrementSummaryStat(state, "overtimeTimes");
   if (actionId === "study") incrementSummaryStat(state, "studyTimes");
   if (actionId === "reward") incrementSummaryStat(state, "rewardTimes");
@@ -900,6 +999,14 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
 
   if (action.id === "overtime" && ![2, 3].includes(state.jobLevel)) {
     return { available: false, reason: action.disabledReason };
+  }
+
+  if (action.id === "overtime") {
+    return { available: false, reason: "正職加班現在由公司臨時要求，不能自由安排。" };
+  }
+
+  if (!hasEnoughTimeSlots(state, getActionSlotCost(action))) {
+    return { available: false, reason: "今天的時段已經不夠了，該睡了。" };
   }
 
   if (action.id === "work" && getHasScheduledJob(state)) {
@@ -1165,9 +1272,11 @@ const applyWorkAttendanceOutcome = (state) => {
   beginTurnLogIfNeeded(state);
   state.turnLog.actionId = "attendanceWork";
   recordPassiveAction(state, "attendanceWork");
+  consumeTimeSlots(state, SCHEDULED_JOB_SLOT_COST, "attendanceWork", job.name);
   appendResolution(state, { effects: job.attendanceEffects });
   incrementSummaryStat(state, "jobsWorked");
-  pushLine(state, `你今天還是去上了 ${job.name}，先把固定班扛完。`);
+  incrementSummaryStat(state, job.level === 2 ? "partTimeAttendanceTimes" : "fullTimeAttendanceTimes");
+  pushLine(state, `你今天還是去上了 ${job.name}，早上和下午先被固定班吃掉。`);
 };
 
 const applyLeaveSuccessOutcome = (state) => {
@@ -1183,6 +1292,7 @@ const applyLeaveFailureOutcome = (state) => {
   beginTurnLogIfNeeded(state);
   state.turnLog.actionId = "attendanceWork";
   recordPassiveAction(state, "attendanceWork");
+  consumeTimeSlots(state, SCHEDULED_JOB_SLOT_COST, "attendanceWork", job.name);
   appendResolution(state, {
     effects: {
       ...job.attendanceEffects,
@@ -1191,7 +1301,29 @@ const applyLeaveFailureOutcome = (state) => {
     },
   });
   incrementSummaryStat(state, "jobsWorked");
+  incrementSummaryStat(state, job.level === 2 ? "partTimeAttendanceTimes" : "fullTimeAttendanceTimes");
   pushLine(state, "老闆不同意，你只好硬著頭皮去上班。");
+};
+
+const maybeApplyForcedOvertime = (state, rng) => {
+  const job = getJob(state);
+  const rate = FORCED_OVERTIME_RATE[job.level] ?? 0;
+  if (rate <= 0 || getAvailableTimeSlots(state).length === 0 || rng() >= rate) {
+    return;
+  }
+
+  consumeTimeSlots(state, 1, "forcedOvertime", "被迫加班");
+  recordPassiveAction(state, "forcedOvertime");
+  appendResolution(state, {
+    effects: FORCED_OVERTIME_EFFECTS,
+  });
+  incrementSummaryStat(state, "forcedOvertimeTimes");
+  incrementSummaryStat(state, "overtimeTimes");
+  pushLine(state, "主管臨時丟來訊息：「今天案子要收，晚點再走。」晚上被加班吃掉了，你沒有真的拒絕空間。");
+
+  if (!state.conditions.burnoutRisk && (state.stress >= 72 || state.history.consecutiveHeavyDays >= 1)) {
+    applyConditionChanges(state, { burnoutRisk: true }).forEach((line) => pushLine(state, line));
+  }
 };
 
 const applyActiveCaseWork = (state) => {
@@ -1330,20 +1462,28 @@ const openActionChoice = (state, actionId) => {
   const repeatPenalty = getRepeatPenalty(getRepeatIndex(state, actionId));
 
   if (actionId === "work") {
+    const slot = getNextAvailableTimeSlot(state);
+    const slotOptions = state.dailyWorkOptions.filter((option) => option.timeSlot === slot?.id);
+    const options = slotOptions.length > 0 ? slotOptions : state.dailyWorkOptions;
     state.pendingActionChoice = {
       actionId,
-      title: "今天要接哪一份工",
+      title: `${slot?.label ?? "這個時段"}要接哪一份工`,
       description:
         repeatPenalty.repeatIndex > 1
-          ? "同樣類型的工作今天已經做過，這次會更累、賺更少，也更容易出事。"
-          : "今天能挑的臨時工作不同，收入和體力成本也不同。",
-      options: state.dailyWorkOptions.map((option) => {
-        const adjusted = applyRepeatPenaltyToEffects(option.effects, repeatPenalty);
+          ? "薪水不會打折，但身體會累積疲勞，今天再打工會更耗體也更容易出事。"
+          : "每個時段能接的臨時工作不同，收入和體力成本也不同。",
+      options: options.map((option) => {
+        const adjusted = applyWorkFatigueToEffects(state, option.effects, repeatPenalty.repeatIndex);
+        const disabled = Number.isFinite(option.minEnergy) && state.energy < option.minEnergy;
         return {
           id: option.id,
           label: option.label,
-          caption: `+$${adjusted.money ?? 0} / 體力 ${adjusted.energy ?? 0}`,
+          caption: disabled
+            ? `需要體力 ${option.minEnergy}｜你現在太累，這份工做不動`
+            : `${slot?.label ?? ""}｜+$${adjusted.money ?? 0} / 體力 ${adjusted.energy ?? 0}`,
           requiredCash: getRequiredCashFromEffects(adjusted),
+          disabled,
+          disabledReason: disabled ? "體力不足" : "",
         };
       }),
     };
@@ -1699,6 +1839,7 @@ const resolveAction = (state, actionId, rng) => {
   nextState.turnLog.actionId = getActionLogId(nextState, action);
   pushLine(nextState, `你今天安排了「${getActionLogLabel(nextState, action)}」。`);
   recordUserAction(nextState, action.id, repeatPenalty);
+  consumeTimeSlots(nextState, getActionSlotCost(action), action.id, action.label);
   updateSummaryActionCounts(nextState, action.id);
 
   resolveBaseAction(nextState, actionId, rng, repeatPenalty);
@@ -1817,7 +1958,7 @@ export const createInitialState = (rng = Math.random) => {
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
     .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" && action.id !== "jobSearch" : action.id !== "resign"))
-    .filter((action) => action.id !== "overtime" || [2, 3].includes(state.jobLevel))
+    .filter((action) => action.id !== "overtime")
     .filter((action) => action.id !== "repairScooter" || state.conditions.scooterBroken)
     .filter((action) => action.id !== "repairComputer" || state.conditions.computerBroken)
     .filter((action) => action.id !== "appeaseLandlord" || state.conditions.landlordAngry)
@@ -1845,7 +1986,10 @@ export const getActionViewModels = (state) =>
         effects: dynamicEffects,
         tag,
         energyPreview,
-        repeatPenaltyPreview: getRepeatPenaltyText(repeatPenalty),
+        repeatPenaltyPreview:
+          action.id === "work" && repeatPenalty.repeatIndex > 1
+            ? `第 ${repeatPenalty.repeatIndex} 次打工：薪水不打折，但體力和壓力懲罰會加重。`
+            : getRepeatPenaltyText(repeatPenalty),
         disabled: !availability.available,
         disabledReason: availability.reason,
       };
@@ -1864,7 +2008,7 @@ export const getStatusMeta = (state) => {
   const rentCountdown =
     nextRent === null ? "本月房租已處理完" : nextRent === state.day ? `今天要繳 $${dueRent}` : `${nextRent - state.day} 天後・$${dueRent}`;
   const phaseCopy = {
-    [PHASES.READY]: state.dayPlan.totalActions === 0 ? "準備安排今天" : "今天還能繼續做事，也可以直接睡覺",
+    [PHASES.READY]: getAvailableTimeSlots(state).length === 0 ? "今天三個時段都用完了，該睡了" : state.dayPlan.totalActions === 0 ? "準備安排今天" : "今天還能繼續做事，也可以直接睡覺",
     [PHASES.ATTENDANCE]: "先決定今天要不要去上班",
     [PHASES.CHOICE]: "先選一個方案",
     [PHASES.EVENT]: "生活又臨時丟了一題給你",
@@ -1896,12 +2040,14 @@ export const getStatusMeta = (state) => {
     rentCountdown,
     phaseLabel: phaseCopy[state.phase],
     currentJob: getJob(state),
-    actionSummary: `今天已做 ${state.dayPlan.totalActions} 件事`,
+    actionSummary: `今日時段：${getTimeSlotSummary(state)}`,
+    timeSlots: state.dayPlan.timeSlots.map((slot) => ({ ...slot, used: Boolean(slot.actionId) })),
     repeatWarning:
       state.dayPlan.lastRepeatPenalty?.repeatIndex > 1
-        ? `再做同一件會更累、賺更少、風險更高。上次是第 ${state.dayPlan.lastRepeatPenalty.repeatIndex} 次。`
+        ? `再做同一件會更累、風險更高。上次是第 ${state.dayPlan.lastRepeatPenalty.repeatIndex} 次。`
         : "",
     canSleep: state.phase === PHASES.READY,
+    canAct: state.phase === PHASES.READY && getAvailableTimeSlots(state).length > 0,
     activeConditions,
     character: state.character,
   };
@@ -1927,6 +2073,9 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
 
   const { actionId } = nextState.pendingActionChoice;
   const pendingOption = getPendingOptionById(nextState.pendingActionChoice.options, optionId);
+  if (pendingOption?.disabled) {
+    return nextState;
+  }
   if (!canAffordRequiredCash(nextState, getPendingOptionRequiredCash(pendingOption))) {
     return nextState;
   }
@@ -1967,6 +2116,7 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
     beginTurnLogIfNeeded(nextState);
     nextState.turnLog.actionId = actionId;
     recordUserAction(nextState, actionId, repeatPenalty);
+    consumeTimeSlots(nextState, getActionSlotCost(ACTIONS[actionId]), actionId, ACTIONS[actionId].label);
     updateSummaryActionCounts(nextState, actionId);
 
     appendResolution(nextState, {
@@ -1997,15 +2147,29 @@ export const dispatchActionChoice = (state, optionId, rng = Math.random) => {
   }
 
   const repeatPenalty = getRepeatPenalty(getRepeatIndex(nextState, actionId));
-  const adjustedEffects = applyRepeatPenaltyToEffects(selected.effects, repeatPenalty);
+  const energyBeforeChoice = nextState.energy;
+  const adjustedEffects =
+    actionId === "work"
+      ? applyWorkFatigueToEffects(nextState, selected.effects, repeatPenalty.repeatIndex)
+      : applyRepeatPenaltyToEffects(selected.effects, repeatPenalty);
   beginTurnLogIfNeeded(nextState);
   nextState.turnLog.actionId = actionId;
   pushLine(nextState, `你今天選了「${selected.label}」。`);
   recordUserAction(nextState, actionId, repeatPenalty);
+  consumeTimeSlots(nextState, getActionSlotCost(ACTIONS[actionId]), actionId, selected.label);
   updateSummaryActionCounts(nextState, actionId);
   appendResolution(nextState, { effects: adjustedEffects });
+  if (actionId === "work" && energyBeforeChoice < 40) {
+    incrementSummaryStat(nextState, "lowEnergyWorkTimes");
+    pushLine(nextState, "你是在低體力狀態硬接這份工，身體很明顯跟不上。");
+  }
   if (repeatPenalty.repeatIndex > 1) {
-    pushLine(nextState, `同樣的安排今天已經做過，這次的代價更直接，效果也開始打折。`);
+    pushLine(
+      nextState,
+      actionId === "work"
+        ? `今天第 ${repeatPenalty.repeatIndex} 次打工，薪水照拿，但疲勞直接疊上來。`
+        : `同樣的安排今天已經做過，這次的代價更直接，效果也開始打折。`
+    );
   }
   nextState.pendingActionChoice = null;
 
@@ -2054,6 +2218,7 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
     } else {
       incrementSummaryStat(nextState, "leaveFailedTimes");
       applyLeaveFailureOutcome(nextState);
+      maybeApplyForcedOvertime(nextState, rng);
     }
 
     nextState.pendingAttendance = null;
@@ -2069,6 +2234,7 @@ export const dispatchAttendanceChoice = (state, choice, rng = Math.random) => {
   }
 
   applyWorkAttendanceOutcome(nextState);
+  maybeApplyForcedOvertime(nextState, rng);
   nextState.pendingAttendance = null;
 
   const failure = detectFailure(nextState);
