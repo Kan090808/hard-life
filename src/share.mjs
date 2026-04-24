@@ -505,7 +505,7 @@ const buildShareText = (state, url) => {
 
 const renderShareImage = async (state, url, overrides = {}) => {
   const { document } = getRuntime(overrides);
-  const { version, totalPlays } = overrides;
+  const { version } = overrides;
   await waitForFonts(document);
 
   if (overrides.captureElement) {
@@ -627,11 +627,6 @@ const renderShareImage = async (state, url, overrides = {}) => {
     ctx.textAlign = "right";
     ctx.fillText(version, width - 72, 1552);
     ctx.textAlign = "left";
-  }
-  if (typeof totalPlays === "number" && !Number.isNaN(totalPlays)) {
-    ctx.fillStyle = "rgba(24, 28, 38, 0.45)";
-    ctx.font = `500 20px ${SHARE_FONT_STACK}`;
-    ctx.fillText(`大家已經玩了 ${totalPlays.toLocaleString()} 次`, 72, 1588);
   }
 
   const blob = await canvasToBlob(canvas);
