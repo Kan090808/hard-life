@@ -1752,7 +1752,7 @@ const handleScreenshot = async () => {
   render();
 
   try {
-    const image = await renderShareImage(state, window.location.href);
+    const image = await renderShareImage(state, window.location.href, { captureElement: elements.endingCapture });
     const result = await shareImage(uiState.shareCapabilities, image);
     logShareWarnings("image", result.warnings);
 

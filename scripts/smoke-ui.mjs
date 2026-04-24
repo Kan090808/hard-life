@@ -361,6 +361,59 @@ const runReloadSmoke = async (page, origin) => {
   console.log("PASS intro dialog closes after reload from reset state");
 };
 
+const runEndingShareImageSmoke = async (page, origin) => {
+  await patchSavedRun(page, {
+    day: 30,
+    money: 16888,
+    energy: 64,
+    mood: 58,
+    stress: 42,
+    skill: 37,
+    jobLevel: 2,
+    phase: "completed",
+    pendingAttendance: null,
+    pendingActionChoice: null,
+    pendingEvent: null,
+    ending: {
+      id: "stable-life",
+      type: "success",
+      title: "穩定生活",
+      body: "日子還是辛苦，但你已經能穩穩過下去。",
+      details: {
+        tags: [
+          { label: "有個體面的工作", conditionText: "月底工作等級達到「正職新人」以上" },
+          { label: "差點破產", conditionText: "本月金錢曾低於 500，但最後沒有破產" },
+        ],
+        summaryLines: ["月底還有 $16,888。", "技能來到 37，工作還有往上走的空間。"],
+        records: ["工作 8 次", "本月最高壓力 72", "學技能 4 次，月底技能 37"],
+        advice: "下次可以試著把壓力壓低一點，月底會更穩。",
+      },
+    },
+  });
+  await page.goto(origin, { waitUntil: "networkidle" });
+
+  await assertVisible(page.locator("#ending-dialog"), "ending dialog is visible for share image smoke");
+  const imageInfo = await page.evaluate(async () => {
+    const { renderShareImage } = await import("/src/share.mjs");
+    const saved = JSON.parse(window.localStorage.getItem("hard-life-save-v1"));
+    const image = await renderShareImage(saved.state, window.location.href, {
+      captureElement: document.querySelector("#ending-capture"),
+    });
+    return {
+      size: image.blob.size,
+      type: image.blob.type,
+      width: image.width,
+      height: image.height,
+    };
+  });
+
+  assert.equal(imageInfo.type, "image/png", "share image should be a PNG");
+  assert.equal(imageInfo.width, 1200, "share image should be exported at the expected width");
+  assert.equal(imageInfo.height > 1600, true, "DOM share image should capture the full ending content");
+  assert.equal(imageInfo.size > 20000, true, "DOM share image should not be blank");
+  console.log("PASS ending share image captures the rendered DOM into a non-empty PNG");
+};
+
 const main = async () => {
   const { chromium } = loadPlaywright();
   const server = await startStaticServer();
@@ -390,6 +443,7 @@ const main = async () => {
     await runLivingCostShortfallSmoke(page, server.origin);
     await runResetSmoke(page);
     await runReloadSmoke(page, server.origin);
+    await runEndingShareImageSmoke(page, server.origin);
     assert.deepEqual(errors, [], `unexpected browser errors:\n${errors.join("\n")}`);
     console.log("PASS browser console stayed clean during smoke tests");
     console.log("Smoke UI tests passed.");

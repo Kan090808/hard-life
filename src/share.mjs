@@ -2,8 +2,11 @@ import { GAME_COPY, JOBS } from "./data/config.mjs";
 
 const SHARE_TITLE = GAME_COPY.title;
 const SHARE_IMAGE_SIZE = { width: 1200, height: 1600 };
+const SHARE_DOM_IMAGE_WIDTH = 1200;
 const SHARE_FONT_STACK = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
 const IN_APP_BROWSER_PATTERN = /FBAN|FBAV|Instagram|Line|MicroMessenger|Messenger/i;
+const SVG_NS = "http://www.w3.org/2000/svg";
+const XHTML_NS = "http://www.w3.org/1999/xhtml";
 
 /**
  * @typedef {Object} ShareCapabilities
@@ -120,6 +123,191 @@ const waitForFonts = async (documentLike) => {
     documentLike.fonts.ready.catch(() => {}),
     new Promise((resolve) => setTimeout(resolve, 180)),
   ]);
+};
+
+const waitForImageLoad = async (image) => {
+  if (image.complete && image.naturalWidth > 0) {
+    return;
+  }
+
+  await new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("share-image-load-failed"));
+  });
+};
+
+const collectDocumentStyles = (documentLike) => {
+  const styleTexts = [];
+
+  for (const sheet of Array.from(documentLike.styleSheets ?? [])) {
+    try {
+      const rules = Array.from(sheet.cssRules ?? []);
+      styleTexts.push(rules.map((rule) => rule.cssText).join("\n"));
+    } catch {}
+  }
+
+  return styleTexts.filter(Boolean).join("\n");
+};
+
+const getEndingTone = (state) => (state.ending?.type === "failure" ? "danger" : "growth");
+
+const getEndingBackground = (tone) => (tone === "danger" ? "#ffd6d2" : "#c8f5de");
+
+const createDomShareWrapper = (state, captureElement, documentLike) => {
+  const tone = getEndingTone(state);
+  const width = Math.ceil(captureElement.getBoundingClientRect?.().width || captureElement.scrollWidth || 416);
+  const wrapper = documentLike.createElement("section");
+  wrapper.className = "ending-screen share-capture-export";
+  wrapper.dataset.tone = tone;
+  wrapper.setAttribute("xmlns", XHTML_NS);
+  Object.assign(wrapper.style, {
+    position: "relative",
+    inset: "auto",
+    zIndex: "auto",
+    display: "block",
+    width: `${width}px`,
+    minHeight: "auto",
+    overflow: "visible",
+    background: getEndingBackground(tone),
+    animation: "none",
+  });
+
+  const band = documentLike.createElement("div");
+  band.className = "ending-band";
+  band.setAttribute("aria-hidden", "true");
+  Object.assign(band.style, {
+    position: "relative",
+    top: "auto",
+  });
+
+  const content = captureElement.cloneNode(true);
+  content.removeAttribute("id");
+  Object.assign(content.style, {
+    width: `${width}px`,
+    minHeight: "auto",
+    margin: "0",
+  });
+
+  for (const node of Array.from(content.querySelectorAll("[id]"))) {
+    node.removeAttribute("id");
+  }
+  for (const node of Array.from(content.querySelectorAll("[autofocus]"))) {
+    node.removeAttribute("autofocus");
+  }
+  for (const node of Array.from(content.querySelectorAll(".ending-footer"))) {
+    node.remove();
+  }
+
+  wrapper.append(band, content);
+  return wrapper;
+};
+
+const measureDomShareWrapper = async (wrapper, documentLike) => {
+  const host = documentLike.createElement("div");
+  Object.assign(host.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    zIndex: "-1",
+    pointerEvents: "none",
+    opacity: "0",
+  });
+  host.append(wrapper);
+  documentLike.body.append(host);
+  await waitForFonts(documentLike);
+  const rect = wrapper.getBoundingClientRect();
+  const width = Math.ceil(rect.width || wrapper.scrollWidth);
+  const height = Math.ceil(rect.height || wrapper.scrollHeight);
+  host.remove();
+  return { width, height };
+};
+
+const serializeDomShareSvg = (wrapper, cssText, width, height, documentLike) => {
+  const svg = documentLike.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("xmlns", SVG_NS);
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const style = documentLike.createElementNS(SVG_NS, "style");
+  style.textContent = `
+    ${cssText}
+    .share-capture-export, .share-capture-export * {
+      animation: none !important;
+      transition: none !important;
+      caret-color: transparent !important;
+    }
+    .share-capture-export {
+      box-sizing: border-box !important;
+      overflow: visible !important;
+    }
+    .share-capture-export .ending-band {
+      position: relative !important;
+      top: auto !important;
+    }
+    .share-capture-export .ending-content {
+      min-height: auto !important;
+    }
+    .share-capture-export .ending-content::before {
+      position: absolute !important;
+      top: 50% !important;
+    }
+    .share-capture-export .ending-footer {
+      display: none !important;
+    }
+  `;
+
+  const foreignObject = documentLike.createElementNS(SVG_NS, "foreignObject");
+  foreignObject.setAttribute("width", "100%");
+  foreignObject.setAttribute("height", "100%");
+  foreignObject.append(wrapper);
+  svg.append(style, foreignObject);
+
+  return new XMLSerializer().serializeToString(svg);
+};
+
+const renderDomShareImage = async (state, url, captureElement, documentLike) => {
+  if (!captureElement?.cloneNode || !documentLike?.createElementNS || !documentLike?.body) {
+    throw new Error("dom-capture-unavailable");
+  }
+
+  const measureWrapper = createDomShareWrapper(state, captureElement, documentLike);
+  const { width: sourceWidth, height: sourceHeight } = await measureDomShareWrapper(measureWrapper, documentLike);
+  const cssText = collectDocumentStyles(documentLike);
+  const svgWrapper = createDomShareWrapper(state, captureElement, documentLike);
+  const svgText = serializeDomShareSvg(svgWrapper, cssText, sourceWidth, sourceHeight, documentLike);
+  const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+  const scale = SHARE_DOM_IMAGE_WIDTH / sourceWidth;
+  const targetWidth = SHARE_DOM_IMAGE_WIDTH;
+  const targetHeight = Math.ceil(sourceHeight * scale);
+  const canvas = createCanvas(targetWidth, targetHeight, documentLike);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("2d-context-unavailable");
+  }
+
+  const ImageCtor = documentLike.defaultView?.Image ?? globalThis.Image;
+  if (typeof ImageCtor !== "function") {
+    throw new Error("image-constructor-unavailable");
+  }
+
+  const image = new ImageCtor();
+  image.decoding = "sync";
+  image.src = svgUrl;
+  await waitForImageLoad(image);
+  ctx.fillStyle = getEndingBackground(getEndingTone(state));
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+  const snapshot = getShareSnapshot(state, url);
+  const blob = await canvasToBlob(canvas);
+  return {
+    blob,
+    width: targetWidth,
+    height: targetHeight,
+    filename: "打工人生結果.png",
+    alt: `${snapshot.title}｜${snapshot.rankLabel}`,
+  };
 };
 
 const wrapCanvasText = (ctx, text, maxWidth) => {
@@ -318,6 +506,17 @@ const buildShareText = (state, url) => {
 const renderShareImage = async (state, url, overrides = {}) => {
   const { document } = getRuntime(overrides);
   await waitForFonts(document);
+
+  if (overrides.captureElement) {
+    try {
+      return await renderDomShareImage(state, url, overrides.captureElement, document);
+    } catch (error) {
+      console.warn("[share:dom-capture-fallback]", {
+        name: error?.name ?? "Error",
+        message: error?.message ?? String(error),
+      });
+    }
+  }
 
   const snapshot = getShareSnapshot(state, url);
   const { width, height } = SHARE_IMAGE_SIZE;
