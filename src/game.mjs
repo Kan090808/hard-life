@@ -48,12 +48,12 @@ const SCHEDULED_JOB_SLOT_COST = 2;
 const FORCED_OVERTIME_RATE = {
   3: 0.25,
 };
-const FORCED_OVERTIME_EFFECTS = { money: 450, energy: -8, mood: -15, stress: 20 };
+const FORCED_OVERTIME_EFFECTS = { money: 450, energy: -8, mood: -15, stress: 28 };
 const FORCED_OVERTIME_DIALOG = {
   title: "老闆要求加班",
   description: "今天有個事情要麻煩你加個班",
   optionText: "哦，好的…",
-  optionCaption: "金錢 +450、體力 -8、心情 -15、壓力 +20",
+  optionCaption: "金錢 +450、體力 -8、心情 -15、壓力 +28",
 };
 const POOR_SLEEP_DIALOG = {
   title: "昨晚睡眠品質很差",
@@ -862,7 +862,10 @@ const createDailyWorkOptions = (state, _rng) =>
     };
   });
 
-const createDailyRewardOptions = (rng) => pickDistinct(REWARD_ACTIVITIES, 3, rng).map((entry) => ({ ...entry }));
+const createDailyRewardOptions = (state, rng) => {
+  const eligible = REWARD_ACTIVITIES.filter((a) => state.money >= a.minBalance);
+  return pickDistinct(eligible, 3, rng).map((entry) => ({ ...entry }));
+};
 
 const generateDailyFreelanceOffer = (state, rng) => {
   const hasContact = state.conditions.hasFreelanceContact;
@@ -889,7 +892,7 @@ const generateDailyFreelanceOffer = (state, rng) => {
 
 const refreshDailyBoards = (state, rng) => {
   state.dailyWorkOptions = createDailyWorkOptions(state, rng);
-  state.dailyRewardOptions = createDailyRewardOptions(rng);
+  state.dailyRewardOptions = createDailyRewardOptions(state, rng);
   state.dailyFreelanceOffer = generateDailyFreelanceOffer(state, rng);
 };
 
