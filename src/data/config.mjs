@@ -331,9 +331,9 @@ export const ACTIONS = {
 };
 
 export const WORK_GIGS = [
-  { id: "breakfast-prep", label: "早餐店備料", timeSlot: "morning", minEnergy: 20, type: "physical", effects: { money: 480, energy: -20, mood: -3, stress: 4 } },
+  { id: "breakfast-prep", label: "早餐店備料", timeSlot: "morning", minEnergy: 25, type: "physical", effects: { money: 480, energy: -25, mood: -3, stress: 4 } },
   { id: "market-carry", label: "菜市場搬貨", timeSlot: "morning", minEnergy: 35, type: "physical", effects: { money: 620, energy: -30, mood: -5, stress: 6 } },
-  { id: "commute-flyer", label: "通勤口發傳單", timeSlot: "morning", minEnergy: 10, type: "social", effects: { money: 450, energy: -18, mood: -2, stress: 5 } },
+  { id: "commute-flyer", label: "通勤口發傳單", timeSlot: "morning", minEnergy: 25, type: "social", effects: { money: 450, energy: -25, mood: -2, stress: 5 } },
   { id: "lunch-rush", label: "便當店午餐尖峰", timeSlot: "afternoon", minEnergy: 20, type: "physical", effects: { money: 650, energy: -28, mood: -6, stress: 8 } },
   { id: "warehouse-sort", label: "倉庫理貨", timeSlot: "afternoon", minEnergy: 35, type: "physical", effects: { money: 780, energy: -34, mood: -7, stress: 9 } },
   { id: "dishwash", label: "餐廳洗碗", timeSlot: "afternoon", minEnergy: 20, type: "physical", effects: { money: 600, energy: -30, mood: -8, stress: 8 } },
