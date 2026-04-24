@@ -1785,7 +1785,11 @@ const handleScreenshot = async () => {
   render();
 
   try {
-    const image = await renderShareImage(state, window.location.href, { captureElement: elements.endingCapture });
+    const image = await renderShareImage(state, window.location.href, {
+      captureElement: elements.endingCapture,
+      version: APP_VERSION,
+      totalPlays: uiState.analyticsSummary?.totalStarts,
+    });
     const result = await shareImage(uiState.shareCapabilities, image);
     logShareWarnings("image", result.warnings);
 

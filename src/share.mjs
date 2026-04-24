@@ -153,7 +153,7 @@ const getEndingTone = (state) => (state.ending?.type === "failure" ? "danger" : 
 
 const getEndingBackground = (tone) => (tone === "danger" ? "#ffd6d2" : "#c8f5de");
 
-const createDomShareWrapper = (state, captureElement, documentLike) => {
+const createDomShareWrapper = (state, captureElement, documentLike, { version, totalPlays } = {}) => {
   const tone = getEndingTone(state);
   const width = Math.ceil(captureElement.getBoundingClientRect?.().width || captureElement.scrollWidth || 416);
   const wrapper = documentLike.createElement("section");
@@ -199,6 +199,34 @@ const createDomShareWrapper = (state, captureElement, documentLike) => {
   }
 
   wrapper.append(band, content);
+
+  const hasAnalytics = typeof totalPlays === "number" && !Number.isNaN(totalPlays);
+  if (version || hasAnalytics) {
+    const watermark = documentLike.createElement("div");
+    Object.assign(watermark.style, {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "6px 24px 12px",
+      fontFamily: SHARE_FONT_STACK,
+      fontSize: "13px",
+      lineHeight: "1.4",
+      color: "rgba(24, 28, 38, 0.45)",
+      borderTop: "1px solid rgba(24, 28, 38, 0.08)",
+      marginTop: "8px",
+    });
+    const leftEl = documentLike.createElement("span");
+    if (hasAnalytics) {
+      leftEl.textContent = `大家已經玩了 ${totalPlays.toLocaleString()} 次`;
+    }
+    const rightEl = documentLike.createElement("span");
+    if (version) {
+      rightEl.textContent = version;
+    }
+    watermark.append(leftEl, rightEl);
+    wrapper.append(watermark);
+  }
+
   return wrapper;
 };
 
@@ -266,15 +294,16 @@ const serializeDomShareSvg = (wrapper, cssText, width, height, documentLike) => 
   return new XMLSerializer().serializeToString(svg);
 };
 
-const renderDomShareImage = async (state, url, captureElement, documentLike) => {
+const renderDomShareImage = async (state, url, captureElement, documentLike, { version, totalPlays } = {}) => {
   if (!captureElement?.cloneNode || !documentLike?.createElementNS || !documentLike?.body) {
     throw new Error("dom-capture-unavailable");
   }
 
-  const measureWrapper = createDomShareWrapper(state, captureElement, documentLike);
+  const extras = { version, totalPlays };
+  const measureWrapper = createDomShareWrapper(state, captureElement, documentLike, extras);
   const { width: sourceWidth, height: sourceHeight } = await measureDomShareWrapper(measureWrapper, documentLike);
   const cssText = collectDocumentStyles(documentLike);
-  const svgWrapper = createDomShareWrapper(state, captureElement, documentLike);
+  const svgWrapper = createDomShareWrapper(state, captureElement, documentLike, extras);
   const svgText = serializeDomShareSvg(svgWrapper, cssText, sourceWidth, sourceHeight, documentLike);
   const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
   const scale = SHARE_DOM_IMAGE_WIDTH / sourceWidth;
@@ -505,11 +534,12 @@ const buildShareText = (state, url) => {
 
 const renderShareImage = async (state, url, overrides = {}) => {
   const { document } = getRuntime(overrides);
+  const { version, totalPlays } = overrides;
   await waitForFonts(document);
 
   if (overrides.captureElement) {
     try {
-      return await renderDomShareImage(state, url, overrides.captureElement, document);
+      return await renderDomShareImage(state, url, overrides.captureElement, document, { version, totalPlays });
     } catch (error) {
       console.warn("[share:dom-capture-fallback]", {
         name: error?.name ?? "Error",
@@ -622,6 +652,16 @@ const renderShareImage = async (state, url, overrides = {}) => {
   ctx.fillStyle = "#5d5d6f";
   ctx.font = `500 22px ${SHARE_FONT_STACK}`;
   ctx.fillText("打工人生：月底前活下去", 72, 1552);
+  if (version) {
+    ctx.textAlign = "right";
+    ctx.fillText(version, width - 72, 1552);
+    ctx.textAlign = "left";
+  }
+  if (typeof totalPlays === "number" && !Number.isNaN(totalPlays)) {
+    ctx.fillStyle = "rgba(24, 28, 38, 0.45)";
+    ctx.font = `500 20px ${SHARE_FONT_STACK}`;
+    ctx.fillText(`大家已經玩了 ${totalPlays.toLocaleString()} 次`, 72, 1588);
+  }
 
   const blob = await canvasToBlob(canvas);
 
