@@ -267,8 +267,20 @@ const runBadSleepFreeOptionSmoke = async (page, origin) => {
       category: "健康警訊",
       description: "你翻來覆去睡得很淺，早上起來頭很重。今天怎麼撐過去？",
       options: [
-        { id: "rest", text: "今天多休息", caption: "花一個時段・壓力 -8・心情 +8", requiredCash: 0 },
-        { id: "coffee", text: "喝咖啡續命", caption: "$120・壓力 +8・心情 +8", requiredCash: 120 },
+        {
+          id: "rest",
+          text: "今天多休息",
+          caption: "花一個時段・壓力 -8・心情 +8",
+          requiredCash: 0,
+          resolution: { effects: { stress: -8, mood: 8 }, log: "你決定早上慢慢來，不硬趕行程。身體稍微鬆開一點。" },
+        },
+        {
+          id: "coffee",
+          text: "喝咖啡續命",
+          caption: "$120・壓力 +8・心情 +8",
+          requiredCash: 120,
+          resolution: { effects: { money: -120, stress: 8, mood: 8 }, log: "你灌下一杯咖啡，提神效果立刻出現，但身體其實還是繃著的。" },
+        },
       ],
       _trigger: "poorSleep",
     },
