@@ -226,7 +226,7 @@ assert.equal(forcedOvertimePending.pendingEvent.id, "forced-overtime");
 assert.equal(forcedOvertimePending.dayPlan.timeSlots[2].actionId, "forcedOvertime");
 const forcedOvertime = dispatchEventChoice(forcedOvertimePending, "confirm", sequence(0.99));
 assert.equal(forcedOvertime.money, 5500);
-assert.equal(forcedOvertime.energy, 62);
+assert.equal(forcedOvertime.energy, 42);
 assert.equal(forcedOvertime.mood, 33);
 assert.equal(forcedOvertime.stress, 56);
 assert.equal(forcedOvertime.summaryStats.fullTimeAttendanceTimes, 1);

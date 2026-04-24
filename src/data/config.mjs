@@ -177,7 +177,7 @@ export const JOBS = {
     leaveThreshold: 45,
     attendanceEffects: {
       money: 1550,
-      energy: -10,
+      energy: -30,
       mood: -12,
       stress: 16,
     },
