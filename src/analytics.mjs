@@ -107,6 +107,15 @@ const loadAnalyticsScript = () => {
   analyticsScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[data-ga4="${MEASUREMENT_ID}"]`);
     if (existing) {
+      if (
+        typeof getGtag() === "function" ||
+        existing.getAttribute("data-loaded") === "true" ||
+        existing.readyState === "complete" ||
+        existing.readyState === "loaded"
+      ) {
+        resolve();
+        return;
+      }
       existing.addEventListener("load", resolve, { once: true });
       existing.addEventListener("error", reject, { once: true });
       return;
@@ -116,7 +125,14 @@ const loadAnalyticsScript = () => {
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(MEASUREMENT_ID)}`;
     script.dataset.ga4 = MEASUREMENT_ID;
-    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener(
+      "load",
+      () => {
+        script.dataset.loaded = "true";
+        resolve();
+      },
+      { once: true }
+    );
     script.addEventListener("error", reject, { once: true });
     document.head.append(script);
   });
