@@ -179,7 +179,7 @@ export const JOBS = {
       money: 1550,
       energy: -30,
       mood: -12,
-      stress: 16,
+      stress: 22,
     },
     leaveEffects: {
       money: -700,
@@ -240,7 +240,7 @@ export const ACTIONS = {
     effects: {
       energy: -18,
       mood: -10,
-      stress: 14,
+      stress: 20,
     },
     incomeKey: "overtimeIncome",
     disabledReason: "你現在沒有能自由選的加班班表。",
@@ -343,11 +343,18 @@ export const WORK_GIGS = [
 ];
 
 export const REWARD_ACTIVITIES = [
-  { id: "snack", label: "買點好吃的", effects: { money: -150, mood: 10, stress: -5 } },
-  { id: "movie", label: "看場電影", effects: { money: -350, mood: 18, stress: -10 } },
-  { id: "shopping", label: "小額購物", effects: { money: -500, mood: 22, stress: -12 } },
-  { id: "massage", label: "去按摩", effects: { money: -700, energy: 10, mood: 20, stress: -16 } },
-  { id: "cafeday", label: "咖啡廳耍廢", effects: { money: -220, mood: 14, stress: -7 } },
+  // Tier 0: 存款 0+（基本慰勞）
+  { id: "snack",        label: "買點好吃的",     minBalance: 0,     effects: { money: -150,  mood: 10, stress: -5  } },
+  { id: "cafeday",      label: "咖啡廳耍廢",     minBalance: 0,     effects: { money: -250,  mood: 13, stress: -7  } },
+  // Tier 1: 存款 5000+（小小享受）
+  { id: "movie",        label: "看場電影",       minBalance: 5000,  effects: { money: -400,  mood: 15, stress: -10 } },
+  { id: "nightmarket",  label: "逛夜市散心",     minBalance: 5000,  effects: { money: -330,  mood: 12, energy: 5, stress: -8  } },
+  // Tier 2: 存款 10000+（認真犒賞）
+  { id: "shopping",     label: "去購物中心逛街", minBalance: 10000, effects: { money: -650,  mood: 17, stress: -13 } },
+  { id: "afternoontea", label: "下午茶套餐",     minBalance: 10000, effects: { money: -550,  mood: 14, energy: 8, stress: -11 } },
+  // Tier 3: 存款 15000+（奢侈享受）
+  { id: "massage",      label: "預約按摩療程",   minBalance: 15000, effects: { money: -900,  mood: 20, energy: 15, stress: -16 } },
+  { id: "finedining",   label: "精緻餐廳大餐",   minBalance: 15000, effects: { money: -1200, mood: 18, energy: 12, stress: -14 } },
 ];
 
 export const FAILURE_ENDINGS = {
