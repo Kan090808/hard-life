@@ -1024,7 +1024,7 @@ const getProjectedActionEffects = (state, action) => {
     case "study":
       return {
         money: -getStudyCost(state.skill),
-        energy: -14,
+        energy: -20,
         mood: -4,
         stress: 5,
         skill: state.conditions.computerBroken ? 7 : 10,
@@ -1283,7 +1283,7 @@ const resolveStudy = (state, rng) => {
   return {
     effects: {
       money: -getStudyCost(state.skill),
-      energy: -14,
+      energy: -20,
       mood: -4,
       stress: 5,
       skill: finalGain,
