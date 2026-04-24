@@ -262,15 +262,15 @@ const runBadSleepFreeOptionSmoke = async (page, origin) => {
     pendingAttendance: null,
     pendingActionChoice: null,
     pendingEvent: {
-      id: "bad-sleep",
-      title: "睡眠品質很差",
+      id: "poor-sleep",
+      title: "昨晚睡眠品質很差",
       category: "健康警訊",
-      description: "昨晚翻了一整晚，天快亮才睡著，今天醒來感覺比沒睡更累。",
+      description: "你翻來覆去睡得很淺，早上起來頭很重。今天怎麼撐過去？",
       options: [
-        { id: "slow-day", text: "今天先放慢", caption: "體力 +10、壓力 -8。", requiredCash: 0 },
-        { id: "barely-standing", text: "空著肚子硬撐", caption: "體力 -8、心情 -6、壓力 +10，新增過勞風險。", requiredCash: 0 },
+        { id: "rest", text: "今天多休息", caption: "花一個時段・壓力 -8・心情 +8", requiredCash: 0 },
+        { id: "coffee", text: "喝咖啡續命", caption: "$120・壓力 +8・心情 +8", requiredCash: 120 },
       ],
-      _trigger: "dayStart",
+      _trigger: "poorSleep",
     },
     ending: null,
   });
@@ -278,18 +278,18 @@ const runBadSleepFreeOptionSmoke = async (page, origin) => {
 
   const eventDialog = page.locator("#event-dialog");
   const actionDialog = page.locator("#action-dialog");
-  const freeOptionButton = page.locator('#event-options button[data-role="event-option"][data-option-id="barely-standing"]');
+  const freeOptionButton = page.locator('#event-options button[data-role="event-option"][data-option-id="rest"]');
   const resultConfirmButton = page.locator('#action-dialog button[data-role="confirm-action-result"]');
   const takeActionButton = page.locator("#take-action-button");
 
-  await assertVisible(eventDialog, "bad sleep event dialog is visible for zero-cash run");
-  await clickAndWait(page, freeOptionButton, "free bad sleep option responds with zero cash");
-  assert.equal(await eventDialog.isVisible(), false, "bad sleep event dialog should close after taking the free option");
-  console.log("PASS bad sleep event can resolve without cash");
-  await assertVisible(actionDialog, "bad sleep resolution still surfaces in the result dialog");
-  await clickAndWait(page, resultConfirmButton, "bad sleep result dialog can be confirmed");
-  assert.equal(await takeActionButton.isDisabled(), false, "take action remains available after resolving zero-cash bad sleep event");
-  console.log("PASS zero-cash bad sleep flow does not soft-lock the run");
+  await assertVisible(eventDialog, "poor sleep event dialog is visible for zero-cash run");
+  await clickAndWait(page, freeOptionButton, "free poor sleep option responds with zero cash");
+  assert.equal(await eventDialog.isVisible(), false, "poor sleep event dialog should close after taking the free option");
+  console.log("PASS poor sleep event can resolve without cash");
+  await assertVisible(actionDialog, "poor sleep resolution still surfaces in the result dialog");
+  await clickAndWait(page, resultConfirmButton, "poor sleep result dialog can be confirmed");
+  assert.equal(await takeActionButton.isDisabled(), false, "take action remains available after resolving zero-cash poor sleep event");
+  console.log("PASS zero-cash poor sleep flow does not soft-lock the run");
 };
 
 const runLivingCostShortfallSmoke = async (page, origin) => {
