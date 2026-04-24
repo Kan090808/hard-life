@@ -153,7 +153,7 @@ const getEndingTone = (state) => (state.ending?.type === "failure" ? "danger" : 
 
 const getEndingBackground = (tone) => (tone === "danger" ? "#ffd6d2" : "#c8f5de");
 
-const createDomShareWrapper = (state, captureElement, documentLike, { version, totalPlays } = {}) => {
+const createDomShareWrapper = (state, captureElement, documentLike) => {
   const tone = getEndingTone(state);
   const width = Math.ceil(captureElement.getBoundingClientRect?.().width || captureElement.scrollWidth || 416);
   const wrapper = documentLike.createElement("section");
@@ -199,34 +199,6 @@ const createDomShareWrapper = (state, captureElement, documentLike, { version, t
   }
 
   wrapper.append(band, content);
-
-  const hasAnalytics = typeof totalPlays === "number" && !Number.isNaN(totalPlays);
-  if (version || hasAnalytics) {
-    const watermark = documentLike.createElement("div");
-    Object.assign(watermark.style, {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "6px 24px 12px",
-      fontFamily: SHARE_FONT_STACK,
-      fontSize: "13px",
-      lineHeight: "1.4",
-      color: "rgba(24, 28, 38, 0.45)",
-      borderTop: "1px solid rgba(24, 28, 38, 0.08)",
-      marginTop: "8px",
-    });
-    const leftEl = documentLike.createElement("span");
-    if (hasAnalytics) {
-      leftEl.textContent = `大家已經玩了 ${totalPlays.toLocaleString()} 次`;
-    }
-    const rightEl = documentLike.createElement("span");
-    if (version) {
-      rightEl.textContent = version;
-    }
-    watermark.append(leftEl, rightEl);
-    wrapper.append(watermark);
-  }
-
   return wrapper;
 };
 
@@ -294,16 +266,15 @@ const serializeDomShareSvg = (wrapper, cssText, width, height, documentLike) => 
   return new XMLSerializer().serializeToString(svg);
 };
 
-const renderDomShareImage = async (state, url, captureElement, documentLike, { version, totalPlays } = {}) => {
+const renderDomShareImage = async (state, url, captureElement, documentLike) => {
   if (!captureElement?.cloneNode || !documentLike?.createElementNS || !documentLike?.body) {
     throw new Error("dom-capture-unavailable");
   }
 
-  const extras = { version, totalPlays };
-  const measureWrapper = createDomShareWrapper(state, captureElement, documentLike, extras);
+  const measureWrapper = createDomShareWrapper(state, captureElement, documentLike);
   const { width: sourceWidth, height: sourceHeight } = await measureDomShareWrapper(measureWrapper, documentLike);
   const cssText = collectDocumentStyles(documentLike);
-  const svgWrapper = createDomShareWrapper(state, captureElement, documentLike, extras);
+  const svgWrapper = createDomShareWrapper(state, captureElement, documentLike);
   const svgText = serializeDomShareSvg(svgWrapper, cssText, sourceWidth, sourceHeight, documentLike);
   const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
   const scale = SHARE_DOM_IMAGE_WIDTH / sourceWidth;
@@ -539,7 +510,7 @@ const renderShareImage = async (state, url, overrides = {}) => {
 
   if (overrides.captureElement) {
     try {
-      return await renderDomShareImage(state, url, overrides.captureElement, document, { version, totalPlays });
+      return await renderDomShareImage(state, url, overrides.captureElement, document);
     } catch (error) {
       console.warn("[share:dom-capture-fallback]", {
         name: error?.name ?? "Error",

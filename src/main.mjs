@@ -1703,6 +1703,10 @@ const renderEndingDialog = () => {
       <span class="ending-section-label">下次可以試試</span>
       <p>${details.advice || "這輪撐得不錯，下次可以挑戰更高存款或更低壓力。"}</p>
     </section>
+    <div class="ending-meta">
+      <span>${(() => { const n = uiState.analyticsSummary?.totalStarts; return typeof n === "number" && !Number.isNaN(n) ? `大家已經玩了 ${n.toLocaleString()} 次` : ""; })()}</span>
+      <span>${APP_VERSION}</span>
+    </div>
   `;
 
   uiState.shareCapabilities = detectShareCapabilities();
