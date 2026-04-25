@@ -908,6 +908,7 @@ const refreshDailyBoards = (state, rng) => {
 };
 
 const getHasScheduledJob = (state) => Boolean(getJob(state).requiresAttendance);
+const shouldBlockGigWorkAction = (state) => getHasScheduledJob(state) && state.jobLevel >= 3;
 
 const getActionLogLabel = (_state, action) => action.label;
 
@@ -1068,7 +1069,9 @@ const getActionRequiredCash = (state, actionId) => {
     return 0;
   }
 
-  const opensChoice = ["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(state));
+  const opensChoice =
+    ["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special) &&
+    !(action.id === "work" && shouldBlockGigWorkAction(state));
   if (opensChoice) {
     return 0;
   }
@@ -1108,7 +1111,7 @@ const getActionAvailability = (state, action, { ignoreFlowGuards = false } = {})
     return { available: false, reason: "今天的時段已經不夠了，該睡了。" };
   }
 
-  if (action.id === "work" && getHasScheduledJob(state)) {
+  if (action.id === "work" && shouldBlockGigWorkAction(state)) {
     return { available: false, reason: "你現在有固定工作，這格會改成離職。" };
   }
 
@@ -2058,7 +2061,9 @@ const resolveAction = (state, actionId, rng) => {
     return maybeTriggerEventOrContinue(nextState, rng);
   }
 
-  const opensChoice = ["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special) && !(action.id === "work" && getHasScheduledJob(nextState));
+  const opensChoice =
+    ["workChoice", "rewardChoice", "appeaseLandlordChoice"].includes(action.special) &&
+    !(action.id === "work" && shouldBlockGigWorkAction(nextState));
   if (opensChoice) {
     return openActionChoice(nextState, action.id);
   }
@@ -2232,7 +2237,7 @@ export const createInitialState = (rng = Math.random) => {
 
 export const getActionViewModels = (state) =>
   Object.values(ACTIONS)
-    .filter((action) => (getHasScheduledJob(state) ? action.id !== "work" && action.id !== "jobSearch" : action.id !== "resign"))
+    .filter((action) => (shouldBlockGigWorkAction(state) ? action.id !== "work" && action.id !== "jobSearch" : action.id !== "resign"))
     .filter((action) => action.id !== "overtime")
     .filter((action) => action.id !== "repairScooter" || state.conditions.scooterBroken)
     .filter((action) => action.id !== "repairComputer" || state.conditions.computerBroken)
@@ -2274,8 +2279,7 @@ export const getActionViewModels = (state) =>
       };
     })
     .sort((left, right) => {
-      const hasScheduledJob = getHasScheduledJob(state);
-      const order = hasScheduledJob
+      const order = shouldBlockGigWorkAction(state)
         ? ["resign", "overtime", "study", "reward", "scrollPhone", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
         : ["work", "jobSearch", "overtime", "study", "reward", "scrollPhone", "repairScooter", "repairComputer", "appeaseLandlord", "network"];
       return order.indexOf(left.id) - order.indexOf(right.id);
