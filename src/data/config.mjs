@@ -149,7 +149,7 @@ export const JOBS = {
   2: {
     level: 2,
     name: "穩定兼職",
-    workIncome: 1100,
+    workIncome: 800,
     overtimeIncome: null,
     tagline: "固定兼職會吃掉半天，收入普通但比臨時工穩。",
     badge: "Lv.2 穩定兼職",
@@ -157,8 +157,8 @@ export const JOBS = {
     requiresAttendance: true,
     leaveThreshold: 35,
     attendanceEffects: {
-      money: 1100,
-      energy: -18,
+      money: 800,
+      energy: -30,
       mood: -5,
       stress: 7,
     },
@@ -172,7 +172,7 @@ export const JOBS = {
   3: {
     level: 3,
     name: "正職新人",
-    workIncome: 1550,
+    workIncome: 1200,
     overtimeIncome: 450,
     tagline: "收入變穩，但公司會先吃掉你大半天，還可能臨時要你加班。",
     badge: "Lv.3 正職新人",
@@ -180,7 +180,7 @@ export const JOBS = {
     requiresAttendance: true,
     leaveThreshold: 45,
     attendanceEffects: {
-      money: 1550,
+      money: 1200,
       energy: -30,
       mood: -12,
       stress: 22,
