@@ -1,0 +1,39 @@
+name: Sync PostHog Analytics Summary
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sync PostHog data
+        env:
+          POSTHOG_HOST: https://us.posthog.com
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          ANALYTICS_TIMEZONE: Asia/Taipei
+        run: node scripts/sync-posthog.mjs
+
+      - name: Push to analytics-data branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan analytics-data
+          git rm -rf --cached . --quiet
+          git add analytics-summary.json
+          git commit -m "sync: PostHog analytics summary"
+          git push origin HEAD:analytics-data --force

@@ -63,6 +63,9 @@ const getSessionId = () => getOrCreateStoredId(SESSION_ID_KEY, "session", "sessi
 
 const getPosthog = () => getGlobal().posthog;
 
+const getSummaryUrl = () =>
+  "https://raw.githubusercontent.com/kan090808/hard-life/analytics-data/analytics-summary.json";
+
 const getCurrentUrl = () => {
   if (typeof window === "undefined") {
     return "";
@@ -279,7 +282,19 @@ export const trackGameOver = ({ runId, endingId = "", endingType = "", day = 1, 
 };
 
 export const fetchAnalyticsSummary = async () => {
-  return null;
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const response = await fetch(getSummaryUrl(), { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return await response.json();
+  } catch {
+    return null;
+  }
 };
 
 export const isAnalyticsCollectionEnabled = () => analyticsEnabled;
