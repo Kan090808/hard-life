@@ -38,6 +38,12 @@ const REPEAT_EVENT_RISK = 0.16;
 const BASE_EVENT_TRIGGER_RATE = 0.22;
 const MAX_EVENT_TRIGGER_RATE = 0.82;
 const DAY_START_EVENT_RATE = 0.38;
+const TRAVEL_COST = 15000;
+const TRAVEL_FAST_FORWARD_DAYS = 5;
+const TRAVEL_PHONE_RATE_STEP = 0.04;
+const TRAVEL_MONEY_BONUS_THRESHOLD = 10000;
+const TRAVEL_MONEY_RATE_BONUS = 0.18;
+const TRAVEL_EVENT_MAX_RATE = 0.46;
 const TIME_SLOTS = [
   { id: "morning", label: "早上" },
   { id: "afternoon", label: "下午" },
@@ -196,6 +202,7 @@ const clampStat = (key, value) => {
 };
 
 const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+const randomInt = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
 const incrementSummaryStat = (state, key, amount = 1) => {
   state.summaryStats[key] = (state.summaryStats[key] ?? 0) + amount;
 };
@@ -579,8 +586,11 @@ const buildEndingRecords = (state) => {
   append(summaryStats.computerRepairedTimes > 0, `修過 ${summaryStats.computerRepairedTimes} 次電腦`);
   append(summaryStats.networkTimes > 0, `社交拜訪 ${summaryStats.networkTimes} 次`);
   append(summaryStats.rewardTimes > 0, `犒賞自己 ${summaryStats.rewardTimes} 次`);
+  append(summaryStats.phoneScrollTimes > 0, `滑手機 ${summaryStats.phoneScrollTimes} 次`);
+  append(summaryStats.travelIdeaTimes > 0, `想出國 ${summaryStats.travelIdeaTimes} 次`);
+  append(summaryStats.travelAbroadTimes > 0, `真的出國 ${summaryStats.travelAbroadTimes} 次`);
 
-  return records.slice(0, 6);
+  return records.slice(0, 8);
 };
 
 const buildEndingAdvice = (state) => {
@@ -1013,6 +1023,7 @@ const updateSummaryActionCounts = (state, actionId) => {
   if (actionId === "study") incrementSummaryStat(state, "studyTimes");
   if (actionId === "reward") incrementSummaryStat(state, "rewardTimes");
   if (actionId === "network") incrementSummaryStat(state, "networkTimes");
+  if (actionId === "scrollPhone") incrementSummaryStat(state, "phoneScrollTimes");
   if (actionId === "repairScooter") incrementSummaryStat(state, "scooterRepairedTimes");
   if (actionId === "repairComputer") incrementSummaryStat(state, "computerRepairedTimes");
 };
@@ -1039,6 +1050,8 @@ const getProjectedActionEffects = (state, action) => {
       return { money: -180, mood: 12, stress: -6 };
     case "resign":
       return { mood: state.jobLevel === 3 ? 8 : 4, stress: state.jobLevel === 3 ? -10 : -6, money: state.jobLevel === 3 ? -600 : -250 };
+    case "scrollPhone":
+      return {};
     default: {
       const effects = cloneEffects(action.effects);
       if (action.incomeKey) {
@@ -1331,6 +1344,22 @@ const resolveNetwork = (state, rng) => {
   };
 };
 
+const resolveScrollPhone = (_state, rng) => {
+  const moodImproves = rng() < 0.8;
+  const mood = moodImproves ? randomInt(rng, 3, 8) : -randomInt(rng, 3, 6);
+  const stress = randomInt(rng, -8, 5);
+
+  return {
+    effects: {
+      mood,
+      stress,
+    },
+    log: moodImproves
+      ? "滑手機消磨時間，至少人生還能有點樂趣。"
+      : "滑手機舒緩生活壓力，但內心感覺越來越空虛。",
+  };
+};
+
 const resolveResignation = (state) => ({
   effects: {
     jobLevel: 1 - state.jobLevel,
@@ -1496,6 +1525,87 @@ const maybeTriggerDayStartEvent = (state, rng) => {
   return state;
 };
 
+const getTravelIdeaRate = (state) => {
+  const phoneRate = Math.max(0, (state.summaryStats.phoneScrollTimes ?? 0) - 1) * TRAVEL_PHONE_RATE_STEP;
+  const moneyRate = state.money > TRAVEL_MONEY_BONUS_THRESHOLD ? TRAVEL_MONEY_RATE_BONUS : 0;
+  return Math.min(TRAVEL_EVENT_MAX_RATE, phoneRate + moneyRate);
+};
+
+const getTravelFastForwardDayCount = (state) => Math.min(TRAVEL_FAST_FORWARD_DAYS, Math.max(0, state.totalDays - state.day));
+
+const getTravelRentEstimate = (state, dayCount) => {
+  const rentDays = RENT_DAYS.filter((rentDay) => rentDay >= state.day && rentDay < state.day + dayCount);
+  if (rentDays.length === 0) {
+    return 0;
+  }
+  return rentDays.length * RENT_AMOUNT + (state.rentDebt ?? 0);
+};
+
+const getTravelCostEstimate = (state) => {
+  const dayCount = getTravelFastForwardDayCount(state);
+  const livingCost = DAILY_LIVING_COST * dayCount;
+  const rentCost = getTravelRentEstimate(state, dayCount);
+  return {
+    dayCount,
+    baseCost: TRAVEL_COST,
+    livingCost,
+    rentCost,
+    totalCost: TRAVEL_COST + livingCost + rentCost,
+  };
+};
+
+const openTravelIdeaEvent = (state) => {
+  const travelCost = getTravelCostEstimate(state);
+  recordDayStartEventTriggeredToday(state, "travel-idea");
+  incrementSummaryStat(state, "travelIdeaTimes");
+  beginTurnLogIfNeeded(state);
+  pushLine(state, "旅遊的念頭突然冒出來：你很想暫時離開這個月。");
+  state.pendingEvent = {
+    id: "travel-idea",
+    title: "想去東京",
+    category: "生活事件",
+    description: "你滑到東京街景和深夜拉麵店，突然很想把自己丟到成田機場。機票、住宿、交通和吃飯加起來不便宜，但想到可以在陌生城市走幾天，心裡就開始動搖。",
+    options: [
+      {
+        id: "travel-abroad",
+        text: "飛去東京散心",
+        caption: `預估總成本 $${travelCost.totalCost.toLocaleString()}（旅費 $${travelCost.baseCost.toLocaleString()} + 生活費 $${travelCost.livingCost.toLocaleString()} + 房租 $${travelCost.rentCost.toLocaleString()}）・快轉 ${travelCost.dayCount} 天`,
+        requiredCash: TRAVEL_COST,
+        resolution: {
+          effects: { money: -TRAVEL_COST, mood: 35, stress: -35 },
+          log: "你真的把東京機票刷下去了。幾天裡你走過車站、便利商店和夜晚的街角，生活沒有被解決，但心裡像終於被打開一扇窗。",
+        },
+      },
+      {
+        id: "give-up-travel",
+        text: "算了，沒錢",
+        caption: "心情 -25・壓力 +8",
+        requiredCash: 0,
+        resolution: {
+          effects: { mood: -25, stress: 8 },
+          log: "你把東京旅遊頁面關掉。不是不想去，是現實沒有讓你任性的餘裕。",
+        },
+      },
+    ],
+    _trigger: "travelIdea",
+  };
+  state.phase = PHASES.EVENT;
+  return state;
+};
+
+const maybeTriggerTravelIdeaAtDayStart = (state, rng) => {
+  if (state.day <= 1 || state.dayPlan.dayStartEventIdsTriggeredToday?.includes("travel-idea")) {
+    return null;
+  }
+
+  const rate = getTravelIdeaRate(state);
+  if (rate <= 0 || rng() >= rate) {
+    return null;
+  }
+
+  return openTravelIdeaEvent(state);
+};
+
 const continueAfterAttendance = (state, rng) => {
   if (state.activeCaseProject) {
     const nextState = applyActiveCaseWork(state);
@@ -1524,6 +1634,11 @@ const startDayFlow = (state, rng) => {
   if (state.pendingPoorSleep) {
     state.pendingPoorSleep = false;
     return openPoorSleepDialog(state);
+  }
+
+  const travelIdea = maybeTriggerTravelIdeaAtDayStart(state, rng);
+  if (travelIdea) {
+    return travelIdea;
   }
 
   if (!getHasScheduledJob(state)) {
@@ -1660,6 +1775,9 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
     case "network":
       resolution = resolveNetwork(state, rng);
       break;
+    case "scrollPhone":
+      resolution = resolveScrollPhone(state, rng);
+      break;
     case "resign":
       resolution = resolveResignation(state);
       break;
@@ -1674,7 +1792,7 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
 
   resolution = {
     ...resolution,
-    effects: applyRepeatPenaltyToEffects(resolution.effects, repeatPenalty),
+    effects: action.special === "scrollPhone" ? cloneEffects(resolution.effects) : applyRepeatPenaltyToEffects(resolution.effects, repeatPenalty),
   };
 
   appendResolution(state, resolution);
@@ -1683,7 +1801,7 @@ const resolveBaseAction = (state, actionId, rng, repeatPenalty) => {
     .filter(Boolean)
     .forEach((penalty) => appendResolution(state, penalty));
 
-  if (repeatPenalty.repeatIndex > 1) {
+  if (repeatPenalty.repeatIndex > 1 && action.special !== "scrollPhone") {
     pushLine(state, `同樣的事做到第 ${repeatPenalty.repeatIndex} 次，身體開始抗議，收穫也不像第一次那麼乾脆。`);
   }
 
@@ -1740,6 +1858,32 @@ const applyRecurringCosts = (state, rng) => {
     },
   });
   pushLine(state, `房租繳不出來，這次欠下的 $${RENT_AMOUNT} 會疊到下次租金。欠租累積為 $${state.rentDebt}。`);
+};
+
+const fastForwardTravelDays = (state, rng) => {
+  let skippedDays = 0;
+
+  while (skippedDays < TRAVEL_FAST_FORWARD_DAYS && state.day < state.totalDays) {
+    pushLine(state, `出國第 ${skippedDays + 1} 天，生活還是照常計費。`);
+    updateHistoryAtEndOfDay(state);
+    applyRecurringCosts(state, rng);
+
+    const failure = detectFailure(state);
+    if (failure) {
+      setEnding(state, { type: "failure", ...failure }, PHASES.GAME_OVER);
+      commitTurnLog(state);
+      return state;
+    }
+
+    state.day += 1;
+    skippedDays += 1;
+    initializeDayPlan(state);
+  }
+
+  refreshDailyBoards(state, rng);
+  unlockMilestones(state);
+  pushLine(state, `你回來時，月曆已經往後翻了 ${skippedDays} 天。`);
+  return state;
 };
 
 const eligibleAfterActionEvents = (state) =>
@@ -1957,6 +2101,11 @@ const resolveAction = (state, actionId, rng) => {
     return nextState;
   }
 
+  if (actionId === "scrollPhone") {
+    nextState.phase = PHASES.READY;
+    return nextState;
+  }
+
   return maybeTriggerEventOrContinue(nextState, rng, repeatPenalty);
 };
 
@@ -1992,6 +2141,9 @@ const resolveEvent = (state, optionId, rng) => {
   if (nextState.pendingEvent.id === "freelance-offer" && optionId !== "decline") {
     incrementSummaryStat(nextState, "freelanceAcceptedTimes");
   }
+  if (nextState.pendingEvent.id === "travel-idea") {
+    incrementSummaryStat(nextState, optionId === "travel-abroad" ? "travelAbroadTimes" : "travelGiveUpTimes");
+  }
   nextState.pendingEvent = null;
 
   const failure = detectFailure(nextState);
@@ -1999,6 +2151,17 @@ const resolveEvent = (state, optionId, rng) => {
     setEnding(nextState, { type: "failure", ...failure }, PHASES.GAME_OVER);
     commitTurnLog(nextState);
     return nextState;
+  }
+
+  if (trigger === "travelIdea") {
+    if (optionId === "travel-abroad") {
+      fastForwardTravelDays(nextState, rng);
+      if (nextState.ending) {
+        return nextState;
+      }
+      return startDayFlow(nextState, rng);
+    }
+    return maybeTriggerDayStartEvent(nextState, rng);
   }
 
   if (trigger === "dayStart") {
@@ -2089,6 +2252,8 @@ export const getActionViewModels = (state) =>
       } else if (action.id === "study") {
         const skillRange = state.conditions.computerBroken ? "技能 +1~14（電腦故障）" : "技能 +6~14";
         tag = `課程費 $${getStudyCost(state.skill)} · ${skillRange}`;
+      } else if (action.id === "scrollPhone") {
+        tag = "80% 心情變好";
       } else if (action.incomeKey) {
         tag = `今日收入 $${currentJob[action.incomeKey]}`;
       }
@@ -2104,7 +2269,9 @@ export const getActionViewModels = (state) =>
         tag,
         energyPreview,
         repeatPenaltyPreview:
-          action.id === "work" && repeatPenalty.repeatIndex > 1
+          action.id === "scrollPhone"
+            ? "不耗時段、不耗體力。"
+            : action.id === "work" && repeatPenalty.repeatIndex > 1
             ? `第 ${repeatPenalty.repeatIndex} 次打工：薪水不打折，但體力和壓力懲罰會加重。`
             : getRepeatPenaltyText(repeatPenalty),
         disabled: !availability.available,
@@ -2114,8 +2281,8 @@ export const getActionViewModels = (state) =>
     .sort((left, right) => {
       const hasScheduledJob = getHasScheduledJob(state);
       const order = hasScheduledJob
-        ? ["resign", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
-        : ["work", "jobSearch", "overtime", "study", "reward", "repairScooter", "repairComputer", "appeaseLandlord", "network"];
+        ? ["resign", "overtime", "study", "reward", "scrollPhone", "repairScooter", "repairComputer", "appeaseLandlord", "network"]
+        : ["work", "jobSearch", "overtime", "study", "reward", "scrollPhone", "repairScooter", "repairComputer", "appeaseLandlord", "network"];
       return order.indexOf(left.id) - order.indexOf(right.id);
     });
 
