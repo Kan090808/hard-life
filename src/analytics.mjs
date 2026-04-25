@@ -1,11 +1,14 @@
-const MEASUREMENT_ID = "G-HK303NGM3E";
+const POSTHOG_API_KEY = "phc_kwyfgfiDVytcRtUshq9buycVsfJKBHz4nfoxMFQYh4ws";
+const POSTHOG_API_HOST = "https://us.i.posthog.com";
 const PRODUCTION_HOSTS = new Set(["kan090808.github.io"]);
 const PLAYER_ID_KEY = "hard-life-player-id";
 const SESSION_ID_KEY = "hard-life-session-id";
 
 let analyticsEnabled = false;
 let analyticsReady = false;
-let analyticsScriptPromise = null;
+let posthogEnabled = false;
+let posthogReady = false;
+let posthogScriptPromise = null;
 let appVersion = "dev";
 let pendingEvents = [];
 
@@ -58,24 +61,50 @@ const isProductionEnvironment = () => {
 const getPlayerId = () => getOrCreateStoredId(PLAYER_ID_KEY, "player", "local");
 const getSessionId = () => getOrCreateStoredId(SESSION_ID_KEY, "session", "session");
 
-const getSummaryUrl = () =>
-  "https://raw.githubusercontent.com/kan090808/hard-life/analytics-data/analytics-summary.json";
+const getPosthog = () => getGlobal().posthog;
 
-const getGtag = () => getGlobal().gtag;
+const getCurrentUrl = () => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.location.href;
+};
+
+const getReferrerHost = () => {
+  if (typeof document === "undefined" || !document.referrer) {
+    return "";
+  }
+  try {
+    return new URL(document.referrer).hostname;
+  } catch {
+    return "";
+  }
+};
+
+const getRuntimeAnalyticsConfig = () => {
+  const runtimeConfig = getGlobal().HARD_LIFE_ANALYTICS ?? {};
+  return {
+    posthogKey: runtimeConfig.posthogKey ?? POSTHOG_API_KEY,
+    posthogHost: runtimeConfig.posthogHost ?? POSTHOG_API_HOST,
+  };
+};
 
 const flushPendingEvents = () => {
   if (!analyticsReady) {
     return;
   }
-  const gtag = getGtag();
-  if (typeof gtag !== "function") {
-    return;
-  }
 
   pendingEvents.forEach(({ name, params }) => {
-    gtag("event", name, params);
+    sendEvent(name, params);
   });
   pendingEvents = [];
+};
+
+const sendEvent = (name, params) => {
+  const posthog = getPosthog();
+  if (posthogEnabled && posthogReady && typeof posthog?.capture === "function") {
+    posthog.capture(name, params);
+  }
 };
 
 const emitEvent = (name, params = {}) => {
@@ -88,27 +117,30 @@ const emitEvent = (name, params = {}) => {
     app_version: appVersion,
     player_id: getPlayerId(),
     session_id: getSessionId(),
+    $current_url: getCurrentUrl(),
+    $host: window.location.host,
+    $pathname: window.location.pathname,
     page_path: window.location.pathname,
   };
 
-  if (!analyticsReady || typeof getGtag() !== "function") {
+  if (!analyticsReady) {
     pendingEvents.push({ name, params: payload });
     return;
   }
 
-  getGtag()("event", name, payload);
+  sendEvent(name, payload);
 };
 
-const loadAnalyticsScript = () => {
-  if (analyticsScriptPromise) {
-    return analyticsScriptPromise;
+const loadPosthogScript = (apiHost) => {
+  if (posthogScriptPromise) {
+    return posthogScriptPromise;
   }
 
-  analyticsScriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[data-ga4="${MEASUREMENT_ID}"]`);
+  posthogScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector("script[data-posthog-js]");
     if (existing) {
       if (
-        typeof getGtag() === "function" ||
+        typeof getPosthog()?.init === "function" ||
         existing.getAttribute("data-loaded") === "true" ||
         existing.readyState === "complete" ||
         existing.readyState === "loaded"
@@ -123,8 +155,9 @@ const loadAnalyticsScript = () => {
 
     const script = document.createElement("script");
     script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(MEASUREMENT_ID)}`;
-    script.dataset.ga4 = MEASUREMENT_ID;
+    script.crossOrigin = "anonymous";
+    script.src = `${apiHost.replace(".i.posthog.com", "-assets.i.posthog.com")}/static/array.js`;
+    script.dataset.posthogJs = "true";
     script.addEventListener(
       "load",
       () => {
@@ -137,7 +170,7 @@ const loadAnalyticsScript = () => {
     document.head.append(script);
   });
 
-  return analyticsScriptPromise;
+  return posthogScriptPromise;
 };
 
 export const generateRunId = () => createId("run");
@@ -145,37 +178,55 @@ export const generateRunId = () => createId("run");
 export const initAnalytics = async ({ version }) => {
   appVersion = version;
   analyticsEnabled = isProductionEnvironment();
+  const { posthogKey, posthogHost } = getRuntimeAnalyticsConfig();
+  posthogEnabled = Boolean(posthogKey);
 
-  if (!analyticsEnabled) {
+  if (!analyticsEnabled || !posthogEnabled) {
     return false;
   }
 
   try {
-    await loadAnalyticsScript();
+    await loadPosthogScript(posthogHost);
+    const posthog = getPosthog();
+    if (typeof posthog?.init !== "function") {
+      return false;
+    }
+
+    posthog.init(posthogKey, {
+      api_host: posthogHost,
+      defaults: "2026-01-30",
+      capture_pageview: false,
+      capture_pageleave: true,
+      autocapture: false,
+      person_profiles: "identified_only",
+    });
+
+    if (typeof posthog.identify === "function") {
+      posthog.identify(getPlayerId(), {
+        install_scope: "browser-local-storage",
+        app_version: version,
+      });
+    }
   } catch (error) {
-    console.warn("[analytics:script]", error);
+    console.warn("[analytics:posthog]", error);
+    posthogEnabled = false;
     return false;
   }
 
-  getGlobal().dataLayer = getGlobal().dataLayer ?? [];
-  getGlobal().gtag =
-    getGlobal().gtag ??
-    function gtag() {
-      getGlobal().dataLayer.push(arguments);
-    };
-
-  const gtag = getGtag();
-  gtag("js", new Date());
-  gtag("config", MEASUREMENT_ID, {
-    send_page_view: false,
-    user_id: getPlayerId(),
-  });
-  gtag("set", "user_properties", {
-    install_scope: "browser-local-storage",
-    app_version: version,
-  });
-
+  posthogReady = true;
   analyticsReady = true;
+  sendEvent("$pageview", {
+    app_version: appVersion,
+    player_id: getPlayerId(),
+    session_id: getSessionId(),
+    $current_url: getCurrentUrl(),
+    $host: window.location.host,
+    $pathname: window.location.pathname,
+    $referrer: document.referrer,
+    $referring_domain: getReferrerHost(),
+    title: document.title,
+    page_path: window.location.pathname,
+  });
   flushPendingEvents();
   return true;
 };
@@ -228,19 +279,7 @@ export const trackGameOver = ({ runId, endingId = "", endingType = "", day = 1, 
 };
 
 export const fetchAnalyticsSummary = async () => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const response = await fetch(getSummaryUrl(), { cache: "no-store" });
-    if (!response.ok) {
-      return null;
-    }
-    return await response.json();
-  } catch {
-    return null;
-  }
+  return null;
 };
 
 export const isAnalyticsCollectionEnabled = () => analyticsEnabled;
