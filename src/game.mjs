@@ -1680,16 +1680,11 @@ const openActionChoice = (state, actionId) => {
           : "每個時段能接的臨時工作不同，收入和體力成本也不同。",
       options: options.map((option) => {
         const adjusted = applyWorkFatigueToEffects(state, option.effects, repeatPenalty.repeatIndex);
-        const disabled = Number.isFinite(option.minEnergy) && state.energy < option.minEnergy;
         return {
           id: option.id,
           label: option.label,
-          caption: disabled
-            ? `需要體力 ${option.minEnergy}｜你現在太累，這份工做不動`
-            : `${slot?.label ?? ""}｜+$${adjusted.money ?? 0} / 體力 ${adjusted.energy ?? 0}`,
+          caption: `${slot?.label ?? ""}｜+$${adjusted.money ?? 0} / 體力 ${adjusted.energy ?? 0}`,
           requiredCash: getRequiredCashFromEffects(adjusted),
-          disabled,
-          disabledReason: disabled ? "體力不足" : "",
         };
       }),
     };

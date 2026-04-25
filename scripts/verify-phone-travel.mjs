@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createInitialState, dispatchAction, dispatchEventChoice } from "../src/game.mjs";
+import { createInitialState, dispatchAction, dispatchActionChoice, dispatchEventChoice } from "../src/game.mjs";
 
 const sequence = (...values) => {
   let index = 0;
@@ -102,5 +102,16 @@ const noTravel = dispatchEventChoice(travelPrompt, "give-up-travel", sequence(0.
 assert.equal(noTravel.summaryStats.travelGiveUpTimes, 1);
 assert.equal(noTravel.mood < travelPrompt.mood, true);
 assert.equal(noTravel.stress > travelPrompt.stress, true);
+
+const exhaustedWorkState = createStableState();
+exhaustedWorkState.energy = 5;
+exhaustedWorkState.dailyWorkOptions = [
+  { id: "market-carry", label: "菜市場搬貨", timeSlot: "morning", minEnergy: 45, effects: { money: 620, energy: -30, mood: -5, stress: 6 } },
+];
+const exhaustedChoice = dispatchAction(exhaustedWorkState, "work", sequence(0.99));
+assert.equal(exhaustedChoice.pendingActionChoice.options[0].disabled, undefined);
+const exhaustedResult = dispatchActionChoice(exhaustedChoice, "market-carry", sequence(0.99));
+assert.equal(exhaustedResult.phase, "game-over");
+assert.equal(exhaustedResult.ending.id, "collapse");
 
 console.log("Phone and travel verification passed.");
