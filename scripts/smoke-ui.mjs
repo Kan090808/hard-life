@@ -93,8 +93,6 @@ const main = async () => {
 
     await page.locator("#utility-button").click();
     await page.getByRole("button", { name: "放棄並重新開始" }).click();
-    assert.match(await page.locator("#sheet-title").textContent(), /確定放棄/);
-    await page.getByRole("button", { name: "確定放棄" }).click();
     assert.equal(await page.locator("#intro-screen").isVisible(), true);
 
     await page.evaluate(() => {
@@ -148,12 +146,15 @@ const main = async () => {
     assert.match(await page.locator("#ending-title").textContent(), /往上走|穩住|撐過|自由/);
     assert.equal(await page.locator("#ending-goal-list .ending-goal").count(), 10);
     assert.match(await page.locator("#ending-progress").textContent(), /1 \/ 10/);
-    const endingLayout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewportWidth: window.innerWidth, screenHeight: document.querySelector("#ending-screen").scrollHeight, viewportHeight: window.innerHeight }));
-    assert.equal(endingLayout.width <= endingLayout.viewportWidth, true, "ending collection must not overflow horizontally");
-    assert.equal(endingLayout.screenHeight > endingLayout.viewportHeight, true, "ending collection should remain vertically scrollable");
+    await page.locator("#ending-catalog-btn").click();
+    assert.equal(await page.locator("#ending-catalog").isVisible(), true);
+    await page.waitForSelector("#ending-goal-list");
+    const catalogLayout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewportWidth: window.innerWidth, listHeight: document.querySelector("#ending-goal-list").scrollHeight, catalogHeight: document.querySelector("#ending-catalog").clientHeight }));
+    assert.equal(catalogLayout.width <= catalogLayout.viewportWidth, true, "catalog must not overflow horizontally");
+    assert.equal(catalogLayout.listHeight > catalogLayout.catalogHeight, true, "goal list should be taller than the catalog viewport");
 
     assert.deepEqual(errors, [], `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log("Smoke UI passed at 360x640 and 430x932: period actions, luck, events, persistence, and the scrollable ending collection work.");
+    console.log("Smoke UI passed at 360x640 and 430x932: period actions, luck, events, persistence, and ending catalog dialog.");
   } finally {
     await browser?.close();
     await server.close();
