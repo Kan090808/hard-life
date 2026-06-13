@@ -1,11 +1,12 @@
 import { createInitialState, dispatchContinue, dispatchOption, getGameView, hydrateState } from "./game.mjs";
-import { GAME_COPY, RENT_AMOUNT } from "./data/config.mjs";
+import { DAILY_LIVING_COST, GAME_COPY, RENT_AMOUNT } from "./data/config.mjs";
 import { APP_VERSION } from "./version.mjs";
 import { isAudioSupported, playEndingSfx, playResultSfx, playSelectSfx, resumeAudio, setAudioEnabled, startBgm, stopBgm } from "./audio.mjs";
 import { generateRunId, initAnalytics, trackGameOver, trackGameReset, trackGameStart } from "./analytics.mjs";
 
-const SAVE_KEY = "hard-life-save-v3";
+const SAVE_KEY = "hard-life-save-v5";
 const AUDIO_KEY = "hard-life-audio-enabled";
+const ENDING_DISCOVERY_KEY = "hard-life-ending-discoveries-v1";
 
 const icons = {
   wallet: '<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19v14H6.5A2.5 2.5 0 0 1 4 16.5v-9Z"/><path d="M15 10h6v4h-6a2 2 0 1 1 0-4Z"/>',
@@ -32,6 +33,8 @@ const icons = {
   bed: '<path d="M3 5v16M21 21v-8a3 3 0 0 0-3-3H8v11M3 16h18"/><circle cx="7" cy="7" r="2"/>',
   laptop: '<path d="M5 5h14v11H5V5ZM3 20h18l-2-4H5l-2 4Z"/>',
   tools: '<path d="m14 7 3-3 3 3-3 3M4 20l9-9M5 4l4 4-3 3-4-4 3-3Z"/>',
+  phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 5h4M11 18h2"/>',
+  clover: '<path d="M12 12c-5-1-6-7-2-8 2-.5 3 1 2 4 1-4 5-5 7-2 1 3-2 5-7 6 4 1 5 5 3 7-3 2-6-1-5-7Z"/><path d="M12 12v9"/>',
 };
 
 const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? icons.spark}</svg>`;
@@ -39,9 +42,9 @@ const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const elements = Object.fromEntries(
   [
     "game-shell", "day-label", "period-label", "period-progress", "rent-button", "rent-label", "utility-button", "status-bar",
-    "money-value", "energy-value", "stress-value", "skill-value", "job-value", "context-strip", "situation-panel", "situation-kicker",
+    "money-value", "energy-value", "stress-value", "skill-value", "luck-value", "context-strip", "situation-panel", "situation-kicker",
     "situation-title", "situation-body", "result-deltas", "result-notes", "action-list", "continue-button", "intro-screen", "start-button",
-    "app-version", "ending-screen", "ending-eyebrow", "ending-title", "ending-body", "ending-stats", "ending-tags", "restart-button",
+    "app-version", "ending-screen", "ending-eyebrow", "ending-title", "ending-body", "ending-stats", "ending-tags", "ending-progress", "ending-goal-list", "restart-button",
     "copy-result-button", "sheet-backdrop", "bottom-sheet", "sheet-icon", "sheet-value", "sheet-title", "sheet-copy", "sheet-actions", "sheet-close-button",
   ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)])
 );
@@ -82,10 +85,11 @@ const load = () => {
 
 const infoFor = (id, view) => {
   const map = {
-    money: { icon: "wallet", value: `$${view.resources.money.toLocaleString()}`, title: "金錢", copy: `每天晚上會自動扣 $180 生活費。第 7、14、21 天還要處理 $${RENT_AMOUNT.toLocaleString()} 房租。` },
+    money: { icon: "wallet", value: `$${view.resources.money.toLocaleString()}`, title: "金錢", copy: `每天晚上會自動扣 $${DAILY_LIVING_COST} 生活費。第 7、14、21 天還要處理 $${RENT_AMOUNT.toLocaleString()} 房租。` },
     energy: { icon: "bolt", value: `${view.resources.energy} / 100`, title: "體力", copy: "行動會消耗體力。降到 0 時這局立刻結束；每天睡覺會恢復體力。" },
     stress: { icon: "pulse", value: `${view.resources.stress} / 100`, title: "壓力", copy: "工作和生活問題會增加壓力。到 100 時這局立刻結束。" },
     skill: { icon: "spark", value: `${view.resources.skill} / 100`, title: "技能", copy: "技能會提高找工作成功率。達到 25 後，可能出現立即結算的接案機會。" },
+    luck: { icon: "clover", value: `${view.resources.luck} / 100`, title: "運氣", copy: `普通行動目前有約 ${Math.round(view.luckRate * 100)}% 機率出現好結果。好結果後運氣 -4，壞結果後運氣 +5，降低連續極端結果。突發事件的回應不會再抽運氣。` },
     job: { icon: view.job.icon, value: view.job.badge, title: view.job.name, copy: `${view.job.description}${view.absences ? ` 目前缺勤 ${view.absences}/2 次。` : ""}` },
     trait: { icon: view.trait.icon, value: "本局特質", title: view.trait.label, copy: view.trait.description },
     rent: { icon: "home", value: view.rentLabel, title: view.rentDebt ? "目前有欠租" : "房租倒數", copy: view.rentDebt ? `你還欠 $${view.rentDebt.toLocaleString()}。下一個房租日以前沒處理，可能直接被趕走。` : `房租每 7 天自動結算一次，每次 $${RENT_AMOUNT.toLocaleString()}。` },
@@ -128,11 +132,11 @@ const closeSheet = () => {
 
 const renderContext = (view) => {
   elements.context_strip.innerHTML = "";
-  const items = [{ id: "trait", label: view.trait.label, icon: view.trait.icon }, ...view.conditions.map((item) => ({ id: item.id, label: item.shortLabel, icon: item.icon }))];
+  const items = [{ id: "job", label: view.job.name, icon: view.job.icon }, { id: "trait", label: view.trait.label, icon: view.trait.icon }, ...view.conditions.map((item) => ({ id: item.id, label: item.shortLabel, icon: item.icon }))];
   items.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = item.id === "trait" ? "context-chip trait-chip" : "context-chip problem-chip";
+    button.className = item.id === "job" ? "context-chip job-chip" : item.id === "trait" ? "context-chip trait-chip" : "context-chip problem-chip";
     button.dataset.info = item.id;
     button.innerHTML = `${svg(item.icon)}<span>${item.label}</span>`;
     elements.context_strip.append(button);
@@ -141,6 +145,8 @@ const renderContext = (view) => {
 
 const renderDecision = (view) => {
   const situation = view.situation;
+  elements.situation_panel.dataset.kind = situation.kind ?? "normal";
+  elements.situation_panel.dataset.outcome = "none";
   elements.situation_kicker.textContent = situation.kicker;
   elements.situation_title.textContent = situation.title;
   elements.situation_body.textContent = situation.body;
@@ -160,7 +166,9 @@ const renderDecision = (view) => {
 
 const renderResult = (view) => {
   const result = view.result;
-  elements.situation_kicker.textContent = "這個時段的結果";
+  elements.situation_panel.dataset.kind = result.kind ?? "normal";
+  elements.situation_panel.dataset.outcome = result.outcomeKind ?? "none";
+  elements.situation_kicker.textContent = result.kind === "event" ? "突發事件處理結果" : result.outcomeKind === "good" ? "好結果 · 這個時段" : "壞結果 · 這個時段";
   elements.situation_title.textContent = result.title;
   elements.situation_body.textContent = result.body;
   elements.result_deltas.innerHTML = result.deltas.map((delta) => `<span class="delta ${delta.value > 0 ? "positive" : "negative"}">${delta.label}</span>`).join("");
@@ -180,9 +188,20 @@ const renderEnding = (view) => {
   elements.ending_title.textContent = ending.title;
   elements.ending_body.textContent = ending.body;
   elements.ending_stats.innerHTML = [
-    ["金錢", `$${view.resources.money.toLocaleString()}`], ["體力", view.resources.energy], ["壓力", view.resources.stress], ["技能", view.resources.skill],
+    ["金錢", `$${view.resources.money.toLocaleString()}`], ["體力", view.resources.energy], ["壓力", view.resources.stress], ["技能", view.resources.skill], ["運氣", view.resources.luck], ["工作", view.job.badge],
   ].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("");
   elements.ending_tags.innerHTML = ending.details.tags.map((tag) => `<span>${tag.label}</span>`).join("");
+  let discovered = [];
+  try { discovered = JSON.parse(localStorage.getItem(ENDING_DISCOVERY_KEY)) ?? []; } catch {}
+  const discoveredIds = new Set(discovered);
+  discoveredIds.add(ending.id);
+  try { localStorage.setItem(ENDING_DISCOVERY_KEY, JSON.stringify([...discoveredIds])); } catch {}
+  elements.ending_progress.textContent = `${discoveredIds.size} / ${view.endingCatalog.length}`;
+  elements.ending_goal_list.innerHTML = view.endingCatalog.map((goal) => {
+    const isCurrent = goal.id === ending.id;
+    const isDiscovered = discoveredIds.has(goal.id);
+    return `<article class="ending-goal ${isDiscovered ? "is-discovered" : ""} ${isCurrent ? "is-current" : ""}"><div><span class="ending-goal-state">${isCurrent ? "本局達成" : isDiscovered ? "已取得" : "未取得"}</span><span class="ending-goal-difficulty">${goal.difficulty}</span></div><h4>${goal.title}</h4><p>${goal.requirement}</p></article>`;
+  }).join("");
 };
 
 const render = () => {
@@ -195,12 +214,12 @@ const render = () => {
   elements.energy_value.textContent = view.resources.energy;
   elements.stress_value.textContent = view.resources.stress;
   elements.skill_value.textContent = view.resources.skill;
-  elements.job_value.textContent = view.job.badge;
+  elements.luck_value.textContent = view.resources.luck;
   elements.status_bar.querySelector('[data-info="money"]').setAttribute("aria-label", `金錢 ${view.resources.money}，查看說明`);
   elements.status_bar.querySelector('[data-info="energy"]').setAttribute("aria-label", `體力 ${view.resources.energy}，查看說明`);
   elements.status_bar.querySelector('[data-info="stress"]').setAttribute("aria-label", `壓力 ${view.resources.stress}，查看說明`);
   elements.status_bar.querySelector('[data-info="skill"]').setAttribute("aria-label", `技能 ${view.resources.skill}，查看說明`);
-  elements.status_bar.querySelector('[data-info="job"]').setAttribute("aria-label", `工作 ${view.job.name}，查看說明`);
+  elements.status_bar.querySelector('[data-info="luck"]').setAttribute("aria-label", `運氣 ${view.resources.luck}，查看說明`);
   renderContext(view);
   setHidden(elements.intro_screen, started);
   setHidden(elements.game_shell, !started || view.screen === "ending");

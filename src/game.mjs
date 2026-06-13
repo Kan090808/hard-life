@@ -1,14 +1,18 @@
 import {
   ACTIONS,
+  COMPLETION_ENDINGS,
   CONDITIONS,
   DAILY_LIVING_COST,
   DEFAULT_PLAYER_STATE,
+  EVENT_CADENCE,
+  ENDING_CATALOG,
   FAILURE_ENDINGS,
   JOBS,
   PERIOD_COPY,
   PERIODS,
   RENT_AMOUNT,
   RENT_DAYS,
+  RANDOM_EVENTS,
   STAT_BOUNDS,
   TRAITS,
 } from "./data/config.mjs";
@@ -21,7 +25,7 @@ const currentPeriod = (state) => PERIODS[state.periodIndex];
 const currentJob = (state) => JOBS[state.jobLevel];
 
 const formatDelta = (key, value) => {
-  const labels = { money: "金錢", energy: "體力", stress: "壓力", skill: "技能" };
+  const labels = { money: "金錢", energy: "體力", stress: "壓力", skill: "技能", luck: "運氣" };
   const formatted = key === "money" ? `$${Math.abs(value).toLocaleString()}` : Math.abs(value);
   return `${labels[key]} ${value >= 0 ? "+" : "-"}${formatted}`;
 };
@@ -35,7 +39,7 @@ const previewEffects = (effects = {}) =>
 const applyEffects = (state, effects = {}) => {
   const deltas = [];
   for (const [key, rawValue] of Object.entries(effects)) {
-    if (!Number.isFinite(rawValue) || !["money", "energy", "stress", "skill"].includes(key)) continue;
+    if (!Number.isFinite(rawValue) || !["money", "energy", "stress", "skill", "luck"].includes(key)) continue;
     const before = state[key];
     const bounds = STAT_BOUNDS[key];
     state[key] = bounds ? clamp(before + rawValue, bounds.min, bounds.max) : before + rawValue;
@@ -65,7 +69,11 @@ const isAffordable = (state, actionId) => {
   return state.money >= cost;
 };
 
-const jobSearchRate = (state) => clamp(0.42 + state.skill * 0.007 + (state.traitId === "connected" ? 0.15 : 0), 0.42, 0.9);
+export const getGoodOutcomeRate = (state, actionId = "") => {
+  const traitBonus = state.traitId === "connected" && ["jobSearch", "network"].includes(actionId) ? 0.15 : 0;
+  const actionModifier = ACTIONS[actionId]?.outcomeRateModifier ?? 0;
+  return clamp(0.35 + state.luck * 0.003 + traitBonus + actionModifier, 0.15, 0.85);
+};
 
 const materializeOption = (state, actionId, overrides = {}) => {
   const action = ACTIONS[actionId];
@@ -77,27 +85,51 @@ const materializeOption = (state, actionId, overrides = {}) => {
     tone: overrides.tone ?? action.tone,
     preview:
       overrides.preview ??
-      (actionId === "jobSearch"
-        ? `${Math.round(jobSearchRate(state) * 100)}% 成功 · ${previewEffects(effects)}`
-        : previewEffects(effects)),
+      `${previewEffects(effects)}${previewEffects(effects) ? " · " : ""}好結果 ${Math.round(getGoodOutcomeRate(state, actionId) * 100)}%`,
     effects,
   };
 };
 
-const maybeCreateProblem = (state, rng) => {
-  if (activeConditionIds(state).length >= 2 || rng() >= 0.1) return null;
-  const candidates = Object.keys(CONDITIONS).filter((id) => !state.conditions[id]);
-  if (candidates.length === 0) return null;
-  const id = pick(candidates, rng);
-  state.conditions[id] = true;
-  return id;
+const materializeEventOption = (state, option) => ({
+  ...clone(option),
+  preview: previewEffects(option.effects),
+  affordable: state.money >= Math.max(0, -(option.effects?.money ?? 0)),
+});
+
+const daysSinceLastEvent = (state) => (state.lastEventDay > 0 ? state.day - state.lastEventDay : state.day - 1);
+
+const eventRateFor = (state) => {
+  const gap = daysSinceLastEvent(state);
+  if (gap < EVENT_CADENCE.minGapDays) return 0;
+  if (gap >= EVENT_CADENCE.forcedAfterDays) return 1;
+  const risingDays = Math.max(0, gap - EVENT_CADENCE.risingAfterDays + 1);
+  return Math.min(0.85, EVENT_CADENCE.baseRate + risingDays * 0.12);
+};
+
+const maybeCreateEvent = (state, rng) => {
+  if (currentPeriod(state).id !== "morning" || rng() >= eventRateFor(state)) return null;
+  const recentIds = new Set(state.eventHistory.slice(-2));
+  const candidates = RANDOM_EVENTS.filter((event) => !recentIds.has(event.id));
+  const event = clone(pick(candidates.length ? candidates : RANDOM_EVENTS, rng));
+  const options = event.options.map((option) => materializeEventOption(state, option)).filter((option) => option.affordable);
+  state.lastEventDay = state.day;
+  return {
+    kind: "event",
+    eventId: event.id,
+    kicker: `突發事件 · Day ${state.day}`,
+    title: event.title,
+    body: event.body,
+    periodId: "morning",
+    scheduledWork: false,
+    options: options.slice(0, 3),
+  };
 };
 
 const addUnique = (options, option) => {
   if (option && !options.some((entry) => entry.id === option.id)) options.push(option);
 };
 
-const buildOptions = (state, rng, problemCreated) => {
+const buildOptions = (state, rng) => {
   const options = [];
   const period = currentPeriod(state);
   const job = currentJob(state);
@@ -107,42 +139,57 @@ const buildOptions = (state, rng, problemCreated) => {
     addUnique(options, materializeOption(state, "payDebt", { preview: `金錢 -$${state.rentDebt.toLocaleString()} · 清除欠租` }));
   }
 
-  const problemId = problemCreated ?? activeConditionIds(state)[0];
-  if (problemId === "scooterBroken") {
+  const problemId = activeConditionIds(state)[0];
+  if (period.id === "afternoon" && problemId === "scooterBroken") {
     if (isAffordable(state, "repairScooter")) addUnique(options, materializeOption(state, "repairScooter", { preview: `${previewEffects(getActionEffects(state, "repairScooter"))} · 清除故障` }));
     else addUnique(options, materializeOption(state, "workaround", { label: "先搭車撐過去" }));
   }
-  if (problemId === "computerBroken") {
+  if (period.id === "afternoon" && problemId === "computerBroken") {
     if (isAffordable(state, "repairComputer")) addUnique(options, materializeOption(state, "repairComputer", { preview: `${previewEffects(getActionEffects(state, "repairComputer"))} · 清除故障` }));
     else addUnique(options, materializeOption(state, "workaround", { label: "先借別人的電腦" }));
   }
 
-  if (scheduledWork) addUnique(options, materializeOption(state, "work"));
+  if (scheduledWork) {
+    const label = state.jobLevel === 1 ? "去超商排班" : "進辦公室打卡";
+    addUnique(options, materializeOption(state, "work", { label }));
+  }
 
-  const candidates = [];
-  if (state.jobLevel === 0) candidates.push("gig", "jobSearch");
-  else candidates.push("gig");
-  if (state.jobLevel < 2) candidates.push("jobSearch");
-  candidates.push("rest", "study", "meal", "walk", "network");
-  if (state.skill >= 25 && (state.freelanceLead || rng() < (state.traitId === "connected" ? 0.55 : 0.28))) candidates.unshift("freelance");
+  const candidates = Object.values(ACTIONS)
+    .filter((action) => action.periods?.includes(period.id))
+    .map((action) => action.id)
+    .filter((id) => !["work", "payDebt", "repairScooter", "repairComputer", "workaround"].includes(id));
+  if (state.jobLevel > 0) {
+    const tempWorkIndex = candidates.indexOf("tempWork");
+    if (tempWorkIndex >= 0) candidates.splice(tempWorkIndex, 1);
+  }
+  if (state.jobLevel >= 2) {
+    const gigIndex = candidates.indexOf("gig");
+    if (gigIndex >= 0) candidates.splice(gigIndex, 1);
+  }
+  if (state.jobLevel >= 2 || (state.jobLevel === 1 && state.skill < 25)) {
+    const jobSearchIndex = candidates.indexOf("jobSearch");
+    if (jobSearchIndex >= 0) candidates.splice(jobSearchIndex, 1);
+  }
+  if (state.skill < 25 || (!state.freelanceLead && rng() >= (state.traitId === "connected" ? 0.55 : 0.28))) {
+    const freelanceIndex = candidates.indexOf("freelance");
+    if (freelanceIndex >= 0) candidates.splice(freelanceIndex, 1);
+  }
 
-  const periodPreference = {
-    morning: ["jobSearch", "study", "gig", "network", "rest", "meal", "walk"],
-    afternoon: ["gig", "study", "jobSearch", "meal", "rest", "network", "walk"],
-    evening: ["rest", "study", "freelance", "walk", "meal", "network", "gig"],
-  }[period.id];
-
-  const ordered = [...new Set([...periodPreference, ...candidates])].filter((id) => candidates.includes(id));
-  const offset = Math.floor(rng() * Math.max(1, ordered.length));
-  const rotated = [...ordered.slice(offset), ...ordered.slice(0, offset)];
-  for (const actionId of rotated) {
+  const offset = Math.floor(rng() * Math.max(1, candidates.length));
+  const ordered = [...candidates.slice(offset), ...candidates.slice(0, offset)];
+  for (const actionId of ordered) {
     if (options.length >= 3) break;
     if (!isAffordable(state, actionId)) continue;
     if (actionId === "freelance" && state.skill < 25) continue;
     addUnique(options, materializeOption(state, actionId));
   }
 
-  for (const fallback of ["rest", "walk", "gig"]) {
+  const fallbackByPeriod = {
+    morning: ["breakfast", "lifeAdmin", "jobSearch"],
+    afternoon: state.jobLevel === 0 ? ["meal", "library", "tempWork"] : state.jobLevel === 1 ? ["meal", "library", "gig"] : ["meal", "library"],
+    evening: ["rest", "walk", "study"],
+  }[period.id];
+  for (const fallback of fallbackByPeriod) {
     if (options.length >= 3) break;
     addUnique(options, materializeOption(state, fallback));
   }
@@ -150,13 +197,13 @@ const buildOptions = (state, rng, problemCreated) => {
   return { options: options.slice(0, 3), scheduledWork };
 };
 
-const getSituationCopy = (state, rng, problemCreated) => {
+const getSituationCopy = (state, rng) => {
   if (state.rentDebt > 0) {
     return { kicker: "欠租還在", title: `你還欠著 $${state.rentDebt.toLocaleString()}`, body: "下一個房租日以前沒解決，這局就會直接結束。" };
   }
-  const problemId = problemCreated ?? activeConditionIds(state)[0];
-  if (problemId === "scooterBroken") return { kicker: "生活出狀況", title: "機車發不動了", body: "出門工作會更累。現在修掉，還是先想辦法撐過去？" };
-  if (problemId === "computerBroken") return { kicker: "生活出狀況", title: "電腦突然罷工", body: "學習和接案都會受影響。修理很貴，不修也有代價。" };
+  const problemId = activeConditionIds(state)[0];
+  if (currentPeriod(state).id === "afternoon" && problemId === "scooterBroken") return { kicker: "下午跑腿", title: "機車還在等你處理", body: "現在可以牽去機車行，也可以繼續靠大眾運輸撐過去。" };
+  if (currentPeriod(state).id === "afternoon" && problemId === "computerBroken") return { kicker: "下午跑腿", title: "筆電還不能正常使用", body: "送修會花掉一筆錢，不處理則會繼續影響晚上的學習和接案。" };
   const job = currentJob(state);
   if (job.scheduledPeriod === currentPeriod(state).id) {
     return { kicker: `${currentPeriod(state).label} · ${job.badge}`, title: "今天這個時段要上班", body: "去上班能拿到固定收入；選別的事會記一次缺勤。" };
@@ -166,14 +213,19 @@ const getSituationCopy = (state, rng, problemCreated) => {
 };
 
 const preparePeriod = (state, rng) => {
-  const problemCreated = maybeCreateProblem(state, rng);
-  const { options, scheduledWork } = buildOptions(state, rng, problemCreated);
-  state.currentSituation = {
-    ...getSituationCopy(state, rng, problemCreated),
-    periodId: currentPeriod(state).id,
-    scheduledWork,
-    options,
-  };
+  const eventSituation = maybeCreateEvent(state, rng);
+  if (eventSituation) {
+    state.currentSituation = eventSituation;
+  } else {
+    const { options, scheduledWork } = buildOptions(state, rng);
+    state.currentSituation = {
+      kind: "normal",
+      ...getSituationCopy(state, rng),
+      periodId: currentPeriod(state).id,
+      scheduledWork,
+      options,
+    };
+  }
   state.screen = "decision";
   state.lastResult = null;
   state.pendingAdvance = null;
@@ -193,21 +245,21 @@ const endingDetails = (state) => ({
     { label: state.rentDebt > 0 ? "帶著欠租撐完" : "房租有處理" },
   ],
   summaryLines: [`最後留下 $${state.money.toLocaleString()}。`, `技能 ${state.skill}，壓力 ${state.stress}。`],
-  records: [`上班 ${state.summary.jobsWorked} 次`, `找工作 ${state.summary.jobSearches} 次`, `接案 ${state.summary.freelanceJobs} 次`],
+  records: [`好結果 ${state.summary.goodOutcomes} 次`, `壞結果 ${state.summary.badOutcomes} 次`, `處理突發事件 ${state.summary.eventsTriggered} 次`],
   advice: state.stress > 70 ? "下次少硬撐幾次，月底會更穩。" : "你已經找到一條能活下來的節奏。",
 });
 
 export const evaluateEnding = (state) => {
-  let ending;
-  if (state.skill >= 50 && state.summary.freelanceJobs >= 3) {
-    ending = { id: "free-life", type: "success", title: "自由開始有了形狀", body: "你還沒完全逃離工作，但已經有能力自己接住機會。" };
-  } else if (state.jobLevel === 2 && state.skill >= 30) {
-    ending = { id: "career-shift", type: "success", title: "總算往上走了一格", body: "正職仍然辛苦，但你不再只是原地窮忙。" };
-  } else if (state.money >= 4500 && state.stress <= 65 && state.rentDebt === 0) {
-    ending = { id: "stable-life", type: "success", title: "這個月穩住了", body: "沒有奇蹟，但錢、工作和身體都還在。" };
-  } else {
-    ending = { id: "busy-cycle", type: "success", title: "又撐過一個月", body: "日子沒有變輕鬆，你至少還站著。" };
-  }
+  const matches = {
+    "life-turnaround": state.money >= 10000 && state.skill >= 75 && state.energy >= 70 && state.stress <= 30 && state.jobLevel === 2 && state.rentDebt === 0 && state.summary.rentMissed === 0,
+    "independent-pro": state.skill >= 75 && state.summary.freelanceJobs >= 6 && state.money >= 6500 && state.stress <= 55 && state.rentDebt === 0,
+    "balanced-rise": state.money >= 6000 && state.skill >= 50 && state.energy >= 60 && state.stress <= 40 && state.rentDebt === 0,
+    "free-life": state.skill >= 65 && state.summary.freelanceJobs >= 4 && state.money >= 4500,
+    "career-shift": state.jobLevel === 2 && state.skill >= 55 && state.money >= 4500 && state.rentDebt === 0,
+    "stable-life": state.money >= 3500 && state.stress <= 65 && state.rentDebt === 0,
+    "busy-cycle": true,
+  };
+  const ending = COMPLETION_ENDINGS.find((entry) => matches[entry.id]);
   return { ...ending, details: endingDetails(state) };
 };
 
@@ -251,46 +303,41 @@ const applyActionOutcome = (state, actionId, rng) => {
   const lines = [];
   const effects = getActionEffects(state, actionId);
   const deltas = applyEffects(state, effects);
+  const outcomeKind = rng() < getGoodOutcomeRate(state, actionId) ? "good" : "bad";
+  const outcome = ACTIONS[actionId].outcomes[outcomeKind];
+  deltas.push(...applyEffects(state, outcome.effects));
+  deltas.push(...applyEffects(state, { luck: outcomeKind === "good" ? -4 : 5 }));
+  state.summary[outcomeKind === "good" ? "goodOutcomes" : "badOutcomes"] += 1;
+  lines.push(`${outcomeKind === "good" ? "好結果" : "壞結果"}：${outcome.text}`);
 
   if (actionId === "work") {
     state.absences = Math.max(0, state.absences - 1);
     state.summary.jobsWorked += 1;
-    lines.push(`你完成了${currentJob(state).name}的班。`);
+    lines.unshift(`你完成了${currentJob(state).name}的班。`);
   } else if (actionId === "jobSearch") {
     state.summary.jobSearches += 1;
-    if (rng() < jobSearchRate(state)) {
+    if (outcome.promoteJob) {
       state.jobLevel = Math.min(2, state.jobLevel + 1);
       state.absences = 0;
-      lines.push(`面試有了結果，你直接成為${currentJob(state).name}。`);
-    } else {
-      lines.push("履歷投出去了，但這次沒有收到錄取。 ");
+      lines.push(`你現在成為${currentJob(state).name}。`);
     }
   } else if (actionId === "freelance") {
     state.summary.freelanceJobs += 1;
     state.freelanceLead = false;
-    lines.push("案子在這個時段內交掉，款項也入帳了。 ");
+    lines.unshift("案子在這個時段內交掉，基本款項已入帳。 ");
   } else if (actionId === "network") {
-    if (rng() < 0.45 + (state.traitId === "connected" ? 0.25 : 0)) {
+    if (outcome.createLead) {
       state.freelanceLead = true;
-      lines.push("有人說下次有小案子會先想到你。 ");
-    } else {
-      lines.push("聊了一輪，至少沒有讓關係斷掉。 ");
     }
   } else if (actionId === "repairScooter") {
     state.conditions.scooterBroken = false;
-    lines.push("機車修好了，之後外出不再額外耗體力。 ");
+    lines.unshift("機車修好了，之後外出不再額外耗體力。 ");
   } else if (actionId === "repairComputer") {
     state.conditions.computerBroken = false;
-    lines.push("電腦恢復正常，學習和接案不再受影響。 ");
+    lines.unshift("電腦恢復正常，學習和接案不再受影響。 ");
   } else if (actionId === "payDebt") {
     state.rentDebt = 0;
-    lines.push("欠租補上了，下一個房租日暫時不會把你趕出去。 ");
-  } else if (actionId === "rest") {
-    lines.push("你真的停下來休息了一段時間。 ");
-  } else if (actionId === "study") {
-    lines.push(state.conditions.computerBroken ? "設備一直出問題，但還是勉強學到一些。" : "今天學的東西開始能派上用場。 ");
-  } else {
-    lines.push("這個時段就這樣被你用掉了。 ");
+    lines.unshift("欠租補上了，下一個房租日暫時不會把你趕出去。 ");
   }
 
   if (state.currentSituation.scheduledWork && actionId !== "work") {
@@ -305,7 +352,19 @@ const applyActionOutcome = (state, actionId, rng) => {
   }
 
   state.summary.actions[actionId] = (state.summary.actions[actionId] ?? 0) + 1;
-  return { lines, deltas };
+  return { lines, deltas, outcomeKind };
+};
+
+const applyEventOutcome = (state, option) => {
+  const deltas = applyEffects(state, option.effects);
+  for (const [conditionId, active] of Object.entries(option.conditionChanges ?? {})) {
+    if (Object.hasOwn(state.conditions, conditionId)) state.conditions[conditionId] = active;
+  }
+  const eventId = state.currentSituation.eventId;
+  state.eventHistory.push(eventId);
+  state.summary.eventsTriggered += 1;
+  state.summary.actions[option.id] = (state.summary.actions[option.id] ?? 0) + 1;
+  return { lines: [], deltas, body: option.result };
 };
 
 export const createInitialState = (rng = Math.random, traitId = null) => {
@@ -315,12 +374,14 @@ export const createInitialState = (rng = Math.random, traitId = null) => {
     traitId: chosenTrait,
     conditions: { scooterBroken: false, computerBroken: false },
     freelanceLead: false,
+    lastEventDay: 0,
+    eventHistory: [],
     screen: "decision",
     currentSituation: null,
     lastResult: null,
     pendingAdvance: null,
     ending: null,
-    summary: { jobsWorked: 0, jobSearches: 0, freelanceJobs: 0, rentPaid: 0, rentMissed: 0, actions: {} },
+    summary: { jobsWorked: 0, jobSearches: 0, freelanceJobs: 0, goodOutcomes: 0, badOutcomes: 0, eventsTriggered: 0, rentPaid: 0, rentMissed: 0, actions: {} },
   };
   if (chosenTrait === "savings") state.money += 1000;
   preparePeriod(state, rng);
@@ -333,7 +394,9 @@ export const dispatchOption = (state, optionId, rng = Math.random) => {
   if (!option) return state;
 
   const next = clone(state);
-  const { lines, deltas } = applyActionOutcome(next, optionId, rng);
+  const isEvent = next.currentSituation.kind === "event";
+  const outcome = isEvent ? applyEventOutcome(next, next.currentSituation.options.find((entry) => entry.id === optionId)) : applyActionOutcome(next, optionId, rng);
+  const { lines, deltas } = outcome;
   let failure = detectFailureInternal(next);
   const isEvening = next.periodIndex === PERIODS.length - 1;
   if (!failure && isEvening) failure = settleDay(next, lines, deltas);
@@ -351,9 +414,11 @@ export const dispatchOption = (state, optionId, rng = Math.random) => {
   }
 
   next.lastResult = {
+    kind: isEvent ? "event" : "normal",
+    outcomeKind: outcome.outcomeKind ?? null,
     title: option.label,
-    body: lines[0] ?? "事情處理完了。",
-    lines: lines.slice(1),
+    body: outcome.body ?? lines[0] ?? "事情處理完了。",
+    lines: outcome.body ? lines : lines.slice(1),
     deltas,
     nextLabel: isEvening ? `進入 Day ${next.day + 1}` : `前往${PERIODS[next.periodIndex + 1].label}`,
   };
@@ -385,7 +450,8 @@ export const getGameView = (state) => {
     totalDays: state.totalDays,
     period,
     progress: PERIODS.map((entry, index) => ({ ...entry, state: index < state.periodIndex ? "done" : index === state.periodIndex ? "current" : "future" })),
-    resources: { money: state.money, energy: state.energy, stress: state.stress, skill: state.skill },
+    resources: { money: state.money, energy: state.energy, stress: state.stress, skill: state.skill, luck: state.luck },
+    luckRate: getGoodOutcomeRate(state),
     job,
     trait,
     absences: state.absences,
@@ -396,10 +462,22 @@ export const getGameView = (state) => {
     result: state.lastResult,
     screen: state.screen,
     ending: state.ending,
+    endingCatalog: ENDING_CATALOG,
   };
 };
 
 export const hydrateState = (candidate) => {
-  if (!candidate || candidate.totalDays !== 21 || !candidate.currentSituation || !candidate.traitId) return null;
+  if (
+    !candidate ||
+    candidate.totalDays !== 21 ||
+    !candidate.currentSituation ||
+    !candidate.traitId ||
+    !Array.isArray(candidate.eventHistory) ||
+    !Number.isFinite(candidate.lastEventDay) ||
+    !Number.isFinite(candidate.luck) ||
+    !Number.isFinite(candidate.summary?.goodOutcomes) ||
+    !Number.isFinite(candidate.summary?.badOutcomes) ||
+    !Number.isFinite(candidate.summary?.eventsTriggered)
+  ) return null;
   return candidate;
 };

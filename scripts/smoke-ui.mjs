@@ -99,21 +99,61 @@ const main = async () => {
 
     await page.evaluate(() => {
       const state = {
-        day: 21, totalDays: 21, periodIndex: 2, money: 10000, energy: 80, stress: 20, skill: 40, jobLevel: 2, absences: 0,
-        rentDebt: 0, traitId: "savings", conditions: { scooterBroken: false, computerBroken: false }, freelanceLead: false, screen: "decision",
-        currentSituation: { kicker: "晚上", title: "最後一個決定", body: "撐完今天。", periodId: "evening", scheduledWork: false, options: [{ id: "rest", label: "好好休息", icon: "bed", tone: "recovery", preview: "體力 +18 · 壓力 -12", effects: { energy: 18, stress: -12 } }] },
-        lastResult: null, pendingAdvance: null, ending: null,
-        summary: { jobsWorked: 5, jobSearches: 2, freelanceJobs: 1, rentPaid: 2, rentMissed: 0, actions: {} },
+        day: 11, totalDays: 21, periodIndex: 0, money: 900, energy: 65, stress: 42, skill: 16, luck: 50, jobLevel: 1, absences: 0,
+        rentDebt: 0, traitId: "sturdy", conditions: { scooterBroken: false, computerBroken: false }, freelanceLead: false,
+        lastEventDay: 11, eventHistory: [], screen: "decision", lastResult: null, pendingAdvance: null, ending: null,
+        currentSituation: {
+          kind: "event", eventId: "nhi-bill", kicker: "突發事件 · Day 11", title: "健保費補繳通知來了",
+          body: "信封上寫著逾期金額。這筆錢會把這週的餘裕吃掉。", periodId: "morning", scheduledWork: false,
+          options: [
+            { id: "event:nhi-bill:pay", label: "一次把它繳清", icon: "pulse", tone: "utility", effects: { money: -900, stress: -5 }, preview: "金錢 -$900 · 壓力 -5", result: "你把補繳單處理掉。" },
+            { id: "event:nhi-bill:installment", label: "打電話申請分期", icon: "phone", tone: "growth", effects: { money: -300, energy: -6, stress: 5 }, preview: "金錢 -$300 · 體力 -6 · 壓力 +5", result: "最後總算談成分期。" },
+            { id: "event:nhi-bill:delay", label: "先把信收進抽屜", icon: "home", tone: "recovery", effects: { stress: 14 }, preview: "壓力 +14", result: "那個信封一直留在腦中。" },
+          ],
+        },
+        summary: { jobsWorked: 4, jobSearches: 2, freelanceJobs: 0, goodOutcomes: 2, badOutcomes: 3, eventsTriggered: 0, rentPaid: 1, rentMissed: 0, actions: {} },
       };
-      localStorage.setItem("hard-life-save-v3", JSON.stringify({ state, started: true }));
+      localStorage.setItem("hard-life-save-v5", JSON.stringify({ state, started: true }));
+    });
+    await page.reload({ waitUntil: "networkidle" });
+    assert.equal(await page.locator('#situation-panel[data-kind="event"]').isVisible(), true);
+    assert.match(await page.locator("#situation-title").textContent(), /健保費/);
+    assert.equal(await page.locator("#action-list .action-button").count(), 3);
+    const eventLayout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewportWidth: window.innerWidth, height: document.documentElement.scrollHeight, viewportHeight: window.innerHeight }));
+    assert.equal(eventLayout.width <= eventLayout.viewportWidth, true, "event layout must not overflow at 360px");
+    assert.equal(eventLayout.height <= eventLayout.viewportHeight + 1, true, "event layout must fit at 360x640");
+    await page.locator('[data-option-id="event:nhi-bill:delay"]').click();
+    assert.equal(await page.locator('#situation-panel[data-kind="event"]').isVisible(), true);
+    assert.match(await page.locator("#situation-kicker").textContent(), /突發事件處理結果/);
+
+    await page.setViewportSize({ width: 430, height: 932 });
+    const wideLayout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewportWidth: window.innerWidth }));
+    assert.equal(wideLayout.width <= wideLayout.viewportWidth, true, "430px layout must not overflow horizontally");
+    await page.setViewportSize({ width: 360, height: 640 });
+
+    await page.evaluate(() => {
+      const state = {
+        day: 21, totalDays: 21, periodIndex: 2, money: 10000, energy: 80, stress: 20, skill: 40, luck: 50, jobLevel: 2, absences: 0,
+        rentDebt: 0, traitId: "savings", conditions: { scooterBroken: false, computerBroken: false }, freelanceLead: false, screen: "decision",
+        lastEventDay: 15, eventHistory: ["nhi-bill", "typhoon-rain"],
+        currentSituation: { kind: "normal", kicker: "晚上", title: "最後一個決定", body: "撐完今天。", periodId: "evening", scheduledWork: false, options: [{ id: "rest", label: "在租屋處補眠", icon: "bed", tone: "recovery", preview: "體力 +18 · 壓力 -12", effects: { energy: 18, stress: -12 } }] },
+        lastResult: null, pendingAdvance: null, ending: null,
+        summary: { jobsWorked: 5, jobSearches: 2, freelanceJobs: 1, goodOutcomes: 12, badOutcomes: 9, eventsTriggered: 2, rentPaid: 2, rentMissed: 0, actions: {} },
+      };
+      localStorage.setItem("hard-life-save-v5", JSON.stringify({ state, started: true }));
     });
     await page.reload({ waitUntil: "networkidle" });
     await page.locator('[data-option-id="rest"]').click();
     assert.equal(await page.locator("#ending-screen").isVisible(), true);
     assert.match(await page.locator("#ending-title").textContent(), /往上走|穩住|撐過|自由/);
+    assert.equal(await page.locator("#ending-goal-list .ending-goal").count(), 10);
+    assert.match(await page.locator("#ending-progress").textContent(), /1 \/ 10/);
+    const endingLayout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewportWidth: window.innerWidth, screenHeight: document.querySelector("#ending-screen").scrollHeight, viewportHeight: window.innerHeight }));
+    assert.equal(endingLayout.width <= endingLayout.viewportWidth, true, "ending collection must not overflow horizontally");
+    assert.equal(endingLayout.screenHeight > endingLayout.viewportHeight, true, "ending collection should remain vertically scrollable");
 
     assert.deepEqual(errors, [], `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log("Smoke UI passed at 360x640: one-screen layout, status sheet, direct actions, persistence, reset confirmation, and ending work.");
+    console.log("Smoke UI passed at 360x640 and 430x932: period actions, luck, events, persistence, and the scrollable ending collection work.");
   } finally {
     await browser?.close();
     await server.close();

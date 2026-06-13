@@ -64,6 +64,9 @@ const getEndingRank = (ending) => {
   }
 
   const rankMap = {
+    "life-turnaround": { label: "本月稱號：人生翻盤者", tone: "growth" },
+    "independent-pro": { label: "本月稱號：獨立接案者", tone: "growth" },
+    "balanced-rise": { label: "本月稱號：平衡高手", tone: "growth" },
     "free-life": { label: "本月稱號：自由候選人", tone: "growth" },
     "career-shift": { label: "本月稱號：翻身進行式", tone: "growth" },
     "stable-life": { label: "本月稱號：穩住的人", tone: "steady" },

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f6f4ee" />
+    <meta name="theme-color" content="#e9eef1" />
     <meta name="description" content="一天三個決定，在月底前撐過工作、房租和生活。" />
     <title>打工人生：月底前活下去</title>
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
@@ -51,10 +51,10 @@
           <strong id="skill-value">0</strong>
           <span class="sr-only">查看技能說明</span>
         </button>
-        <button class="status-item status-job" type="button" data-info="job">
-          <span class="icon-slot" data-icon="briefcase" aria-hidden="true"></span>
-          <strong id="job-value">待業</strong>
-          <span class="sr-only">查看工作說明</span>
+        <button class="status-item status-luck" type="button" data-info="luck">
+          <span class="icon-slot" data-icon="clover" aria-hidden="true"></span>
+          <strong id="luck-value">50</strong>
+          <span class="sr-only">查看運氣說明</span>
         </button>
       </section>
 
@@ -78,7 +78,7 @@
       <div class="intro-mark" aria-hidden="true"><span class="icon-slot" data-icon="wallet"></span></div>
       <p class="intro-eyebrow">21 天生存決策</p>
       <h2 id="intro-title">打工人生</h2>
-      <p>一天只做三個決定。工作、休息、學習，每一個選擇都要付出代價。</p>
+      <p>一天只做三個決定。在臺灣的租屋、排班與突發帳單之間，勉強撐過 21 天。</p>
       <div class="intro-rules">
         <span>早上</span><span>下午</span><span>晚上</span>
       </div>
@@ -93,6 +93,14 @@
         <p id="ending-body"></p>
         <div class="ending-stats" id="ending-stats"></div>
         <div class="ending-tags" id="ending-tags"></div>
+        <section class="ending-collection" aria-labelledby="ending-collection-title">
+          <div class="ending-collection-head">
+            <h3 id="ending-collection-title">結局圖鑑</h3>
+            <span id="ending-progress">0 / 10</span>
+          </div>
+          <p>所有條件都會公開。挑一個目標，再活一次。</p>
+          <div class="ending-goal-list" id="ending-goal-list"></div>
+        </section>
       </div>
       <div class="ending-actions">
         <button class="primary-button" id="restart-button" type="button">再活一次</button>
