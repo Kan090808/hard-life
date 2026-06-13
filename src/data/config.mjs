@@ -233,9 +233,9 @@ export const RANDOM_EVENTS = [
 ];
 
 export const FAILURE_ENDINGS = {
-  collapse: { id: "collapse", type: "failure", difficulty: "失敗", title: "身體先撐不住了", body: "體力耗盡，你只能停下這個月。", requirement: "體力降到 0" },
-  burnout: { id: "burnout", type: "failure", difficulty: "失敗", title: "壓力把生活壓垮了", body: "你再也無法假裝一切都還能處理。", requirement: "壓力達到 100" },
-  eviction: { id: "eviction", type: "failure", difficulty: "失敗", title: "欠租沒有下一次了", body: "上一期房租還沒解決，新的房租又到了。", requirement: "舊欠租未清，又遇到下一次房租" },
+  collapse: { id: "collapse", type: "failure", difficulty: "失敗", title: "身體先撐不住了", body: "生活最重要的是照顧好身體，別累壞了。", requirement: "體力降到 0" },
+  burnout: { id: "burnout", type: "failure", difficulty: "失敗", title: "壓力把生活壓垮了", body: "不要給自己太大壓力，要學會放過自己。", requirement: "壓力達到 100" },
+  eviction: { id: "eviction", type: "failure", difficulty: "失敗", title: "欠租沒有下一次了", body: "走投無路時，家裡還是你的避風港。", requirement: "舊欠租未清，又遇到下一次房租" },
 };
 
 export const COMPLETION_ENDINGS = [

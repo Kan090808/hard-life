@@ -45,7 +45,8 @@ const elements = Object.fromEntries(
     "money-value", "energy-value", "stress-value", "skill-value", "luck-value", "context-strip", "situation-panel", "situation-kicker",
     "situation-title", "situation-body", "result-deltas", "result-notes", "action-list", "continue-button", "intro-screen", "start-button",
     "app-version", "ending-screen", "ending-eyebrow", "ending-title", "ending-body", "ending-stats", "ending-tags", "ending-progress", "ending-goal-list", "restart-button",
-    "copy-result-button", "sheet-backdrop", "bottom-sheet", "sheet-icon", "sheet-value", "sheet-title", "sheet-copy", "sheet-actions", "sheet-close-button",
+    "copy-result-button", "ending-catalog", "ending-catalog-btn", "ending-catalog-close",
+    "sheet-backdrop", "bottom-sheet", "sheet-icon", "sheet-value", "sheet-title", "sheet-copy", "sheet-actions", "sheet-close-button",
   ].map((id) => [id.replaceAll("-", "_"), document.getElementById(id)])
 );
 
@@ -182,6 +183,7 @@ const renderResult = (view) => {
 
 const renderEnding = (view) => {
   const ending = view.ending;
+  setHidden(elements.ending_catalog, true);
   setHidden(elements.ending_screen, false);
   elements.ending_screen.dataset.tone = ending.type;
   elements.ending_eyebrow.textContent = ending.type === "failure" ? `Day ${view.day} · 人生中斷` : "21 天結算";
@@ -191,16 +193,21 @@ const renderEnding = (view) => {
     ["金錢", `$${view.resources.money.toLocaleString()}`], ["體力", view.resources.energy], ["壓力", view.resources.stress], ["技能", view.resources.skill], ["運氣", view.resources.luck], ["工作", view.job.badge],
   ].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("");
   elements.ending_tags.innerHTML = ending.details.tags.map((tag) => `<span>${tag.label}</span>`).join("");
-  let discovered = [];
-  try { discovered = JSON.parse(localStorage.getItem(ENDING_DISCOVERY_KEY)) ?? []; } catch {}
-  const discoveredIds = new Set(discovered);
-  discoveredIds.add(ending.id);
-  try { localStorage.setItem(ENDING_DISCOVERY_KEY, JSON.stringify([...discoveredIds])); } catch {}
-  elements.ending_progress.textContent = `${discoveredIds.size} / ${view.endingCatalog.length}`;
+  let counts = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(ENDING_DISCOVERY_KEY));
+    if (Array.isArray(raw)) { counts = Object.fromEntries(raw.map((id) => [id, 1])); }
+    else if (raw && typeof raw === "object") { counts = raw; }
+  } catch {}
+  counts[ending.id] = (counts[ending.id] ?? 0) + 1;
+  try { localStorage.setItem(ENDING_DISCOVERY_KEY, JSON.stringify(counts)); } catch {}
+  const uniqueCount = Object.keys(counts).length;
+  elements.ending_progress.textContent = `${uniqueCount} / ${view.endingCatalog.length}`;
   elements.ending_goal_list.innerHTML = view.endingCatalog.map((goal) => {
+    const count = counts[goal.id] ?? 0;
     const isCurrent = goal.id === ending.id;
-    const isDiscovered = discoveredIds.has(goal.id);
-    return `<article class="ending-goal ${isDiscovered ? "is-discovered" : ""} ${isCurrent ? "is-current" : ""}"><div><span class="ending-goal-state">${isCurrent ? "本局達成" : isDiscovered ? "已取得" : "未取得"}</span><span class="ending-goal-difficulty">${goal.difficulty}</span></div><h4>${goal.title}</h4><p>${goal.requirement}</p></article>`;
+    const stateLabel = isCurrent ? "本局達成" : count > 0 ? `取得 ${count} 次` : "未取得";
+    return `<article class="ending-goal ${count > 0 ? "is-discovered" : ""} ${isCurrent ? "is-current" : ""}"><div><span class="ending-goal-state">${stateLabel}</span><span class="ending-goal-difficulty">${goal.difficulty}</span></div><h4>${goal.title}</h4><p>${goal.requirement}</p></article>`;
   }).join("");
 };
 
@@ -307,6 +314,13 @@ elements.start_button.addEventListener("click", startRun);
 elements.restart_button.addEventListener("click", startRun);
 elements.sheet_close_button.addEventListener("click", closeSheet);
 elements.sheet_backdrop.addEventListener("click", closeSheet);
+elements.ending_catalog_btn.addEventListener("click", () => {
+  setHidden(elements.ending_catalog, false);
+});
+elements.ending_catalog_close.addEventListener("click", () => {
+  setHidden(elements.ending_catalog, true);
+});
+
 elements.copy_result_button.addEventListener("click", async () => {
   const view = getGameView(state);
   const text = `【${GAME_COPY.title}】\n${view.ending.title}\n金錢 $${view.resources.money.toLocaleString()} · 體力 ${view.resources.energy} · 壓力 ${view.resources.stress} · 技能 ${view.resources.skill}`;
@@ -320,6 +334,7 @@ elements.copy_result_button.addEventListener("click", async () => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !elements.bottom_sheet.classList.contains("hidden")) closeSheet();
+  if (event.key === "Escape" && !elements.ending_catalog.classList.contains("hidden")) setHidden(elements.ending_catalog, true);
 });
 
 load();

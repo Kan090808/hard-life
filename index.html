@@ -84,24 +84,33 @@
 
     <section class="full-screen ending-screen hidden" id="ending-screen" aria-labelledby="ending-title">
       <div class="ending-content" id="ending-capture">
-        <p class="ending-eyebrow" id="ending-eyebrow">月底結算</p>
+        <div class="ending-header">
+          <p class="ending-eyebrow" id="ending-eyebrow">月底結算</p>
+          <button class="icon-button ending-catalog-btn" id="ending-catalog-btn" type="button" aria-label="結局圖鑑">?</button>
+        </div>
         <h2 id="ending-title">這個月結束了</h2>
         <p id="ending-body"></p>
         <div class="ending-stats" id="ending-stats"></div>
         <div class="ending-tags" id="ending-tags"></div>
-        <section class="ending-collection" aria-labelledby="ending-collection-title">
-          <div class="ending-collection-head">
-            <h3 id="ending-collection-title">結局圖鑑</h3>
-            <span id="ending-progress">0 / 10</span>
-          </div>
-          <p>所有條件都會公開。挑一個目標，再活一次。</p>
-          <div class="ending-goal-list" id="ending-goal-list"></div>
-        </section>
       </div>
       <div class="ending-actions">
         <button class="primary-button" id="restart-button" type="button">再活一次</button>
         <button class="secondary-button" id="copy-result-button" type="button">複製結果</button>
       </div>
+    </section>
+
+    <section class="full-screen ending-catalog-overlay hidden" id="ending-catalog" aria-label="結局圖鑑">
+      <div class="ending-catalog-head">
+        <h2>結局圖鑑</h2>
+        <button class="icon-button" id="ending-catalog-close" type="button" aria-label="關閉圖鑑">
+          <span class="icon-slot" data-icon="close"></span>
+        </button>
+      </div>
+      <div class="ending-catalog-progress">
+        <span id="ending-progress">0 / 10</span>
+      </div>
+      <p>所有條件都已公開。挑一個目標，再活一次。</p>
+      <div class="ending-goal-list" id="ending-goal-list"></div>
     </section>
 
     <div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
