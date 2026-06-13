@@ -84,8 +84,7 @@ const materializeOption = (state, actionId, overrides = {}) => {
     icon: overrides.icon ?? action.icon,
     tone: overrides.tone ?? action.tone,
     preview:
-      overrides.preview ??
-      `${previewEffects(effects)}${previewEffects(effects) ? " · " : ""}好結果 ${Math.round(getGoodOutcomeRate(state, actionId) * 100)}%`,
+      overrides.preview ?? (previewEffects(effects) || "沒有立即數值變化"),
     effects,
   };
 };
@@ -185,9 +184,9 @@ const buildOptions = (state, rng) => {
   }
 
   const fallbackByPeriod = {
-    morning: ["breakfast", "lifeAdmin", "jobSearch"],
-    afternoon: state.jobLevel === 0 ? ["meal", "library", "tempWork"] : state.jobLevel === 1 ? ["meal", "library", "gig"] : ["meal", "library"],
-    evening: ["rest", "walk", "study"],
+    morning: ["breakfast", "lifeAdmin", "jobSearch", "cleanRoom", "readNews"],
+    afternoon: state.jobLevel === 0 ? ["meal", "library", "tempWork", "laundry", "groceries"] : state.jobLevel === 1 ? ["meal", "library", "gig", "laundry", "groceries"] : ["meal", "library", "laundry", "groceries"],
+    evening: ["rest", "walk", "study", "callFamily", "stretch"],
   }[period.id];
   for (const fallback of fallbackByPeriod) {
     if (options.length >= 3) break;
@@ -306,7 +305,7 @@ const applyActionOutcome = (state, actionId, rng) => {
   const outcomeKind = rng() < getGoodOutcomeRate(state, actionId) ? "good" : "bad";
   const outcome = ACTIONS[actionId].outcomes[outcomeKind];
   deltas.push(...applyEffects(state, outcome.effects));
-  deltas.push(...applyEffects(state, { luck: outcomeKind === "good" ? -4 : 5 }));
+  applyEffects(state, { luck: outcomeKind === "good" ? -4 : 5 });
   state.summary[outcomeKind === "good" ? "goodOutcomes" : "badOutcomes"] += 1;
   lines.push(`${outcomeKind === "good" ? "好結果" : "壞結果"}：${outcome.text}`);
 

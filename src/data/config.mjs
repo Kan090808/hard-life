@@ -1,6 +1,6 @@
 export const TOTAL_DAYS = 21;
 export const DAILY_LIVING_COST = 220;
-export const RENT_AMOUNT = 2600;
+export const RENT_AMOUNT = 3000;
 export const RENT_DAYS = [7, 14, 21];
 
 export const PERIODS = [
@@ -18,7 +18,7 @@ export const DEFAULT_PLAYER_STATE = {
   day: 1,
   totalDays: TOTAL_DAYS,
   periodIndex: 0,
-  money: 3400,
+  money: 2000,
   energy: 72,
   stress: 22,
   skill: 0,
@@ -120,12 +120,18 @@ export const ACTIONS = {
   work: { id: "work", label: "去上班", tone: "income", icon: "briefcase", periods: ["morning", "afternoon"], outcomes: { good: { effects: { money: 160, stress: -3 }, text: "今天事情特別順，還多拿到一點獎金。" }, bad: { effects: { energy: -4, stress: 7 }, text: "臨時工作全堆過來，這班比預期更累。" } } },
   breakfast: { id: "breakfast", label: "吃早餐配豆漿", tone: "recovery", icon: "meal", periods: ["morning"], effects: { money: -80, energy: 7, stress: -2 }, outcomes: { good: { effects: { energy: 4, stress: -2 }, text: "早餐店阿姨多送了一顆蛋，今天精神特別好。" }, bad: { effects: { energy: -3, stress: 3 }, text: "排隊太久又拿錯餐，早上的節奏全亂了。" } } },
   lifeAdmin: { id: "lifeAdmin", label: "處理帳單與雜事", tone: "utility", icon: "home", periods: ["morning"], effects: { energy: -6, stress: -4 }, outcomes: { good: { effects: { stress: -5 }, text: "客服很快接通，積著的事情一次處理乾淨。" }, bad: { effects: { energy: -4, stress: 6 }, text: "電話被轉了好幾次，問題還是沒有完全解決。" } } },
+  cleanRoom: { id: "cleanRoom", label: "整理租屋環境", tone: "recovery", icon: "spark", periods: ["morning"], effects: { energy: -5, stress: -5 }, outcomes: { good: { effects: { stress: -4 }, text: "角落清出一袋雜物，空間和心情都寬敞了。" }, bad: { effects: { energy: -4, stress: 4 }, text: "越整理越煩躁，最後只是把東西挪了個位置。" } } },
+  readNews: { id: "readNews", label: "看求職市場動態", tone: "growth", icon: "search", periods: ["morning"], effects: { energy: -3 }, outcomes: { good: { effects: { skill: 2 }, text: "看到幾個有興趣的職缺，也摸清目前的薪資行情。" }, bad: { effects: { stress: 5 }, text: "越看越覺得自己落後，關掉頁面後反而更焦慮。" } } },
   jobSearch: { id: "jobSearch", label: "投履歷找工作", tone: "growth", icon: "search", periods: ["morning"], outcomeRateModifier: -0.2, effects: { money: -100, energy: -12, stress: 6 }, outcomes: { good: { effects: { stress: -3 }, text: "履歷很快得到回覆，你拿到更穩定的工作機會。", promoteJob: true }, bad: { effects: { stress: 6 }, text: "履歷被讀過，這次仍然沒有收到錄取。" } } },
   gig: { id: "gig", label: "跑一個時段外送", tone: "income", icon: "scooter", periods: ["afternoon"], effects: { money: 430, energy: -16, stress: 6 }, outcomes: { good: { effects: { money: 180, stress: -2 }, text: "剛好遇到加成時段，幾張單都很順路。" }, bad: { effects: { money: -150, energy: -4, stress: 5 }, text: "等單和找地址花掉大半時間，收入比預期少。" } } },
   tempWork: { id: "tempWork", label: "接臨時活動工讀", tone: "income", icon: "store", periods: ["afternoon"], effects: { money: 520, energy: -20, stress: 9 }, outcomes: { good: { effects: { money: 160, stress: -3 }, text: "現場提早收工，主辦還多補了一筆車馬費。" }, bad: { effects: { money: -120, energy: -5, stress: 6 }, text: "工作內容臨時加碼，薪水卻沒有跟著增加。" } } },
   meal: { id: "meal", label: "買便當好好吃飯", tone: "recovery", icon: "meal", periods: ["afternoon"], effects: { money: -120, energy: 9, stress: -5 }, outcomes: { good: { effects: { energy: 4, stress: -3 }, text: "店家多送了小菜，這餐意外讓人滿足。" }, bad: { effects: { energy: -4, stress: 4 }, text: "便當放太久，吃完反而有點不舒服。" } } },
   library: { id: "library", label: "去圖書館整理資料", tone: "growth", icon: "brain", periods: ["afternoon"], effects: { energy: -5, stress: -5, skill: 2 }, outcomes: { good: { effects: { skill: 3, stress: -2 }, text: "安靜的座位讓你把混亂的資料一次整理好。" }, bad: { effects: { energy: -3, stress: 4 }, text: "附近一直有人講電話，坐了半天仍然難以專心。" } } },
+  laundry: { id: "laundry", label: "去自助洗衣", tone: "utility", icon: "tools", periods: ["afternoon"], effects: { money: -80, energy: -5, stress: -3 }, outcomes: { good: { effects: { stress: -3 }, text: "洗衣店空空的，折好衣服還有一小時可以處理別的事。" }, bad: { effects: { money: -40, energy: -4, stress: 4 }, text: "排隊等機器等了很久，出來天色都暗了。" } } },
+  groceries: { id: "groceries", label: "補貨日常用品", tone: "utility", icon: "store", periods: ["afternoon"], effects: { money: -200, energy: -4, stress: -4 }, outcomes: { good: { effects: { money: -60, stress: -2 }, text: "剛好遇到即期品特價，省下一點錢。" }, bad: { effects: { money: -80, stress: 4 }, text: "沒注意標價，結帳才發現比預期貴了不少。" } } },
   study: { id: "study", label: "上線上課程", tone: "growth", icon: "brain", periods: ["evening"], effects: { money: -260, energy: -10, stress: 5, skill: 8 }, outcomes: { good: { effects: { skill: 5, stress: -2 }, text: "卡很久的觀念突然想通，進度超過預期。" }, bad: { effects: { skill: -4, energy: -3, stress: 4 }, text: "精神一直飄走，花了時間卻只記住一點。" } } },
+  callFamily: { id: "callFamily", label: "打電話回家", tone: "recovery", icon: "phone", periods: ["evening"], effects: { money: -30, stress: -8 }, outcomes: { good: { effects: { stress: -5 }, text: "家人聊了很多近況，掛掉後心裡踏實不少。" }, bad: { effects: { stress: 6 }, text: "被問到經濟和工作，反而多了一層說不出口的壓力。" } } },
+  stretch: { id: "stretch", label: "做簡單伸展運動", tone: "recovery", icon: "bolt", periods: ["evening"], effects: { energy: 5, stress: -4 }, outcomes: { good: { effects: { energy: 5, stress: -3 }, text: "拉開緊繃的肌肉，整個人輕盈了很多。" }, bad: { effects: { energy: -3, stress: 3 }, text: "做到一半被樓下聲音打斷，草草收場。" } } },
   rest: { id: "rest", label: "在租屋處補眠", tone: "recovery", icon: "bed", periods: ["evening"], effects: { energy: 18, stress: -12 }, outcomes: { good: { effects: { energy: 7, stress: -3 }, text: "難得睡得又深又安穩，整個人恢復不少。" }, bad: { effects: { energy: -8, stress: 5 }, text: "施工聲和機車聲輪流響，這一覺沒有睡好。" } } },
   walk: { id: "walk", label: "去附近公園走走", tone: "recovery", icon: "walk", periods: ["evening"], effects: { energy: -3, stress: -9 }, outcomes: { good: { effects: { stress: -6 }, text: "晚風很舒服，腦中的雜訊終於安靜下來。" }, bad: { effects: { energy: -5, stress: 4 }, text: "突然下雨，只能狼狽地一路跑回租屋處。" } } },
   network: { id: "network", label: "問朋友有沒有缺", tone: "growth", icon: "network", periods: ["evening"], effects: { money: -80, energy: -6, stress: 2, skill: 3 }, outcomes: { good: { effects: { stress: -2 }, text: "朋友真的知道一個小案子，答應先幫你留意。", createLead: true }, bad: { effects: { stress: 6 }, text: "聊了很久只有客套話，反而多了一點人情壓力。" } } },

@@ -19,7 +19,7 @@ const forceOption = (state, id, { scheduledWork = false } = {}) => {
 const initial = createInitialState(fixed(0.99), "savings");
 const initialView = getGameView(initial);
 assert.equal(initial.totalDays, 21);
-assert.equal(initial.money, 4400);
+assert.equal(initial.money, 3000);
 assert.equal(initialView.period.id, "morning");
 assert.equal(initialView.situation.options.length >= 2 && initialView.situation.options.length <= 3, true);
 assert.equal(initialView.situation.options.every((option) => option.id && !Object.hasOwn(option, "disabled")), true);
@@ -117,7 +117,7 @@ condition.conditions.scooterBroken = true;
 forceOption(condition, "repairScooter");
 condition = dispatchOption(condition, "repairScooter", fixed(0.99));
 assert.equal(condition.conditions.scooterBroken, false);
-assert.equal(condition.money, 2420);
+assert.equal(condition.money, 1020);
 
 let firstRent = createInitialState(fixed(0.99), "sturdy");
 firstRent.day = 7;
@@ -125,14 +125,14 @@ firstRent.periodIndex = 2;
 firstRent.money = 0;
 forceOption(firstRent, "rest");
 firstRent = dispatchOption(firstRent, "rest", fixed(0.99));
-assert.equal(firstRent.rentDebt, 2600, "unaffordable first rent becomes one debt value");
+assert.equal(firstRent.rentDebt, 3000, "unaffordable first rent becomes one debt value");
 assert.equal(firstRent.screen, "result");
 
 let eviction = createInitialState(fixed(0.99), "sturdy");
 eviction.day = 14;
 eviction.periodIndex = 2;
 eviction.money = 0;
-eviction.rentDebt = 2600;
+eviction.rentDebt = 3000;
 forceOption(eviction, "rest");
 eviction = dispatchOption(eviction, "rest", fixed(0.99));
 assert.equal(eviction.screen, "ending");
