@@ -90,7 +90,7 @@ const infoFor = (id, view) => {
     energy: { icon: "bolt", value: `${view.resources.energy} / 100`, title: "體力", copy: "行動會消耗體力。降到 0 時這局立刻結束；每天睡覺會恢復體力。" },
     stress: { icon: "pulse", value: `${view.resources.stress} / 100`, title: "壓力", copy: "工作和生活問題會增加壓力。到 100 時這局立刻結束。" },
     skill: { icon: "spark", value: `${view.resources.skill} / 100`, title: "技能", copy: "技能會提高找工作成功率。達到 25 後，可能出現立即結算的接案機會。" },
-    luck: { icon: "clover", value: `${view.resources.luck} / 100`, title: "運氣", copy: `普通行動目前有約 ${Math.round(view.luckRate * 100)}% 機率出現好結果。好結果後運氣 -4，壞結果後運氣 +5，降低連續極端結果。突發事件的回應不會再抽運氣。` },
+    luck: { icon: "clover", value: `${view.resources.luck} / 100`, title: "運氣", copy: `普通行動目前有約 ${Math.round(view.luckRate * 100)}% 機率出現好結果。` },
     job: { icon: view.job.icon, value: view.job.badge, title: view.job.name, copy: `${view.job.description}${view.absences ? ` 目前缺勤 ${view.absences}/2 次。` : ""}` },
     trait: { icon: view.trait.icon, value: "本局特質", title: view.trait.label, copy: view.trait.description },
     rent: { icon: "home", value: view.rentLabel, title: view.rentDebt ? "目前有欠租" : "房租倒數", copy: view.rentDebt ? `你還欠 $${view.rentDebt.toLocaleString()}。下一個房租日以前沒處理，可能直接被趕走。` : `房租每 7 天自動結算一次，每次 $${RENT_AMOUNT.toLocaleString()}。` },
@@ -169,7 +169,7 @@ const renderResult = (view) => {
   const result = view.result;
   elements.situation_panel.dataset.kind = result.kind ?? "normal";
   elements.situation_panel.dataset.outcome = result.outcomeKind ?? "none";
-  elements.situation_kicker.textContent = result.kind === "event" ? "突發事件處理結果" : result.outcomeKind === "good" ? "好結果 · 這個時段" : "壞結果 · 這個時段";
+  elements.situation_kicker.textContent = result.kind === "event" ? "突發事件處理結果" : result.kind === "overtime" ? "加班結果" : result.outcomeKind === "good" ? "好結果 · 這個時段" : "壞結果 · 這個時段";
   elements.situation_title.textContent = result.title;
   elements.situation_body.textContent = result.body;
   elements.result_deltas.innerHTML = result.deltas.map((delta) => `<span class="delta ${delta.value > 0 ? "positive" : "negative"}">${delta.label}</span>`).join("");

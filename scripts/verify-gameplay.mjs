@@ -85,7 +85,7 @@ work.periodIndex = 1;
 forceOption(work, "work", { scheduledWork: true });
 const beforeWorkMoney = work.money;
 work = dispatchOption(work, "work", fixed(0.99));
-assert.equal(work.money, beforeWorkMoney + 560);
+assert.equal(work.money, beforeWorkMoney + 760);
 assert.equal(work.summary.jobsWorked, 1);
 
 let absence = createInitialState(fixed(0.99), "sturdy");

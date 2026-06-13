@@ -84,6 +84,9 @@ export const getGoodOutcomeRate = (state, actionId = "") => {
   return clamp(0.35 + state.luck * 0.003 + traitBonus + actionModifier, 0.15, 0.85);
 };
 
+const getOvertimeRate = (state) => clamp(0.1 - state.luck * 0.001, 0.01, 0.15);
+const getOvertimeRefuseRate = (state) => clamp(0.4 + state.luck * 0.004, 0.2, 0.9);
+
 const materializeOption = (state, actionId, overrides = {}) => {
   const action = ACTIONS[actionId];
   const effects = getActionEffects(state, actionId);
@@ -202,13 +205,14 @@ const buildOptions = (state, rng) => {
     if (options.length >= 3) break;
     if (!isAffordable(state, actionId)) continue;
     if (actionId === "freelance" && state.skill < 25) continue;
+    if (["gaming", "phoneScroll"].includes(actionId) && state.stress <= 30 && rng() < 0.6) continue;
     addUnique(options, materializeOption(state, actionId));
   }
 
   const fallbackByPeriod = {
     morning: ["breakfast", "snooze", "jobSearch", "readNews"],
     afternoon: state.jobLevel === 0 ? ["meal", "library", "tempWork", "syntrend"] : state.jobLevel === 1 ? ["meal", "library", "gig", "syntrend"] : ["meal", "library", "syntrend"],
-    evening: ["rest", "walk", "study", "network", "run", "gaming", "phoneScroll", "stretch"],
+    evening: ["rest", "walk", "study", "network", "run", "gaming", "phoneScroll", "stretch", "meditate"],
   }[period.id];
   for (const fallback of fallbackByPeriod) {
     if (options.length >= 3) break;
@@ -347,6 +351,12 @@ const applyActionOutcome = (state, actionId, rng) => {
       outcomeEffects[k] = Math.round(v * ratio);
     }
   }
+  if (actionId === "meditate" && outcomeKind === "good") {
+    const prev = state.summary.meditateGood ?? 0;
+    const reduction = Math.min(12 + prev, 30);
+    outcomeEffects = { stress: -reduction };
+    state.summary.meditateGood = prev + 1;
+  }
   deltas.push(...applyEffects(state, outcomeEffects));
   applyEffects(state, { luck: outcomeKind === "good" ? -4 : 5 });
   state.summary[outcomeKind === "good" ? "goodOutcomes" : "badOutcomes"] += 1;
@@ -443,7 +453,50 @@ export const createInitialState = (rng = Math.random, traitId = null) => {
   return state;
 };
 
+const handleOvertimeChoice = (state, optionId, rng) => {
+  const next = clone(state);
+  const lines = [];
+  const deltas = [];
+  const isEvening = next.periodIndex === PERIODS.length - 1;
+
+  if (optionId === "overtime:accept") {
+    deltas.push(...applyEffects(next, { energy: -16, money: 240, stress: 7 }));
+    lines.push("你留下來把事情趕完，走出公司已經天黑了。");
+  } else {
+    const refuseOk = rng() < getOvertimeRefuseRate(next);
+    if (refuseOk) {
+      deltas.push(...applyEffects(next, { stress: 12 }));
+      lines.push("你婉拒了加班要求，收拾東西離開辦公室。");
+    } else {
+      deltas.push(...applyEffects(next, { stress: 20, energy: -16, money: 240 }));
+      lines.push("你試著拒絕，但主管態度很硬，最後還是留下來加班。");
+    }
+  }
+
+  let failure = detectFailureInternal(next);
+  if (!failure && isEvening) failure = settleDay(next, lines, deltas);
+  if (failure) {
+    next.ending = { ...failure, details: endingDetails(next) };
+    next.screen = "ending";
+    return next;
+  }
+
+  next.lastResult = {
+    kind: "overtime",
+    outcomeKind: null,
+    title: optionId === "overtime:accept" ? "默默加班" : "拒絕加班",
+    body: lines[0] ?? "",
+    lines: lines.slice(1),
+    deltas,
+    nextLabel: isEvening ? `進入 Day ${next.day + 1}` : `前往${PERIODS[next.periodIndex + 1].label}`,
+  };
+  next.pendingAdvance = isEvening ? "day" : "period";
+  next.screen = "result";
+  return next;
+};
+
 export const dispatchOption = (state, optionId, rng = Math.random) => {
+  if (state.currentSituation?.kind === "overtime") return handleOvertimeChoice(state, optionId, rng);
   if (state.screen !== "decision" || state.ending) return state;
   const option = state.currentSituation.options.find((entry) => entry.id === optionId);
   if (!option) return state;
@@ -465,6 +518,23 @@ export const dispatchOption = (state, optionId, rng = Math.random) => {
   if (isEvening && next.day >= next.totalDays) {
     next.ending = evaluateEnding(next);
     next.screen = "ending";
+    return next;
+  }
+
+  if (optionId === "work" && next.jobLevel >= 1 && !isEvening && rng() < getOvertimeRate(next)) {
+    next.currentSituation = {
+      kind: "overtime",
+      kicker: "下班前",
+      title: "主管走過來了",
+      body: "「今天能多待幾個小時嗎？這個 deadline 很趕。」",
+      options: [
+        { id: "overtime:accept", label: "默默加班", icon: "briefcase", tone: "income", preview: "體力 −16 · 金錢 +$240 · 壓力 +7" },
+        { id: "overtime:refuse", label: "拒絕", icon: "home", tone: "recovery", preview: "壓力 +12" },
+      ],
+    };
+    next.screen = "decision";
+    next.lastResult = null;
+    next.pendingAdvance = null;
     return next;
   }
 
