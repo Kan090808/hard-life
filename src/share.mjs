@@ -99,12 +99,11 @@ const getShareSnapshot = (state, url) => {
     body: ending.body,
     rankLabel: rank.label,
     tone: rank.tone,
-    jobName: JOBS[state.jobLevel].name,
-    jobBadge: JOBS[state.jobLevel].badge,
+    jobName: (JOBS[state.jobLevel] ?? JOBS[0]).name,
+    jobBadge: (JOBS[state.jobLevel] ?? JOBS[0]).badge,
     stats: [
       { label: "存款", value: `$${state.money.toLocaleString()}` },
       { label: "體力", value: `${state.energy}` },
-      { label: "心情", value: `${state.mood}` },
       { label: "壓力", value: `${state.stress}` },
       { label: "技能", value: `${state.skill}` },
     ],
@@ -575,7 +574,7 @@ const renderShareImage = async (state, url, overrides = {}) => {
   const cardWidth = (width - 144 - 24) / 2;
   const statBoxes = [
     { ...snapshot.stats[0], x: 72, y: 626, width: cardWidth, height: 180 },
-    { label: "體力 / 心情", value: `${state.energy} / ${state.mood}`, x: 72 + cardWidth + 24, y: 626, width: cardWidth, height: 180 },
+    { label: "體力", value: `${state.energy}`, x: 72 + cardWidth + 24, y: 626, width: cardWidth, height: 180 },
     { label: "壓力 / 技能", value: `${state.stress} / ${state.skill}`, x: 72, y: 830, width: cardWidth, height: 180 },
     { label: "工作等級", value: snapshot.jobBadge, x: 72 + cardWidth + 24, y: 830, width: cardWidth, height: 180 },
   ];

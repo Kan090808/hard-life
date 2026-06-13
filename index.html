@@ -1,524 +1,122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f6f4ee" />
+    <meta name="description" content="一天三個決定，在月底前撐過工作、房租和生活。" />
     <title>打工人生：月底前活下去</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body class="dialog-open" data-app-boot="booting">
-    <div class="backdrop backdrop-a"></div>
-    <div class="backdrop backdrop-b"></div>
-    <button class="analytics-panel" id="analytics-panel" type="button" hidden>
-      <span class="analytics-label">大家已經玩了</span>
-      <strong class="analytics-value" id="analytics-total-starts">--</strong>
-      <span class="analytics-label">次</span>
-    </button>
-    <div class="version-badge" id="version-badge" aria-label="目前版本">v1.0</div>
-
-    <main class="app-shell">
-      <img class="world-decor decor-receipt" src="./assets/decor/receipt-note.svg" alt="" aria-hidden="true" />
-      <img class="world-decor decor-envelope" src="./assets/decor/pay-envelope.svg" alt="" aria-hidden="true" />
-      <img class="world-decor decor-sticker" src="./assets/decor/store-sticker.svg" alt="" aria-hidden="true" />
-
-      <section class="game-board" aria-label="遊戲主畫面">
-        <section class="status-panel" aria-label="本週進度">
-          <div class="status-core-row">
-            <div class="status-day-group">
-              <div class="day-pill" id="day-label">Day 1 / 30</div>
-              <p class="week-caption" id="week-label">第 1 週 · 週內第 1 天</p>
-            </div>
-            <button class="details-toggle" aria-expanded="false" aria-controls="status-details" id="details-toggle">
-              <span class="toggle-text">詳情</span>
-              <span class="toggle-icon">+</span>
-            </button>
+  <body>
+    <main class="game-shell" id="game-shell">
+      <header class="topbar">
+        <div>
+          <p class="day-label" id="day-label">Day 1 / 21</p>
+          <div class="period-heading">
+            <h1 id="period-label">早上</h1>
+            <div class="period-progress" id="period-progress" aria-label="今天進度"></div>
           </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="rent-button" id="rent-button" type="button" data-info="rent" aria-label="查看房租資訊">
+            <span class="icon-slot" data-icon="home" aria-hidden="true"></span>
+            <span id="rent-label">6 天</span>
+          </button>
+          <button class="icon-button" id="utility-button" type="button" aria-label="開啟設定">
+            <span class="icon-slot" data-icon="menu" aria-hidden="true"></span>
+          </button>
+        </div>
+      </header>
 
-          <div class="hud-grid compact-hud">
-            <article class="hud-card wallet-card">
-              <span class="hud-icon" aria-hidden="true">$</span>
-              <div>
-                <span class="hud-label">金錢</span>
-                <strong class="hud-value" id="wallet-amount">$3,000</strong>
-              </div>
-            </article>
-            <article class="hud-card threat-card">
-              <span class="hud-icon" aria-hidden="true">R</span>
-              <div>
-                <span class="hud-label">房租</span>
-                <strong class="hud-value" id="rent-countdown">6 天後</strong>
-              </div>
-            </article>
-          </div>
+      <section class="status-bar" id="status-bar" aria-label="目前狀態">
+        <button class="status-item status-money" type="button" data-info="money">
+          <span class="icon-slot" data-icon="wallet" aria-hidden="true"></span>
+          <strong id="money-value">$0</strong>
+          <span class="sr-only">查看金錢說明</span>
+        </button>
+        <button class="status-item status-energy" type="button" data-info="energy">
+          <span class="icon-slot" data-icon="bolt" aria-hidden="true"></span>
+          <strong id="energy-value">0</strong>
+          <span class="sr-only">查看體力說明</span>
+        </button>
+        <button class="status-item status-stress" type="button" data-info="stress">
+          <span class="icon-slot" data-icon="pulse" aria-hidden="true"></span>
+          <strong id="stress-value">0</strong>
+          <span class="sr-only">查看壓力說明</span>
+        </button>
+        <button class="status-item status-skill" type="button" data-info="skill">
+          <span class="icon-slot" data-icon="spark" aria-hidden="true"></span>
+          <strong id="skill-value">0</strong>
+          <span class="sr-only">查看技能說明</span>
+        </button>
+        <button class="status-item status-job" type="button" data-info="job">
+          <span class="icon-slot" data-icon="briefcase" aria-hidden="true"></span>
+          <strong id="job-value">待業</strong>
+          <span class="sr-only">查看工作說明</span>
+        </button>
+      </section>
 
-          <section class="compact-section" aria-label="生存狀態">
-            <div class="section-kicker">生存</div>
-            <div class="stat-grid compact" id="stat-grid">
-              <article class="stat-card compact-stat stat-energy">
-                <span class="stat-icon" aria-hidden="true">E</span>
-                <span class="stat-label">體力</span>
-                <strong class="stat-value">--</strong>
-                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
-              </article>
-              <article class="stat-card compact-stat stat-mood">
-                <span class="stat-icon" aria-hidden="true">M</span>
-                <span class="stat-label">心情</span>
-                <strong class="stat-value">--</strong>
-                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
-              </article>
-              <article class="stat-card compact-stat stat-stress">
-                <span class="stat-icon" aria-hidden="true">S</span>
-                <span class="stat-label">壓力</span>
-                <strong class="stat-value">--</strong>
-                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
-              </article>
-              <article class="stat-card compact-stat stat-skill">
-                <span class="stat-icon" aria-hidden="true">K</span>
-                <span class="stat-label">技能</span>
-                <strong class="stat-value">--</strong>
-                <div class="stat-meter"><div class="stat-meter-fill" style="width:0%;"></div></div>
-              </article>
-            </div>
-          </section>
+      <section class="context-strip" id="context-strip" aria-label="特質與持續狀態"></section>
 
-          <section class="compact-section" aria-label="角色屬性">
-            <div class="section-kicker">角色</div>
-            <div class="character-grid" id="character-grid">
-              <article class="attribute-card attribute-intelligence">
-                <span class="stat-icon" aria-hidden="true">I</span>
-                <span class="stat-label">智力</span>
-                <strong class="stat-value">--</strong>
-              </article>
-              <article class="attribute-card attribute-physique">
-                <span class="stat-icon" aria-hidden="true">P</span>
-                <span class="stat-label">體能</span>
-                <strong class="stat-value">--</strong>
-              </article>
-              <article class="attribute-card attribute-luck">
-                <span class="stat-icon" aria-hidden="true">L</span>
-                <span class="stat-label">運氣</span>
-                <strong class="stat-value">--</strong>
-              </article>
-              <article class="attribute-card attribute-wealth">
-                <span class="stat-icon" aria-hidden="true">W</span>
-                <span class="stat-label">財力</span>
-                <strong class="stat-value">--</strong>
-              </article>
-            </div>
-          </section>
+      <section class="situation-panel" id="situation-panel" aria-live="polite">
+        <p class="situation-kicker" id="situation-kicker">早上 · Day 1</p>
+        <h2 id="situation-title">新的一天</h2>
+        <p class="situation-body" id="situation-body">今天先把哪件事做好？</p>
+        <div class="result-deltas hidden" id="result-deltas"></div>
+        <ul class="result-notes hidden" id="result-notes"></ul>
+      </section>
 
-          <div class="condition-strip" id="condition-strip" aria-label="持續狀態"></div>
-
-          <div class="status-details" id="status-details">
-            <article class="job-identity-card" id="job-identity-card">
-              <div class="job-identity-top">
-                <span class="job-badge" id="job-badge">Lv.1 便利商店</span>
-              </div>
-              <h3 class="job-title" id="job-title">便利商店打工</h3>
-            </article>
-
-            <div class="meta-inline">
-              <div class="meta-pill"><span>工作</span><strong id="job-label">便利商店打工</strong></div>
-              <div class="meta-pill"><span>欠租</span><strong id="rent-strikes">0 次</strong></div>
-              <div class="meta-pill"><span>狀態</span><strong id="phase-label">準備選擇今天要做什麼</strong></div>
-              <div class="meta-pill"><span>時段</span><strong id="action-summary">今天已做 0 件事</strong></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel action-panel" aria-label="今日決策">
-          <article class="goal-card" id="goal-card">
-            <span class="goal-kicker">短期目標</span>
-            <strong class="goal-title" id="goal-title">先保住本週房租</strong>
-            <p class="goal-copy" id="goal-copy">這兩天別亂花錢，先把現金流撐住。</p>
-          </article>
-          <div class="control-buttons">
-            <button class="control-button primary-control" id="take-action-button" type="button">採取行動</button>
-            <button class="control-button secondary-control" id="sleep-button" type="button">睡覺</button>
-            <button class="control-button danger-control" id="reset-button" type="button">放棄人生吧</button>
-          </div>
-          <div class="utility-row">
-            <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false">音效：開</button>
-          </div>
-        </section>
+      <section class="decision-area" aria-label="目前可以做的事">
+        <div class="action-list" id="action-list"></div>
+        <button class="continue-button hidden" id="continue-button" type="button">繼續</button>
       </section>
     </main>
 
-    <div class="overlay" id="overlay" aria-hidden="false"></div>
-    <section class="achievement-toast hidden" id="achievement-toast" aria-live="polite" aria-atomic="true"></section>
-    <section class="share-toast hidden" id="share-toast" aria-live="polite" aria-atomic="true"></section>
-
-    <section
-      class="dialog"
-      id="intro-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="intro-title"
-      aria-describedby="intro-copy"
-    >
-      <div class="dialog-shell intro-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">遊戲介紹</p>
-            <h3 id="intro-title">打工人生：月底前活下去</h3>
-          </div>
-        </div>
-        <p class="dialog-copy" id="intro-copy">
-          《打工人生：月底前活下去》是一款 30 天生存決策遊戲。一天能做多少事只看你還剩多少體力，但房租、工作與突發事件會讓你很快想睡也睡不安穩。
-        </p>
-        <p class="boot-status" id="boot-status" hidden aria-live="polite"></p>
-        <div class="intro-stats" id="intro-stats" hidden>
-          <div class="intro-stat-item">
-            <span>我的累計人生</span>
-            <strong id="intro-total-starts">--</strong>
-          </div>
-          <div class="intro-stat-item">
-            <span>我的通關次數</span>
-            <strong id="intro-total-clears">--</strong>
-          </div>
-          <div class="intro-stat-item">
-            <span>我的過勞次數</span>
-            <strong id="intro-total-burnouts">--</strong>
-          </div>
-        </div>
-        <div class="intro-points">
-          <div class="intro-point">
-            <span>目標</span>
-            <strong>撐過 30 天，別被房租和壓力先擊倒。</strong>
-          </div>
-          <div class="intro-point">
-            <span>提醒</span>
-            <strong>睡覺會回體力，但硬刷同一件事只會越做越虧。</strong>
-          </div>
-        </div>
-        <div class="dialog-actions">
-          <button class="primary-button" id="start-button" type="button" disabled>載入中…</button>
-        </div>
+    <section class="full-screen intro-screen" id="intro-screen" aria-labelledby="intro-title">
+      <div class="intro-mark" aria-hidden="true"><span class="icon-slot" data-icon="wallet"></span></div>
+      <p class="intro-eyebrow">21 天生存決策</p>
+      <h2 id="intro-title">打工人生</h2>
+      <p>一天只做三個決定。工作、休息、學習，每一個選擇都要付出代價。</p>
+      <div class="intro-rules">
+        <span>早上</span><span>下午</span><span>晚上</span>
       </div>
+      <button class="primary-button" id="start-button" type="button">開始這個月</button>
+      <small id="app-version"></small>
     </section>
 
-    <section class="dialog hidden" id="boot-failure-dialog" role="alertdialog" aria-modal="true" aria-labelledby="boot-failure-title">
-      <div class="dialog-shell boot-failure-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">載入失敗</p>
-            <h3 id="boot-failure-title">遊戲沒有成功載入</h3>
-          </div>
-        </div>
-        <p class="dialog-copy">請重新載入頁面再試一次。如果還是失敗，通常是網路或快取中的舊檔案還沒同步完成。</p>
-        <div class="dialog-actions">
-          <button class="primary-button" id="boot-reload-button" type="button">重新載入</button>
-        </div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="attendance-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="attendance-title"
-      aria-describedby="attendance-description"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">上班決定</p>
-            <h3 id="attendance-title"></h3>
-          </div>
-        </div>
-        <div class="event-spotlight">
-          <p class="dialog-copy" id="attendance-description"></p>
-        </div>
-        <div class="dialog-actions stacked" id="attendance-options"></div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="choice-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="choice-title"
-      aria-describedby="choice-description"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">方案選擇</p>
-            <h3 id="choice-title"></h3>
-          </div>
-        </div>
-        <div class="event-spotlight">
-          <p class="dialog-copy" id="choice-description"></p>
-        </div>
-        <div class="dialog-actions stacked" id="choice-options"></div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="action-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="action-dialog-title"
-      aria-describedby="action-dialog-body"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow" id="action-dialog-kicker">採取行動</p>
-            <h3 id="action-dialog-title">選一個主要行動</h3>
-          </div>
-        </div>
-        <p class="dialog-copy" id="action-dialog-copy">今天只能按一次，選下去就是今天的命運。</p>
-        <div class="dialog-body" id="action-dialog-body"></div>
-        <div class="dialog-actions" id="action-dialog-actions"></div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="event-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="event-title"
-      aria-describedby="event-description"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow" id="event-kicker">隨機事件</p>
-            <h3 id="event-title"></h3>
-          </div>
-        </div>
-        <div class="event-spotlight">
-          <p class="dialog-copy" id="event-description"></p>
-        </div>
-        <div class="dialog-actions stacked" id="event-options"></div>
-      </div>
-    </section>
-
-    <section
-      class="ending-screen hidden"
-      id="ending-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="ending-title"
-      aria-describedby="ending-copy"
-    >
-      <div class="ending-band" aria-hidden="true"></div>
+    <section class="full-screen ending-screen hidden" id="ending-screen" aria-labelledby="ending-title">
       <div class="ending-content" id="ending-capture">
-        <header class="ending-header">
-          <p class="ending-kicker">月底結算</p>
-          <h2 class="ending-headline" id="ending-title"></h2>
-          <p class="ending-body-copy" id="ending-copy"></p>
-        </header>
-        <div class="ending-report" id="ending-report"></div>
-        <footer class="ending-footer">
-          <div class="ending-action-row">
-            <button class="ending-action-btn" id="screenshot-button" type="button">截圖成績</button>
-            <button class="ending-action-btn" id="share-button" type="button">分享結果</button>
-          </div>
-          <button class="ending-restart-btn" id="restart-button" type="button">重新開始，下個月再撐一次</button>
-        </footer>
+        <p class="ending-eyebrow" id="ending-eyebrow">月底結算</p>
+        <h2 id="ending-title">這個月結束了</h2>
+        <p id="ending-body"></p>
+        <div class="ending-stats" id="ending-stats"></div>
+        <div class="ending-tags" id="ending-tags"></div>
+      </div>
+      <div class="ending-actions">
+        <button class="primary-button" id="restart-button" type="button">再活一次</button>
+        <button class="secondary-button" id="copy-result-button" type="button">複製結果</button>
       </div>
     </section>
 
-    <section
-      class="dialog share-dialog hidden"
-      id="share-text-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="share-text-title"
-      aria-describedby="share-text-description"
-    >
-      <div class="dialog-shell share-dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">手動分享</p>
-            <h3 id="share-text-title">這個環境不能直接複製</h3>
-          </div>
+    <div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
+    <section class="bottom-sheet hidden" id="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <div class="sheet-icon icon-slot" id="sheet-icon" aria-hidden="true"></div>
+        <div>
+          <p id="sheet-value"></p>
+          <h2 id="sheet-title">說明</h2>
         </div>
-        <p class="dialog-copy" id="share-text-description">請直接選取下面這段文字，再貼到你要分享的地方。</p>
-        <textarea class="share-textarea" id="share-textarea" rows="8" readonly spellcheck="false"></textarea>
-        <div class="dialog-actions">
-          <button class="dialog-close" id="share-text-select-button" type="button">選取文字</button>
-          <button class="primary-button" id="share-text-close-button" type="button">知道了</button>
-        </div>
+        <button class="icon-button" id="sheet-close-button" type="button" aria-label="關閉說明">
+          <span class="icon-slot" data-icon="close" aria-hidden="true"></span>
+        </button>
       </div>
+      <p class="sheet-copy" id="sheet-copy"></p>
+      <div class="sheet-actions hidden" id="sheet-actions"></div>
     </section>
 
-    <section
-      class="dialog share-dialog hidden"
-      id="share-image-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="share-image-title"
-      aria-describedby="share-image-description"
-    >
-      <div class="dialog-shell share-dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">圖片預覽</p>
-            <h3 id="share-image-title">長按或右鍵儲存這張圖</h3>
-          </div>
-        </div>
-        <p class="dialog-copy" id="share-image-description">如果瀏覽器不能直接下載，你還是可以從這裡把圖片存下來。</p>
-        <div class="share-image-frame">
-          <img class="share-preview-image" id="share-preview-image" alt="分享圖片預覽" />
-        </div>
-        <p class="share-preview-hint" id="share-preview-hint">長按或右鍵儲存圖片，再分享到其他地方。</p>
-        <div class="dialog-actions">
-          <button class="primary-button" id="share-image-close-button" type="button">知道了</button>
-        </div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="insufficient-cash-dialog"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="insufficient-cash-title"
-      aria-describedby="insufficient-cash-copy"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <h3 id="insufficient-cash-title">現金不足，只好放棄</h3>
-          </div>
-        </div>
-        <p class="dialog-copy" id="insufficient-cash-copy"></p>
-        <div class="dialog-actions">
-          <button class="primary-button" id="insufficient-cash-close-button" type="button">知道了</button>
-        </div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="confirm-dialog"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="confirm-dialog-title"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <h3 id="confirm-dialog-title">確定嗎？</h3>
-          </div>
-        </div>
-        <p class="dialog-copy" id="confirm-dialog-copy"></p>
-        <div class="dialog-actions">
-          <button class="primary-button" id="confirm-dialog-confirm-button" type="button">確定</button>
-          <button class="dialog-close" id="confirm-dialog-cancel-button" type="button">取消</button>
-        </div>
-      </div>
-    </section>
-
-    <section
-      class="dialog hidden"
-      id="analytics-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="analytics-dialog-title"
-    >
-      <div class="dialog-shell">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">所有玩家</p>
-            <h3 id="analytics-dialog-title">遊戲統計</h3>
-          </div>
-        </div>
-        <div class="analytics-dialog-status" id="analytics-dialog-status"></div>
-        <div class="analytics-dialog-grid" id="analytics-dialog-grid"></div>
-        <div class="dialog-actions">
-          <button class="primary-button" id="analytics-dialog-close-button" type="button">知道了</button>
-        </div>
-      </div>
-    </section>
-
-    <script>
-      (() => {
-        const BOOT_TIMEOUT_MS = 4000;
-        const body = document.body;
-        const startButton = document.querySelector("#start-button");
-        const bootStatus = document.querySelector("#boot-status");
-        const introDialog = document.querySelector("#intro-dialog");
-        const bootFailureDialog = document.querySelector("#boot-failure-dialog");
-        const bootReloadButton = document.querySelector("#boot-reload-button");
-        const overlay = document.querySelector("#overlay");
-
-        const setBootStatus = (status, message = "") => {
-          body.dataset.appBoot = status;
-
-          if (startButton) {
-            startButton.disabled = status !== "ready";
-            startButton.textContent = status === "ready" ? "開始遊玩" : "載入中…";
-          }
-
-          if (bootStatus) {
-            bootStatus.hidden = !message;
-            bootStatus.textContent = message;
-          }
-
-          if (introDialog) {
-            introDialog.classList.toggle("hidden", status === "failed");
-            introDialog.setAttribute("aria-hidden", String(status === "failed"));
-          }
-
-          if (bootFailureDialog) {
-            bootFailureDialog.classList.toggle("hidden", status !== "failed");
-            bootFailureDialog.setAttribute("aria-hidden", String(status !== "failed"));
-          }
-
-          if (overlay) {
-            overlay.classList.toggle("hidden", status === "ready");
-            overlay.setAttribute("aria-hidden", String(status === "ready"));
-          }
-        };
-
-        window.__hardLifeBooted = false;
-        window.__hardLifeSetBootFailed = (reason = "unknown") => {
-          if (window.__hardLifeBooted || body.dataset.appBoot === "failed") {
-            return;
-          }
-          window.clearTimeout(window.__hardLifeBootTimer);
-          setBootStatus("failed", "遊戲載入失敗，請按重新載入再試一次。");
-          console.error("[boot:failed]", reason);
-        };
-        window.__hardLifeMarkBooted = () => {
-          if (window.__hardLifeBooted) {
-            return;
-          }
-          window.__hardLifeBooted = true;
-          window.clearTimeout(window.__hardLifeBootTimer);
-          setBootStatus("ready");
-        };
-
-        setBootStatus("booting");
-        window.__hardLifeBootTimer = window.setTimeout(() => {
-          window.__hardLifeSetBootFailed("timeout");
-        }, BOOT_TIMEOUT_MS);
-
-        bootReloadButton?.addEventListener("click", () => {
-          window.location.reload();
-        });
-      })();
-    </script>
-    <script type="module" id="app-entry" src="./src/main.mjs"></script>
-    <script>
-      document.querySelector("#app-entry")?.addEventListener("error", () => {
-        window.__hardLifeSetBootFailed?.("module-load-error");
-      });
-    </script>
+    <script type="module" src="./src/main.mjs"></script>
   </body>
 </html>
