@@ -1,6 +1,6 @@
 ## Context
 
-This change defines the first playable web MVP for 《打工人生：月底前活下去》. The repository does not yet contain an existing game implementation, so the design should optimize for fast delivery, clarity of rules, and easy tuning of balance values. The MVP is a single-session browser game with no backend, persistence, or authentication, which means all gameplay state can live in memory and all content can be shipped as static assets.
+This change defines the first playable web MVP for 《人生好難：在艱難的生活中存活 21 天》. The repository does not yet contain an existing game implementation, so the design should optimize for fast delivery, clarity of rules, and easy tuning of balance values. The MVP is a single-session browser game with no backend, persistence, or authentication, which means all gameplay state can live in memory and all content can be shipped as static assets.
 
 The gameplay loop is rules-heavy rather than animation-heavy. The most important technical constraint is keeping state transitions deterministic and inspectable so that balancing and later content expansion do not require rewriting the game loop. The UI only needs to support one active day flow at a time: view status, choose an action, optionally resolve an event, then advance the day or end the run.
 

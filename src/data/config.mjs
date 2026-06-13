@@ -10,8 +10,8 @@ export const PERIODS = [
 ];
 
 export const GAME_COPY = {
-  title: "打工人生：月底前活下去",
-  subtitle: "一天三個決定。撐過工作、房租和那些突然發生的事。",
+  title: "人生好難：在艱難的生活中存活 21 天",
+  subtitle: "在艱難的生活中存活 21 天",
 };
 
 export const DEFAULT_PLAYER_STATE = {

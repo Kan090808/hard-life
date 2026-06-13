@@ -307,7 +307,7 @@ const renderDomShareImage = async (state, url, captureElement, documentLike) => 
     blob,
     width: targetWidth,
     height: targetHeight,
-    filename: "打工人生結果.png",
+    filename: "人生好難結果.png",
     alt: `${snapshot.title}｜${snapshot.rankLabel}`,
   };
 };
@@ -624,7 +624,7 @@ const renderShareImage = async (state, url, overrides = {}) => {
   ctx.fillText(snapshot.url, 72, 1508, width - 144);
   ctx.fillStyle = "#5d5d6f";
   ctx.font = `500 22px ${SHARE_FONT_STACK}`;
-  ctx.fillText("打工人生：月底前活下去", 72, 1552);
+  ctx.fillText("人生好難：在艱難的生活中存活 21 天", 72, 1552);
   if (version) {
     ctx.textAlign = "right";
     ctx.fillText(version, width - 72, 1552);
@@ -637,7 +637,7 @@ const renderShareImage = async (state, url, overrides = {}) => {
     blob,
     width,
     height,
-    filename: "打工人生結果.png",
+    filename: "人生好難結果.png",
     alt: `${snapshot.title}｜${snapshot.rankLabel}`,
   };
 };

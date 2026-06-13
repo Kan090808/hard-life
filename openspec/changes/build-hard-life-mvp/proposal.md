@@ -1,6 +1,6 @@
 ## Why
 
-The project needs a tightly scoped first playable version of 《打工人生：月底前活下去》 so the core decision loop can be validated before investing in content-heavy or system-heavy expansions. The immediate opportunity is to turn the proposal into a concrete MVP contract that defines the game rules, player-facing behaviors, and implementation boundaries for a static web release.
+The project needs a tightly scoped first playable version of 《人生好難：在艱難的生活中存活 21 天》 so the core decision loop can be validated before investing in content-heavy or system-heavy expansions. The immediate opportunity is to turn the proposal into a concrete MVP contract that defines the game rules, player-facing behaviors, and implementation boundaries for a static web release.
 
 ## What Changes
 

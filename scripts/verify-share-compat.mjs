@@ -159,7 +159,7 @@ assert.equal(manualResult.reason, "insecure-context");
 const imageBlob = new Blob(["png"], { type: "image/png" });
 const imagePayload = {
   blob: imageBlob,
-  filename: "打工人生結果.png",
+  filename: "人生好難結果.png",
   width: 1200,
   height: 1600,
   alt: "穩定生活",
