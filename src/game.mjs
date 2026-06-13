@@ -14,6 +14,7 @@ import {
   RENT_DAYS,
   RANDOM_EVENTS,
   STAT_BOUNDS,
+  STUDY_COST_OPTIONS,
   TRAITS,
 } from "./data/config.mjs";
 
@@ -58,6 +59,10 @@ const getActionEffects = (state, actionId, rng = Math.random) => {
   }
 
   const effects = { ...(ACTIONS[actionId]?.effects ?? {}) };
+  if (actionId === "study" && (state.studyCost ?? 0) > 0) {
+    effects.money = -state.studyCost;
+    effects.skill = Math.round(state.studyCost / 32.5);
+  }
   if (state.traitId === "quickLearner" && actionId === "study") effects.skill = (effects.skill ?? 0) + 3;
   if (state.conditions.scooterBroken && ["work", "gig"].includes(actionId)) effects.energy = (effects.energy ?? 0) - 5;
   if (state.conditions.computerBroken && actionId === "study") effects.skill = Math.max(3, (effects.skill ?? 0) - 5);
@@ -134,6 +139,7 @@ const addUnique = (options, option) => {
 };
 
 const buildOptions = (state, rng) => {
+  state.studyCost = pick(STUDY_COST_OPTIONS, rng);
   const options = [];
   const period = currentPeriod(state);
   const job = currentJob(state);
@@ -333,7 +339,15 @@ const applyActionOutcome = (state, actionId, rng) => {
   const deltas = applyEffects(state, effects);
   const outcomeKind = rng() < getGoodOutcomeRate(state, actionId) ? "good" : "bad";
   const outcome = ACTIONS[actionId].outcomes[outcomeKind];
-  deltas.push(...applyEffects(state, outcome.effects));
+  let outcomeEffects = outcome.effects;
+  if (actionId === "study" && (state.studyCost ?? 0) > 0) {
+    const ratio = state.studyCost / 260;
+    outcomeEffects = {};
+    for (const [k, v] of Object.entries(outcome.effects)) {
+      outcomeEffects[k] = Math.round(v * ratio);
+    }
+  }
+  deltas.push(...applyEffects(state, outcomeEffects));
   applyEffects(state, { luck: outcomeKind === "good" ? -4 : 5 });
   state.summary[outcomeKind === "good" ? "goodOutcomes" : "badOutcomes"] += 1;
   lines.push(`${outcomeKind === "good" ? "好結果" : "壞結果"}：${outcome.text}`);

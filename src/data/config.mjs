@@ -26,6 +26,7 @@ export const DEFAULT_PLAYER_STATE = {
   jobLevel: 0,
   absences: 0,
   rentDebt: 0,
+  studyCost: 0,
 };
 
 export const STAT_BOUNDS = {
@@ -237,6 +238,8 @@ export const FAILURE_ENDINGS = {
   burnout: { id: "burnout", type: "failure", difficulty: "失敗", title: "壓力把生活壓垮了", body: "不要給自己太大壓力，要學會放過自己。", requirement: "壓力達到 100" },
   eviction: { id: "eviction", type: "failure", difficulty: "失敗", title: "欠租沒有下一次了", body: "走投無路時，家裡還是你的避風港。", requirement: "舊欠租未清，又遇到下一次房租" },
 };
+
+export const STUDY_COST_OPTIONS = [390, 590, 890, 1300];
 
 export const COMPLETION_ENDINGS = [
   { id: "life-turnaround", type: "success", difficulty: "非常困難", title: "人生開始翻盤", body: "你不只活下來，還同時守住收入、能力和身心狀態。", requirement: "金錢 $10,000、技能 75、體力 70、壓力不超過 30、約聘工作、無欠租且從未漏繳房租" },
