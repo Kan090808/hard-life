@@ -297,13 +297,7 @@ elements.utility_button.addEventListener("click", () => {
       {
         label: "放棄並重新開始",
         danger: true,
-        onClick: () => {
-          openSheet(
-            { icon: "close", value: "目前進度會消失", title: "確定放棄這一局？", copy: "這個動作不能復原。" },
-            elements.utility_button,
-            [{ label: "確定放棄", danger: true, onClick: resetRun }]
-          );
-        },
+        onClick: resetRun,
       },
     ]
   );

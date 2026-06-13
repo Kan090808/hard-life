@@ -49,9 +49,13 @@ const applyEffects = (state, effects = {}) => {
   return deltas;
 };
 
-const getActionEffects = (state, actionId) => {
+const getActionEffects = (state, actionId, rng = Math.random) => {
   if (actionId === "work") return { ...currentJob(state).effects };
   if (actionId === "payDebt") return { money: -state.rentDebt };
+  if (actionId === "groceries") {
+    const cost = 200 + Math.floor(rng() * 101);
+    return { money: -cost, energy: -4, stress: -4 };
+  }
 
   const effects = { ...(ACTIONS[actionId]?.effects ?? {}) };
   if (state.traitId === "quickLearner" && actionId === "study") effects.skill = (effects.skill ?? 0) + 3;
@@ -95,7 +99,8 @@ const materializeEventOption = (state, option) => ({
   affordable: state.money >= Math.max(0, -(option.effects?.money ?? 0)),
 });
 
-const daysSinceLastEvent = (state) => (state.lastEventDay > 0 ? state.day - state.lastEventDay : state.day - 1);
+const daysSince = (state, field) => (state[field] > 0 ? state.day - state[field] : state.day - 1);
+const daysSinceLastEvent = (state) => daysSince(state, "lastEventDay");
 
 const eventRateFor = (state) => {
   const gap = daysSinceLastEvent(state);
@@ -153,10 +158,21 @@ const buildOptions = (state, rng) => {
     addUnique(options, materializeOption(state, "work", { label }));
   }
 
+  if (period.id === "evening") {
+    const laundryGap = daysSince(state, "lastLaundryDay");
+    if (laundryGap >= 2) {
+      addUnique(options, materializeOption(state, "laundry", { preview: `${previewEffects(getActionEffects(state, "laundry"))} · ${laundryGap} 天未洗` }));
+    }
+    const groceryGap = daysSince(state, "lastGroceriesDay");
+    if (groceryGap >= 7) {
+      addUnique(options, materializeOption(state, "groceries", { preview: `${previewEffects(getActionEffects(state, "groceries"))} · ${groceryGap} 天未補` }));
+    }
+  }
+
   const candidates = Object.values(ACTIONS)
     .filter((action) => action.periods?.includes(period.id))
     .map((action) => action.id)
-    .filter((id) => !["work", "payDebt", "repairScooter", "repairComputer", "workaround"].includes(id));
+    .filter((id) => !["work", "payDebt", "repairScooter", "repairComputer", "workaround", "laundry", "groceries"].includes(id));
   if (state.jobLevel > 0) {
     const tempWorkIndex = candidates.indexOf("tempWork");
     if (tempWorkIndex >= 0) candidates.splice(tempWorkIndex, 1);
@@ -184,9 +200,9 @@ const buildOptions = (state, rng) => {
   }
 
   const fallbackByPeriod = {
-    morning: ["breakfast", "lifeAdmin", "jobSearch", "cleanRoom", "readNews"],
-    afternoon: state.jobLevel === 0 ? ["meal", "library", "tempWork", "laundry", "groceries"] : state.jobLevel === 1 ? ["meal", "library", "gig", "laundry", "groceries"] : ["meal", "library", "laundry", "groceries"],
-    evening: ["rest", "walk", "study", "callFamily", "stretch"],
+    morning: ["breakfast", "snooze", "jobSearch", "readNews"],
+    afternoon: state.jobLevel === 0 ? ["meal", "library", "tempWork", "syntrend"] : state.jobLevel === 1 ? ["meal", "library", "gig", "syntrend"] : ["meal", "library", "syntrend"],
+    evening: ["rest", "walk", "study", "network", "run", "gaming", "phoneScroll", "stretch"],
   }[period.id];
   for (const fallback of fallbackByPeriod) {
     if (options.length >= 3) break;
@@ -292,6 +308,19 @@ const settleDay = (state, lines, deltas) => {
   const rentFailure = settleRent(state, lines, deltas);
   if (rentFailure) return rentFailure;
 
+  const laundryGap = daysSince(state, "lastLaundryDay");
+  if (laundryGap >= 4) {
+    const penalty = Math.min(5, (laundryGap - 3) * 2);
+    deltas.push(...applyEffects(state, { stress: penalty }));
+    lines.push(`衣服堆了 ${laundryGap} 天沒洗，生活品質變差，壓力 +${penalty}。`);
+  }
+  const groceryGap = daysSince(state, "lastGroceriesDay");
+  if (groceryGap >= 10) {
+    const penalty = Math.min(5, (groceryGap - 9) * 2);
+    deltas.push(...applyEffects(state, { stress: penalty }));
+    lines.push(`日用品快用完了卻一直沒補，壓力 +${penalty}。`);
+  }
+
   const sleepEnergy = state.traitId === "sturdy" ? 21 : 16;
   deltas.push(...applyEffects(state, { energy: sleepEnergy, stress: -8 }));
   lines.push(`睡了一晚，體力 +${sleepEnergy}、壓力 -8。`);
@@ -337,6 +366,17 @@ const applyActionOutcome = (state, actionId, rng) => {
   } else if (actionId === "payDebt") {
     state.rentDebt = 0;
     lines.unshift("欠租補上了，下一個房租日暫時不會把你趕出去。 ");
+  } else if (actionId === "laundry") {
+    state.lastLaundryDay = state.day;
+    lines.unshift("衣服洗好了，明天有乾淨的衣服可以穿。 ");
+  } else if (actionId === "groceries") {
+    state.lastGroceriesDay = state.day;
+    lines.unshift("日用品補齊了，生活暫時不用擔心。 ");
+  }
+
+  if (actionId === "syntrend" && outcomeKind === "bad") {
+    const extra = 100 + Math.floor(rng() * 401);
+    deltas.push(...applyEffects(state, { money: -extra }));
   }
 
   if (state.currentSituation.scheduledWork && actionId !== "work") {
@@ -374,6 +414,8 @@ export const createInitialState = (rng = Math.random, traitId = null) => {
     conditions: { scooterBroken: false, computerBroken: false },
     freelanceLead: false,
     lastEventDay: 0,
+    lastLaundryDay: 0,
+    lastGroceriesDay: 0,
     eventHistory: [],
     screen: "decision",
     currentSituation: null,
@@ -478,5 +520,7 @@ export const hydrateState = (candidate) => {
     !Number.isFinite(candidate.summary?.badOutcomes) ||
     !Number.isFinite(candidate.summary?.eventsTriggered)
   ) return null;
+  if (!Number.isFinite(candidate.lastLaundryDay)) candidate.lastLaundryDay = 0;
+  if (!Number.isFinite(candidate.lastGroceriesDay)) candidate.lastGroceriesDay = 0;
   return candidate;
 };

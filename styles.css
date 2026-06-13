@@ -120,7 +120,7 @@ button:focus-visible { outline: 3px solid #2f76c5; outline-offset: 2px; }
 .intro-eyebrow { margin-top: 1.3rem; color: var(--accent); }
 .intro-rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; width: min(100%, 20rem); margin: 1.5rem 0; }
 .intro-rules span { padding: 0.65rem; border-radius: 0.8rem; background: var(--surface); border: 3px solid var(--line); box-shadow: 3px 3px 0 rgba(37,42,49,.11); font-size: 0.82rem; font-weight: 900; }
-.intro-screen .primary-button { max-width: 20rem; }
+.intro-screen .primary-button { max-width: 20rem; margin-top: 1.2rem; }
 .intro-screen small { margin-top: 1rem; color: var(--muted); }
 
 .ending-screen { display: flex; flex-direction: column; justify-content: flex-start; gap: 1.25rem; overflow-y: auto; }
