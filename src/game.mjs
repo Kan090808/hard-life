@@ -86,6 +86,14 @@ export const getGoodOutcomeRate = (state, actionId = "") => {
 
 const getOvertimeRate = (state) => clamp(0.1 - state.luck * 0.001, 0.01, 0.15);
 const getOvertimeRefuseRate = (state) => clamp(0.4 + state.luck * 0.004, 0.2, 0.9);
+const officeWorkConsumesAfternoon = (state, actionId = "work") => actionId === "work" && state.jobLevel === 2 && currentPeriod(state).id === "morning";
+
+const nextAdvance = (state, consumeAfternoon = false) => {
+  const isEvening = state.periodIndex === PERIODS.length - 1;
+  if (isEvening) return { pendingAdvance: "day", nextLabel: `進入 Day ${state.day + 1}` };
+  if (consumeAfternoon) return { pendingAdvance: "evening", nextLabel: "前往晚上" };
+  return { pendingAdvance: "period", nextLabel: `前往${PERIODS[state.periodIndex + 1].label}` };
+};
 
 const materializeOption = (state, actionId, overrides = {}) => {
   const action = ACTIONS[actionId];
@@ -231,7 +239,10 @@ const getSituationCopy = (state, rng) => {
   if (currentPeriod(state).id === "afternoon" && problemId === "computerBroken") return { kicker: "下午跑腿", title: "筆電還不能正常使用", body: "送修會花掉一筆錢，不處理則會繼續影響晚上的學習和接案。" };
   const job = currentJob(state);
   if (job.scheduledPeriod === currentPeriod(state).id) {
-    return { kicker: `${currentPeriod(state).label} · ${job.badge}`, title: "今天這個時段要上班", body: "去上班能拿到固定收入；選別的事會記一次缺勤。" };
+    const body = state.jobLevel === 2
+      ? "去上班能拿到固定收入，但會佔用早上和下午；選別的事會記一次缺勤。"
+      : "去上班能拿到固定收入；選別的事會記一次缺勤。";
+    return { kicker: `${currentPeriod(state).label} · ${job.badge}`, title: "今天這個時段要上班", body };
   }
   const [title, body] = pick(PERIOD_COPY[currentPeriod(state).id], rng);
   return { kicker: `${currentPeriod(state).label} · Day ${state.day}`, title, body };
@@ -457,7 +468,7 @@ const handleOvertimeChoice = (state, optionId, rng) => {
   const next = clone(state);
   const lines = [];
   const deltas = [];
-  const isEvening = next.periodIndex === PERIODS.length - 1;
+  const { pendingAdvance, nextLabel } = nextAdvance(next, officeWorkConsumesAfternoon(next));
 
   if (optionId === "overtime:accept") {
     deltas.push(...applyEffects(next, { energy: -16, money: 240, stress: 7 }));
@@ -474,7 +485,7 @@ const handleOvertimeChoice = (state, optionId, rng) => {
   }
 
   let failure = detectFailureInternal(next);
-  if (!failure && isEvening) failure = settleDay(next, lines, deltas);
+  if (!failure && pendingAdvance === "day") failure = settleDay(next, lines, deltas);
   if (failure) {
     next.ending = { ...failure, details: endingDetails(next) };
     next.screen = "ending";
@@ -488,9 +499,9 @@ const handleOvertimeChoice = (state, optionId, rng) => {
     body: lines[0] ?? "",
     lines: lines.slice(1),
     deltas,
-    nextLabel: isEvening ? `進入 Day ${next.day + 1}` : `前往${PERIODS[next.periodIndex + 1].label}`,
+    nextLabel,
   };
-  next.pendingAdvance = isEvening ? "day" : "period";
+  next.pendingAdvance = pendingAdvance;
   next.screen = "result";
   return next;
 };
@@ -507,6 +518,7 @@ export const dispatchOption = (state, optionId, rng = Math.random) => {
   const { lines, deltas } = outcome;
   let failure = detectFailureInternal(next);
   const isEvening = next.periodIndex === PERIODS.length - 1;
+  const { pendingAdvance, nextLabel } = nextAdvance(next, !isEvent && officeWorkConsumesAfternoon(next, optionId));
   if (!failure && isEvening) failure = settleDay(next, lines, deltas);
 
   if (failure) {
@@ -545,9 +557,9 @@ export const dispatchOption = (state, optionId, rng = Math.random) => {
     body: outcome.body ?? lines[0] ?? "事情處理完了。",
     lines: outcome.body ? lines : lines.slice(1),
     deltas,
-    nextLabel: isEvening ? `進入 Day ${next.day + 1}` : `前往${PERIODS[next.periodIndex + 1].label}`,
+    nextLabel,
   };
-  next.pendingAdvance = isEvening ? "day" : "period";
+  next.pendingAdvance = pendingAdvance;
   next.screen = "result";
   return next;
 };
@@ -558,6 +570,8 @@ export const dispatchContinue = (state, rng = Math.random) => {
   if (next.pendingAdvance === "day") {
     next.day += 1;
     next.periodIndex = 0;
+  } else if (next.pendingAdvance === "evening") {
+    next.periodIndex = PERIODS.findIndex((period) => period.id === "evening");
   } else {
     next.periodIndex += 1;
   }

@@ -94,7 +94,7 @@ export const JOBS = {
     name: "辦公室約聘人員",
     badge: "約聘",
     icon: "briefcase",
-    description: "每天早上進辦公室打卡。薪水較高，但通勤和工作壓力也更重。",
+    description: "每天早上進辦公室打卡，上班會佔用早上和下午。薪水較高，但通勤和工作壓力也更重。",
     scheduledPeriod: "morning",
     effects: { money: 1360, energy: -24, stress: 15 },
   },

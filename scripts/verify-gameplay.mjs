@@ -87,6 +87,37 @@ const beforeWorkMoney = work.money;
 work = dispatchOption(work, "work", fixed(0.99));
 assert.equal(work.money, beforeWorkMoney + 760);
 assert.equal(work.summary.jobsWorked, 1);
+assert.equal(work.pendingAdvance, "period", "part-time work only consumes its scheduled afternoon");
+
+let officeWork = createInitialState(fixed(0.99), "sturdy");
+officeWork.jobLevel = 2;
+officeWork.periodIndex = 0;
+forceOption(officeWork, "work", { scheduledWork: true });
+officeWork = dispatchOption(officeWork, "work", fixed(0.99));
+assert.equal(officeWork.summary.jobsWorked, 1);
+assert.equal(officeWork.pendingAdvance, "evening", "office work consumes morning and afternoon");
+assert.equal(officeWork.lastResult.nextLabel, "前往晚上");
+officeWork = dispatchContinue(officeWork, fixed(0.99));
+assert.equal(officeWork.periodIndex, 2, "office work continues directly to evening");
+
+let officeOvertime = createInitialState(fixed(0.99), "sturdy");
+officeOvertime.jobLevel = 2;
+officeOvertime.periodIndex = 0;
+forceOption(officeOvertime, "work", { scheduledWork: true });
+officeOvertime = dispatchOption(officeOvertime, "work", fixed(0));
+assert.equal(officeOvertime.currentSituation.kind, "overtime", "office work can still trigger overtime");
+officeOvertime = dispatchOption(officeOvertime, "overtime:accept", fixed(0.99));
+assert.equal(officeOvertime.pendingAdvance, "evening", "office overtime still consumes the afternoon");
+officeOvertime = dispatchContinue(officeOvertime, fixed(0.99));
+assert.equal(officeOvertime.periodIndex, 2, "office overtime continues directly to evening");
+
+let officeAbsence = createInitialState(fixed(0.99), "sturdy");
+officeAbsence.jobLevel = 2;
+officeAbsence.periodIndex = 0;
+forceOption(officeAbsence, "breakfast", { scheduledWork: true });
+officeAbsence = dispatchOption(officeAbsence, "breakfast", fixed(0.99));
+assert.equal(officeAbsence.absences, 1);
+assert.equal(officeAbsence.pendingAdvance, "period", "skipping office work does not consume the afternoon");
 
 let absence = createInitialState(fixed(0.99), "sturdy");
 absence.jobLevel = 1;
