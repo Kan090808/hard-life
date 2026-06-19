@@ -194,9 +194,19 @@ const renderEnding = (view) => {
   elements.ending_eyebrow.textContent = endingEyebrows[ending.type] ?? "21 天結算";
   elements.ending_title.textContent = ending.title;
   elements.ending_body.textContent = ending.body;
+  const bustedStats = {
+    collapse: new Set(["energy"]),
+    burnout: new Set(["stress"]),
+    eviction: new Set(["money"]),
+  }[ending.id] ?? new Set();
   elements.ending_stats.innerHTML = [
-    ["金錢", `$${view.resources.money.toLocaleString()}`], ["體力", view.resources.energy], ["壓力", view.resources.stress], ["技能", view.resources.skill], ["運氣", view.resources.luck], ["工作", view.job.badge],
-  ].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("");
+    ["money", "金錢", `$${view.resources.money.toLocaleString()}`],
+    ["energy", "體力", view.resources.energy],
+    ["stress", "壓力", view.resources.stress],
+    ["skill", "技能", view.resources.skill],
+    ["luck", "運氣", view.resources.luck],
+    ["job", "工作", view.job.badge],
+  ].map(([key, label, value]) => `<div class="${bustedStats.has(key) ? "is-busted" : ""}"><span>${label}</span><strong>${value}</strong></div>`).join("");
   elements.ending_tags.innerHTML = ending.details.tags.map((tag) => `<span>${tag.label}</span>`).join("");
   let counts = {};
   try {
