@@ -234,21 +234,21 @@ export const RANDOM_EVENTS = [
 ];
 
 export const FAILURE_ENDINGS = {
-  collapse: { id: "collapse", type: "failure", difficulty: "失敗", title: "身體先撐不住了", body: "生活最重要的是照顧好身體，別累壞了。", requirement: "體力降到 0" },
-  burnout: { id: "burnout", type: "failure", difficulty: "失敗", title: "壓力把生活壓垮了", body: "不要給自己太大壓力，要學會放過自己。", requirement: "壓力達到 100" },
-  eviction: { id: "eviction", type: "failure", difficulty: "失敗", title: "欠租沒有下一次了", body: "走投無路時，家裡還是你的避風港。", requirement: "舊欠租未清，又遇到下一次房租" },
+  collapse: { id: "collapse", type: "failure", difficulty: "失敗", title: "你把自己累壞了", body: "錢還能再賺，但身體壞了就救不回來了，多給自己休息的機會。", requirement: "體力降到 0" },
+  burnout: { id: "burnout", type: "failure", difficulty: "失敗", title: "壓力把你壓垮了", body: "壓力是自己給自己的，你要學會放過自己。", requirement: "壓力達到 100" },
+  eviction: { id: "eviction", type: "failure", difficulty: "失敗", title: "連租金都還不了", body: "別灰心，家永遠是你最後的避風港。", requirement: "舊欠租未清，又遇到下一次房租" },
 };
 
 export const STUDY_COST_OPTIONS = [390, 590, 890, 1300];
 
 export const COMPLETION_ENDINGS = [
-  { id: "life-turnaround", type: "success", difficulty: "非常困難", title: "人生開始翻盤", body: "你不只活下來，還同時守住收入、能力和身心狀態。", requirement: "金錢 $10,000、技能 75、體力 70、壓力不超過 30、約聘工作、無欠租且從未漏繳房租" },
-  { id: "independent-pro", type: "success", difficulty: "非常困難", title: "一人公司的起點", body: "穩定的案源讓你第一次看見不靠排班生活的可能。", requirement: "技能 75、完成 6 次接案、金錢 $6,500、壓力不超過 55、無欠租" },
-  { id: "balanced-rise", type: "success", difficulty: "困難", title: "日子真的變好了", body: "存款、能力和身體沒有互相犧牲，你走出一段少見的平衡。", requirement: "金錢 $6,000、技能 50、體力 60、壓力不超過 40、無欠租" },
-  { id: "free-life", type: "success", difficulty: "困難", title: "自由開始有了形狀", body: "你還沒完全逃離工作，但已經有能力自己接住機會。", requirement: "技能 65、完成 4 次接案、金錢 $4,500" },
-  { id: "career-shift", type: "success", difficulty: "困難", title: "總算往上走了一格", body: "約聘工作仍然辛苦，但你不再只是原地窮忙。", requirement: "成為辦公室約聘人員、技能 55、金錢 $4,500、無欠租" },
-  { id: "stable-life", type: "success", difficulty: "普通", title: "這個月穩住了", body: "沒有奇蹟，但錢、工作和身體都還在。", requirement: "金錢 $3,500、壓力不超過 65、無欠租" },
-  { id: "busy-cycle", type: "success", difficulty: "生還", title: "又撐過一個月", body: "日子沒有變輕鬆，你至少還站著。", requirement: "活到第 21 天" },
+  { id: "life-turnaround", type: "success", difficulty: "非常困難", title: "人生開始翻盤", body: "你順利撐了過來，有了一筆存款，也有很好的維持生活的平衡。這不是奇蹟，這是你努力的成果。", requirement: "金錢 $10,000、技能 75、體力 70、壓力不超過 30、約聘工作、無欠租且從未漏繳房租" },
+  { id: "independent-pro", type: "success", difficulty: "非常困難", title: "一人公司的起點", body: "穩定的案源讓你第一次看見不靠排班生活的可能。你還沒完全自由，但已經能靠自己的能力接住機會。", requirement: "技能 75、完成 6 次接案、金錢 $6,500、壓力不超過 55、無欠租" },
+  { id: "balanced-rise", type: "success", difficulty: "困難", title: "日子真的變好了", body: "存款、能力和身體沒有互相犧牲，你走出一段少見的平衡。月底到了，你不是只剩下疲憊。", requirement: "金錢 $6,000、技能 50、體力 60、壓力不超過 40、無欠租" },
+  { id: "free-life", type: "success", difficulty: "困難", title: "自由開始有了形狀", body: "你還沒完全逃離工作，但技能和案源已經讓你多了一條路。下一個月不再只有被排班推著走。", requirement: "技能 65、完成 4 次接案、金錢 $4,500" },
+  { id: "career-shift", type: "success", difficulty: "困難", title: "總算往上走了一格", body: "約聘工作仍然辛苦，但你不再只是原地窮忙。這份穩定讓你有空間思考下一步。", requirement: "成為辦公室約聘人員、技能 55、金錢 $4,500、無欠租" },
+  { id: "stable-life", type: "success", difficulty: "普通", title: "生活開始穩定", body: "雖然沒有大富大貴，但生活開始穩定了，相信一切會越來越好。", requirement: "金錢 $3,500、壓力不超過 65、無欠租" },
+  { id: "busy-cycle", type: "survival", difficulty: "生還", title: "成功活了下來", body: "你成功活到現在，但生活還會繼續，加油。", requirement: "活到第 21 天" },
 ];
 
 export const ENDING_CATALOG = [...COMPLETION_ENDINGS, ...Object.values(FAILURE_ENDINGS)];

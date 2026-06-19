@@ -62,6 +62,9 @@ const getEndingRank = (ending) => {
   if (ending.type === "failure") {
     return { label: "本月稱號：現實重擊", tone: "danger" };
   }
+  if (ending.type === "survival") {
+    return { label: "本月稱號：月底生還者", tone: "warning" };
+  }
 
   const rankMap = {
     "life-turnaround": { label: "本月稱號：人生翻盤者", tone: "growth" },
@@ -151,9 +154,17 @@ const collectDocumentStyles = (documentLike) => {
   return styleTexts.filter(Boolean).join("\n");
 };
 
-const getEndingTone = (state) => (state.ending?.type === "failure" ? "danger" : "growth");
+const getEndingTone = (state) => {
+  if (state.ending?.type === "failure") return "danger";
+  if (state.ending?.type === "survival") return "warning";
+  return "growth";
+};
 
-const getEndingBackground = (tone) => (tone === "danger" ? "#ffd6d2" : "#c8f5de");
+const getEndingBackground = (tone) => {
+  if (tone === "danger") return "#ffd6d2";
+  if (tone === "warning") return "#fff0cf";
+  return "#c8f5de";
+};
 
 const createDomShareWrapper = (state, captureElement, documentLike) => {
   const tone = getEndingTone(state);

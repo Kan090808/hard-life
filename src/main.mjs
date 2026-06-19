@@ -186,7 +186,12 @@ const renderEnding = (view) => {
   setHidden(elements.ending_catalog, true);
   setHidden(elements.ending_screen, false);
   elements.ending_screen.dataset.tone = ending.type;
-  elements.ending_eyebrow.textContent = ending.type === "failure" ? `Day ${view.day} · 人生中斷` : "21 天結算";
+  const endingEyebrows = {
+    failure: `Day ${view.day} · 生活中斷`,
+    survival: "21 天結算 · 生還",
+    success: `21 天結算 · ${ending.difficulty}成功`,
+  };
+  elements.ending_eyebrow.textContent = endingEyebrows[ending.type] ?? "21 天結算";
   elements.ending_title.textContent = ending.title;
   elements.ending_body.textContent = ending.body;
   elements.ending_stats.innerHTML = [

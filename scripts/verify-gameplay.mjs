@@ -28,6 +28,7 @@ assert.equal(ENDING_CATALOG.length, 10);
 assert.equal(Object.values(ACTIONS).every((action) => action.periods?.length && action.outcomes?.good && action.outcomes?.bad), true);
 assert.equal(ENDING_CATALOG.filter((ending) => ending.difficulty === "困難").length, 3);
 assert.equal(ENDING_CATALOG.filter((ending) => ending.difficulty === "非常困難").length, 2);
+assert.equal(ENDING_CATALOG.find((ending) => ending.id === "busy-cycle").type, "survival");
 
 const periodPools = {};
 let periodState = createInitialState(fixed(0.99), "sturdy");
@@ -231,6 +232,8 @@ const veryHard = {
 assert.equal(evaluateEnding(veryHard).id, "life-turnaround", "very difficult endings have highest priority");
 const independent = { ...veryHard, jobLevel: 0, energy: 40, stress: 45, money: 7000, summary: { ...veryHard.summary, freelanceJobs: 6 } };
 assert.equal(evaluateEnding(independent).id, "independent-pro");
+const survival = { ...completion, money: 0, energy: 10, stress: 90, skill: 0, jobLevel: 0, rentDebt: 0 };
+assert.equal(evaluateEnding(survival).type, "survival", "baseline completion is a survival ending, not a success ending");
 assert.equal(evaluateEnding({ ...completion, ending: null }).details.tags.length, 2);
 assert.equal(hydrateState(initial), initial);
 assert.equal(hydrateState({ totalDays: 30 }), null, "legacy saves are rejected");
