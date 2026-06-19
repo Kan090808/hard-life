@@ -143,7 +143,7 @@ const main = async () => {
     await page.reload({ waitUntil: "networkidle" });
     await page.locator('[data-option-id="rest"]').click();
     assert.equal(await page.locator("#ending-screen").isVisible(), true);
-    assert.match(await page.locator("#ending-title").textContent(), /往上走|穩住|撐過|自由/);
+    assert.equal(await page.locator("#ending-title").textContent(), "生活開始穩定");
     assert.equal(await page.locator("#ending-goal-list .ending-goal").count(), 10);
     assert.match(await page.locator("#ending-progress").textContent(), /1 \/ 10/);
     await page.locator("#ending-catalog-btn").click();
