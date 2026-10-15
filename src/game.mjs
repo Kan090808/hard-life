@@ -20,6 +20,15 @@ import {
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const pick = (items, rng) => items[Math.floor(rng() * items.length)];
+const pickWeighted = (items, rng) => {
+  const total = items.reduce((sum, item) => sum + (item.weight ?? 1), 0);
+  let roll = rng() * total;
+  for (const item of items) {
+    roll -= item.weight ?? 1;
+    if (roll < 0) return item;
+  }
+  return items[items.length - 1];
+};
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const activeConditionIds = (state) => Object.keys(CONDITIONS).filter((id) => state.conditions[id]);
 const currentPeriod = (state) => PERIODS[state.periodIndex];
@@ -130,7 +139,7 @@ const maybeCreateEvent = (state, rng) => {
   if (currentPeriod(state).id !== "morning" || rng() >= eventRateFor(state)) return null;
   const recentIds = new Set(state.eventHistory.slice(-2));
   const candidates = RANDOM_EVENTS.filter((event) => !recentIds.has(event.id));
-  const event = clone(pick(candidates.length ? candidates : RANDOM_EVENTS, rng));
+  const event = clone(pickWeighted(candidates.length ? candidates : RANDOM_EVENTS, rng));
   const options = event.options.map((option) => materializeEventOption(state, option)).filter((option) => option.affordable);
   state.lastEventDay = state.day;
   return {
@@ -342,6 +351,12 @@ const settleDay = (state, lines, deltas) => {
     lines.push(`日用品快用完了卻一直沒補，壓力 +${penalty}。`);
   }
 
+  if ((state.phoneCrackedDays ?? 0) > 0) {
+    state.phoneCrackedDays -= 1;
+    deltas.push(...applyEffects(state, { stress: 5 }));
+    lines.push(`破掉的手機螢幕又讓你點錯好幾次，壓力 +5${state.phoneCrackedDays > 0 ? `（還會再煩 ${state.phoneCrackedDays} 天）` : "。總算習慣了"}。`);
+  }
+
   const sleepEnergy = state.traitId === "sturdy" ? 21 : 16;
   deltas.push(...applyEffects(state, { energy: sleepEnergy, stress: -8 }));
   lines.push(`睡了一晚，體力 +${sleepEnergy}、壓力 -8。`);
@@ -434,6 +449,7 @@ const applyEventOutcome = (state, option) => {
   for (const [conditionId, active] of Object.entries(option.conditionChanges ?? {})) {
     if (Object.hasOwn(state.conditions, conditionId)) state.conditions[conditionId] = active;
   }
+  if (option.phoneCrackedDays) state.phoneCrackedDays = option.phoneCrackedDays;
   const eventId = state.currentSituation.eventId;
   state.eventHistory.push(eventId);
   state.summary.eventsTriggered += 1;
@@ -448,6 +464,8 @@ export const createInitialState = (rng = Math.random, traitId = null) => {
     traitId: chosenTrait,
     conditions: { scooterBroken: false, computerBroken: false },
     freelanceLead: false,
+    bossStrikes: 0,
+    phoneCrackedDays: 0,
     lastEventDay: 0,
     lastLaundryDay: 0,
     lastGroceriesDay: 0,
@@ -476,8 +494,18 @@ const handleOvertimeChoice = (state, optionId, rng) => {
   } else {
     const refuseOk = rng() < getOvertimeRefuseRate(next);
     if (refuseOk) {
-      deltas.push(...applyEffects(next, { stress: 12 }));
+      deltas.push(...applyEffects(next, { stress: 4 }));
+      next.bossStrikes = (next.bossStrikes ?? 0) + 1;
       lines.push("你婉拒了加班要求，收拾東西離開辦公室。");
+      if (next.bossStrikes >= 3) {
+        const previous = currentJob(next).name;
+        next.jobLevel = Math.max(0, next.jobLevel - 1);
+        next.absences = 0;
+        next.bossStrikes = 0;
+        lines.push(`主管對你的配合度越來越有意見，${previous}不再替你留位子，你回到${currentJob(next).name}。`);
+      } else {
+        lines.push(`主管臉色不太好看，他記住了這次（${next.bossStrikes}/3）。`);
+      }
     } else {
       deltas.push(...applyEffects(next, { stress: 20, energy: -16, money: 240 }));
       lines.push("你試著拒絕，但主管態度很硬，最後還是留下來加班。");
@@ -541,7 +569,7 @@ export const dispatchOption = (state, optionId, rng = Math.random) => {
       body: "「今天能多待幾個小時嗎？這個 deadline 很趕。」",
       options: [
         { id: "overtime:accept", label: "默默加班", icon: "briefcase", tone: "income", preview: "體力 −16 · 金錢 +$240 · 壓力 +7" },
-        { id: "overtime:refuse", label: "拒絕", icon: "home", tone: "recovery", preview: "壓力 +12" },
+        { id: "overtime:refuse", label: "拒絕", icon: "home", tone: "recovery", preview: "壓力 +4 · 主管印象變差" },
       ],
     };
     next.screen = "decision";
@@ -620,5 +648,7 @@ export const hydrateState = (candidate) => {
   ) return null;
   if (!Number.isFinite(candidate.lastLaundryDay)) candidate.lastLaundryDay = 0;
   if (!Number.isFinite(candidate.lastGroceriesDay)) candidate.lastGroceriesDay = 0;
+  if (!Number.isFinite(candidate.bossStrikes)) candidate.bossStrikes = 0;
+  if (!Number.isFinite(candidate.phoneCrackedDays)) candidate.phoneCrackedDays = 0;
   return candidate;
 };

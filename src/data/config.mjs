@@ -173,6 +173,26 @@ export const EVENT_CADENCE = {
 
 export const RANDOM_EVENTS = [
   {
+    id: "invoice-prize",
+    weight: 0.4,
+    title: "統一發票中了兩百塊",
+    body: "對獎 App 跳出通知，錢包裡那張皺巴巴的發票居然中了。不多，但今天好像沒那麼糟。",
+    options: [
+      { id: "event:invoice-prize:cash", label: "去超商馬上兌現", icon: "coins", tone: "income", effects: { money: 200, energy: -2, stress: -3 }, result: "店員把兩張紅色鈔票遞給你，你忍不住笑了一下。" },
+      { id: "event:invoice-prize:treat", label: "拿去買杯好喝的手搖", icon: "meal", tone: "recovery", effects: { money: 120, stress: -8 }, result: "全糖去冰，這杯算是老天請的。" },
+    ],
+  },
+  {
+    id: "friend-dinner",
+    weight: 0.4,
+    title: "老朋友說要請你吃飯",
+    body: "很久沒聯絡的朋友突然傳訊息，說剛領到年終，想約你吃頓好的，他買單。",
+    options: [
+      { id: "event:friend-dinner:go", label: "開心赴約", icon: "network", tone: "recovery", effects: { energy: -4, stress: -12 }, result: "聊到店家準備打烊，你好久沒笑得這麼大聲了。" },
+      { id: "event:friend-dinner:rain-check", label: "改天，今天想在家休息", icon: "home", tone: "recovery", effects: { energy: 6, stress: -3 }, result: "朋友說沒關係，下次再約。被記得的感覺還是很好。" },
+    ],
+  },
+  {
     id: "nhi-bill",
     title: "健保費補繳通知來了",
     body: "信封上寫著逾期金額。這筆錢不至於讓生活結束，但會把這週的餘裕吃掉。",
@@ -208,7 +228,7 @@ export const RANDOM_EVENTS = [
     body: "排班、外送、銀行通知都在這支手機裡。它還能勉強使用，但每次滑動都像在賭。",
     options: [
       { id: "event:phone-screen:repair", label: "去通訊行換螢幕", icon: "phone", tone: "utility", effects: { money: -1600 }, result: "螢幕恢復正常，存款卻少了一大截。" },
-      { id: "event:phone-screen:endure", label: "先貼膠帶繼續用", icon: "tools", tone: "recovery", effects: { energy: -5, stress: 32 }, result: "每次點錯畫面都讓你更煩躁，但今天不用花錢。" },
+      { id: "event:phone-screen:endure", label: "先貼膠帶繼續用", icon: "tools", tone: "recovery", effects: { energy: -5, stress: 8 }, phoneCrackedDays: 4, result: "每次點錯畫面都讓你更煩躁，但今天不用花錢。接下來幾天，每晚都會被它煩到。" },
     ],
   },
   {
