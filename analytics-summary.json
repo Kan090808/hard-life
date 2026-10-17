@@ -1,0 +1,21 @@
+{
+  "status": "ok",
+  "source": "posthog",
+  "timezone": "Asia/Taipei",
+  "generatedAt": "2026-10-17T17:01:17.511Z",
+  "syncedUntil": "2026-10-17T16:51:17.511Z",
+  "todayStart": "2026-10-17T16:00:00.000Z",
+  "todayEnd": "2026-10-18T16:00:00.000Z",
+  "totalPlayers": 17,
+  "playersToday": 0,
+  "totalStarts": 108,
+  "startsToday": 0,
+  "totalBurnouts": 16,
+  "burnoutsToday": 0,
+  "totalClears": 11,
+  "clearsToday": 0,
+  "partial": true,
+  "warnings": [
+    "players: PostHog API 504: {\"type\":\"server_error\",\"code\":\"error\",\"detail\":\"Query has hit the max execution time before completing. See our docs for how to improve your query performance. You may need to materialize. This query failed the same way 8 times in a row, so it was not run again. It can run again in about 4 minutes.\",\"attr\":null}"
+  ]
+}
