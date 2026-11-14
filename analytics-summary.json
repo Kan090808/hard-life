@@ -1,0 +1,17 @@
+{
+  "status": "ok",
+  "source": "posthog",
+  "timezone": "Asia/Taipei",
+  "generatedAt": "2026-11-14T17:22:31.275Z",
+  "syncedUntil": "2026-11-14T17:12:31.275Z",
+  "todayStart": "2026-11-14T16:00:00.000Z",
+  "todayEnd": "2026-11-15T16:00:00.000Z",
+  "totalPlayers": 17,
+  "playersToday": 0,
+  "totalStarts": 110,
+  "startsToday": 0,
+  "totalBurnouts": 16,
+  "burnoutsToday": 0,
+  "totalClears": 11,
+  "clearsToday": 0
+}
